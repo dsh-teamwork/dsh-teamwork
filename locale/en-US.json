@@ -1,0 +1,5 @@
+{
+  "status.connected": "Connected",
+  "status.notConnected": "Not connected",
+  "sync.pending": "{count} pending"
+}
