@@ -1,4 +1,4 @@
-import { Context, Service, z } from "@deepseek-ai/cordis";
+import { Context } from "@deepseek-ai/cordis";
 import { AccountService } from "./account";
 import { SyncService } from "./sync";
 import { TeamAssetsService } from "./assets";
@@ -6,12 +6,6 @@ import { ModelPolicyService } from "./model-policy";
 import { AuditService } from "./audit";
 
 export const name = "dsh-teamwork";
-
-export const Config = z.object({
-  apiEndpoint: z.string().default("https://api.dsh-teamwork.com"),
-  autoSync: z.boolean().default(true),
-  syncIntervalMs: z.number().default(300000),
-});
 
 export const inject = ["logger", "sessions"];
 

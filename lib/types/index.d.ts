@@ -7,6 +7,5 @@ export interface Config {
 }
 
 export const name: string;
-export const Config: import("@deepseek-ai/cordis").Schema<Config>;
 export const inject: string[];
 export function apply(ctx: Context, config: Config): void;
