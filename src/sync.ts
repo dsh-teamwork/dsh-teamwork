@@ -1,5 +1,5 @@
 import { Context } from "@deepseek-ai/cordis";
-import { Config } from "./index";
+import { Config } from "./index.js";
 
 export class SyncService {
   private ctx: Context;

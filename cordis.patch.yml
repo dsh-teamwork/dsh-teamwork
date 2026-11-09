@@ -1,9 +1,6 @@
-# Default configuration for dsh-teamwork plugin.
-# Users can override this in their profile cordis.patch.yml.
-
-- id: dsh-teamwork
-  name: '@dsh-teamwork/dsh-teamwork'
-  config:
-    apiEndpoint: https://api.dsh-teamwork.com
-    autoSync: true
-    syncIntervalMs: 300000
+- insert:
+    - id: dsh-teamwork
+      name: '@dsh-teamwork/dsh-teamwork'
+      config:
+        apiEndpoint: http://localhost:3000
+        cachePath: ./teamwork-cache.json
