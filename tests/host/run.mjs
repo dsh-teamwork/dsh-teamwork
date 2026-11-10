@@ -50,7 +50,11 @@ await writeFile(expectedSnapshot, JSON.stringify(snapshot));
 await writeFile(cache, 'invalid-cache-json');
 const patch = join(work, 'patch.yml');
 await writeFile(patch, `- id: plugin-manager\n  config:\n    registry: ${registryUrl}\n    fallbackRegistries: []\n- insert:\n    - id: dsh-teamwork\n      name: ${JSON.stringify(join(repo, 'lib/index.js'))}\n      config:\n        apiEndpoint: http://localhost:3000\n        cachePath: ${JSON.stringify(cache)}\n    - id: teamwork-test\n      name: ${JSON.stringify(join(repo, presetsOnly ? 'tests/host/presets.mjs' : 'tests/host/validate.mjs'))}\n`);
-const env = { ...process.env, DSH_HOME: home, XDG_DATA_HOME: join(work, 'data'), XDG_CACHE_HOME: join(work, 'cache'), npm_config_ignore_workspace_root_check: 'true', npm_config_cache: join(work, 'npm-cache'), TEAMWORK_TEST_CACHE: cache, TEAMWORK_TEST_SNAPSHOT: expectedSnapshot, TEAMWORK_TEST_RESULT: result, TEAMWORK_TEST_CWD: work };
+// Every cache and store the host writes stays under `work`. pnpm puts its store under
+// $PNPM_HOME before $XDG_DATA_HOME, and CI sets PNPM_HOME and caches that store, so the
+// store directory is named explicitly; otherwise a fixture left there by an earlier run
+// is reused and the tarball is never downloaded.
+const env = { ...process.env, DSH_HOME: home, XDG_DATA_HOME: join(work, 'data'), XDG_CACHE_HOME: join(work, 'cache'), npm_config_ignore_workspace_root_check: 'true', npm_config_cache: join(work, 'npm-cache'), npm_config_store_dir: join(work, 'pnpm-store'), TEAMWORK_TEST_CACHE: cache, TEAMWORK_TEST_SNAPSHOT: expectedSnapshot, TEAMWORK_TEST_RESULT: result, TEAMWORK_TEST_CWD: work };
 const child = spawn(process.execPath, [resolve(cli), 'web', '--patch', patch, '--host', '127.0.0.1', '--port', '0', '--no-open'], { env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
 let logs = ''; child.stdout.on('data', d => { logs += d; }); child.stderr.on('data', d => { logs += d; });
 let success = false;
