@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { spawn, execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
+const presetsOnly = process.argv.includes('--presets');
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const cli = process.env.DSH_CLI;
 if (!cli) throw new Error('Set DSH_CLI to the installed @deepseek-ai/dsh CLI entry (lib/bin.js).');
@@ -48,7 +49,7 @@ const expectedSnapshot = join(work, 'expected.json');
 await writeFile(expectedSnapshot, JSON.stringify(snapshot));
 await writeFile(cache, 'invalid-cache-json');
 const patch = join(work, 'patch.yml');
-await writeFile(patch, `- id: plugin-manager\n  config:\n    registry: ${registryUrl}\n    fallbackRegistries: []\n- insert:\n    - id: dsh-teamwork\n      name: ${JSON.stringify(join(repo, 'lib/index.js'))}\n      config:\n        apiEndpoint: http://localhost:3000\n        cachePath: ${JSON.stringify(cache)}\n    - id: teamwork-test\n      name: ${JSON.stringify(join(repo, 'tests/host/validate.mjs'))}\n`);
+await writeFile(patch, `- id: plugin-manager\n  config:\n    registry: ${registryUrl}\n    fallbackRegistries: []\n- insert:\n    - id: dsh-teamwork\n      name: ${JSON.stringify(join(repo, 'lib/index.js'))}\n      config:\n        apiEndpoint: http://localhost:3000\n        cachePath: ${JSON.stringify(cache)}\n    - id: teamwork-test\n      name: ${JSON.stringify(join(repo, presetsOnly ? 'tests/host/presets.mjs' : 'tests/host/validate.mjs'))}\n`);
 const env = { ...process.env, DSH_HOME: home, XDG_DATA_HOME: join(work, 'data'), XDG_CACHE_HOME: join(work, 'cache'), npm_config_ignore_workspace_root_check: 'true', npm_config_cache: join(work, 'npm-cache'), TEAMWORK_TEST_CACHE: cache, TEAMWORK_TEST_SNAPSHOT: expectedSnapshot, TEAMWORK_TEST_RESULT: result, TEAMWORK_TEST_CWD: work };
 const child = spawn(process.execPath, [resolve(cli), 'web', '--patch', patch, '--host', '127.0.0.1', '--port', '0', '--no-open'], { env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
 let logs = ''; child.stdout.on('data', d => { logs += d; }); child.stderr.on('data', d => { logs += d; });
@@ -59,7 +60,7 @@ try {
     try {
       const report = JSON.parse(await readFile(result, 'utf8'));
       if (!report.passed) throw new Error(report.error);
-      if (!downloads) throw new Error('Package manager did not download the fixture tarball');
+      if (!presetsOnly && !downloads) throw new Error('Package manager did not download the fixture tarball');
       console.log(JSON.stringify({ ...report, tarballDownloads: downloads }, null, 2)); success = true; break;
     } catch (error) { if (error.code !== 'ENOENT') throw error; }
     if (child.exitCode !== null) throw new Error(`DSH exited: ${child.exitCode}`);

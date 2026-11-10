@@ -1,181 +1,52 @@
 import { z } from 'zod';
 export declare const snapshotSchema: z.ZodObject<{
     teamId: z.ZodString;
-    configs: z.ZodArray<z.ZodDiscriminatedUnion<"kind", [z.ZodObject<{
+    configs: z.ZodArray<z.ZodDiscriminatedUnion<[z.ZodObject<{
         kind: z.ZodLiteral<"model">;
         data: z.ZodObject<{
             provider: z.ZodString;
             model: z.ZodString;
-        }, "strip", z.ZodTypeAny, {
-            model: string;
-            provider: string;
-        }, {
-            model: string;
-            provider: string;
-        }>;
+            contextWindow: z.ZodOptional<z.ZodNumber>;
+            maxTokens: z.ZodOptional<z.ZodNumber>;
+        }, z.core.$strip>;
         id: z.ZodString;
         name: z.ZodString;
         version: z.ZodNumber;
-    }, "strip", z.ZodTypeAny, {
-        kind: "model";
-        data: {
-            model: string;
-            provider: string;
-        };
-        id: string;
-        name: string;
-        version: number;
-    }, {
-        kind: "model";
-        data: {
-            model: string;
-            provider: string;
-        };
-        id: string;
-        name: string;
-        version: number;
-    }>, z.ZodObject<{
+    }, z.core.$strip>, z.ZodObject<{
         kind: z.ZodLiteral<"preset">;
         data: z.ZodObject<{
+            provider: z.ZodOptional<z.ZodString>;
+            model: z.ZodOptional<z.ZodString>;
+            modelConfigId: z.ZodOptional<z.ZodString>;
+            description: z.ZodOptional<z.ZodString>;
+            instructions: z.ZodOptional<z.ZodString>;
+            outputDescription: z.ZodOptional<z.ZodString>;
+            pluginDependencies: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                pluginConfigId: z.ZodString;
+                version: z.ZodString;
+            }, z.core.$strip>>>;
+            requiredTools: z.ZodOptional<z.ZodArray<z.ZodString>>;
+            optionalTools: z.ZodOptional<z.ZodArray<z.ZodString>>;
             systemPrompt: z.ZodDefault<z.ZodString>;
-            provider: z.ZodString;
-            model: z.ZodString;
-        }, "strip", z.ZodTypeAny, {
-            model: string;
-            provider: string;
-            systemPrompt: string;
-        }, {
-            model: string;
-            provider: string;
-            systemPrompt?: string | undefined;
-        }>;
+            contextWindow: z.ZodOptional<z.ZodNumber>;
+            maxTokens: z.ZodOptional<z.ZodNumber>;
+        }, z.core.$strip>;
         id: z.ZodString;
         name: z.ZodString;
         version: z.ZodNumber;
-    }, "strip", z.ZodTypeAny, {
-        kind: "preset";
-        data: {
-            model: string;
-            provider: string;
-            systemPrompt: string;
-        };
-        id: string;
-        name: string;
-        version: number;
-    }, {
-        kind: "preset";
-        data: {
-            model: string;
-            provider: string;
-            systemPrompt?: string | undefined;
-        };
-        id: string;
-        name: string;
-        version: number;
-    }>, z.ZodObject<{
+    }, z.core.$strip>, z.ZodObject<{
         kind: z.ZodLiteral<"plugin">;
         data: z.ZodObject<{
             package: z.ZodString;
             version: z.ZodString;
+            providesTools: z.ZodOptional<z.ZodArray<z.ZodString>>;
             description: z.ZodDefault<z.ZodString>;
-        }, "strip", z.ZodTypeAny, {
-            version: string;
-            package: string;
-            description: string;
-        }, {
-            version: string;
-            package: string;
-            description?: string | undefined;
-        }>;
+        }, z.core.$strip>;
         id: z.ZodString;
         name: z.ZodString;
         version: z.ZodNumber;
-    }, "strip", z.ZodTypeAny, {
-        kind: "plugin";
-        data: {
-            version: string;
-            package: string;
-            description: string;
-        };
-        id: string;
-        name: string;
-        version: number;
-    }, {
-        kind: "plugin";
-        data: {
-            version: string;
-            package: string;
-            description?: string | undefined;
-        };
-        id: string;
-        name: string;
-        version: number;
-    }>]>, "many">;
-}, "strip", z.ZodTypeAny, {
-    teamId: string;
-    configs: ({
-        kind: "model";
-        data: {
-            model: string;
-            provider: string;
-        };
-        id: string;
-        name: string;
-        version: number;
-    } | {
-        kind: "preset";
-        data: {
-            model: string;
-            provider: string;
-            systemPrompt: string;
-        };
-        id: string;
-        name: string;
-        version: number;
-    } | {
-        kind: "plugin";
-        data: {
-            version: string;
-            package: string;
-            description: string;
-        };
-        id: string;
-        name: string;
-        version: number;
-    })[];
-}, {
-    teamId: string;
-    configs: ({
-        kind: "model";
-        data: {
-            model: string;
-            provider: string;
-        };
-        id: string;
-        name: string;
-        version: number;
-    } | {
-        kind: "preset";
-        data: {
-            model: string;
-            provider: string;
-            systemPrompt?: string | undefined;
-        };
-        id: string;
-        name: string;
-        version: number;
-    } | {
-        kind: "plugin";
-        data: {
-            version: string;
-            package: string;
-            description?: string | undefined;
-        };
-        id: string;
-        name: string;
-        version: number;
-    })[];
-}>;
+    }, z.core.$strip>], "kind">>;
+}, z.core.$strip>;
 export type Snapshot = z.infer<typeof snapshotSchema>;
 export type TeamConfig = Snapshot['configs'][number];
 export declare class TeamworkClient {
@@ -197,8 +68,10 @@ export declare class TeamworkClient {
         configs: ({
             kind: "model";
             data: {
-                model: string;
                 provider: string;
+                model: string;
+                contextWindow?: number | undefined;
+                maxTokens?: number | undefined;
             };
             id: string;
             name: string;
@@ -206,9 +79,21 @@ export declare class TeamworkClient {
         } | {
             kind: "preset";
             data: {
-                model: string;
-                provider: string;
                 systemPrompt: string;
+                provider?: string | undefined;
+                model?: string | undefined;
+                modelConfigId?: string | undefined;
+                description?: string | undefined;
+                instructions?: string | undefined;
+                outputDescription?: string | undefined;
+                pluginDependencies?: {
+                    pluginConfigId: string;
+                    version: string;
+                }[] | undefined;
+                requiredTools?: string[] | undefined;
+                optionalTools?: string[] | undefined;
+                contextWindow?: number | undefined;
+                maxTokens?: number | undefined;
             };
             id: string;
             name: string;
@@ -216,9 +101,10 @@ export declare class TeamworkClient {
         } | {
             kind: "plugin";
             data: {
-                version: string;
                 package: string;
+                version: string;
                 description: string;
+                providesTools?: string[] | undefined;
             };
             id: string;
             name: string;
@@ -231,8 +117,10 @@ export declare class TeamworkClient {
         configs: ({
             kind: "model";
             data: {
-                model: string;
                 provider: string;
+                model: string;
+                contextWindow?: number | undefined;
+                maxTokens?: number | undefined;
             };
             id: string;
             name: string;
@@ -240,9 +128,21 @@ export declare class TeamworkClient {
         } | {
             kind: "preset";
             data: {
-                model: string;
-                provider: string;
                 systemPrompt: string;
+                provider?: string | undefined;
+                model?: string | undefined;
+                modelConfigId?: string | undefined;
+                description?: string | undefined;
+                instructions?: string | undefined;
+                outputDescription?: string | undefined;
+                pluginDependencies?: {
+                    pluginConfigId: string;
+                    version: string;
+                }[] | undefined;
+                requiredTools?: string[] | undefined;
+                optionalTools?: string[] | undefined;
+                contextWindow?: number | undefined;
+                maxTokens?: number | undefined;
             };
             id: string;
             name: string;
@@ -250,22 +150,28 @@ export declare class TeamworkClient {
         } | {
             kind: "plugin";
             data: {
-                version: string;
                 package: string;
+                version: string;
                 description: string;
+                providesTools?: string[] | undefined;
             };
             id: string;
             name: string;
             version: number;
         })[];
     } | undefined>;
+    platformCredential(): string;
+    sessionRevision(): number;
+    authenticated(): boolean;
     current(): {
         teamId: string;
         configs: ({
             kind: "model";
             data: {
-                model: string;
                 provider: string;
+                model: string;
+                contextWindow?: number | undefined;
+                maxTokens?: number | undefined;
             };
             id: string;
             name: string;
@@ -273,9 +179,21 @@ export declare class TeamworkClient {
         } | {
             kind: "preset";
             data: {
-                model: string;
-                provider: string;
                 systemPrompt: string;
+                provider?: string | undefined;
+                model?: string | undefined;
+                modelConfigId?: string | undefined;
+                description?: string | undefined;
+                instructions?: string | undefined;
+                outputDescription?: string | undefined;
+                pluginDependencies?: {
+                    pluginConfigId: string;
+                    version: string;
+                }[] | undefined;
+                requiredTools?: string[] | undefined;
+                optionalTools?: string[] | undefined;
+                contextWindow?: number | undefined;
+                maxTokens?: number | undefined;
             };
             id: string;
             name: string;
@@ -283,9 +201,10 @@ export declare class TeamworkClient {
         } | {
             kind: "plugin";
             data: {
-                version: string;
                 package: string;
+                version: string;
                 description: string;
+                providesTools?: string[] | undefined;
             };
             id: string;
             name: string;
@@ -305,4 +224,27 @@ export declare class TeamOverlay {
     apply(snapshot?: Snapshot): Promise<void>;
     private reconcile;
 }
+/** References resolve within the current team snapshot only; never fall back to local models. */
+export declare function modelData(snapshot: Snapshot, config: TeamConfig): {
+    systemPrompt: string;
+    provider?: string | undefined;
+    model?: string | undefined;
+    modelConfigId?: string | undefined;
+    description?: string | undefined;
+    instructions?: string | undefined;
+    outputDescription?: string | undefined;
+    pluginDependencies?: {
+        pluginConfigId: string;
+        version: string;
+    }[] | undefined;
+    requiredTools?: string[] | undefined;
+    optionalTools?: string[] | undefined;
+    contextWindow?: number | undefined;
+    maxTokens?: number | undefined;
+} | {
+    provider: string;
+    model: string;
+    contextWindow?: number | undefined;
+    maxTokens?: number | undefined;
+} | undefined;
 //# sourceMappingURL=client.d.ts.map

@@ -17,7 +17,7 @@ export function apply(ctx) {
    await ctx.agents.create({ sessionId: id, meta: { cwd: process.env.TEAMWORK_TEST_CWD, agentPreset: 'team:host-smoke:review' }, setup: async agentCtx => { await ctx.agentPresets.mount(agentCtx, 'team:host-smoke:review'); } });
    const agent = ctx.agents.get(id);
    assert(ctx.commands.list(agent).some(c => c.name === 'team'));
-   assert.deepEqual(agent.model.current(), { provider: 'deepseek', model: 'deepseek-chat' });
+   assert.deepEqual(agent.model.current(), { provider: 'teamwork-platform', model: 'review' });
    const require = createRequire(process.env.DSH_CLI);
    const { renderPrompt } = await import(pathToFileURL(require.resolve('@deepseek-ai/dsh-system-prompt')).href);
    const promptAssembly = await agent.ctx.systemPrompt.assemble({ agent, scope: agent, modelSelection: agent.model.current() });
@@ -62,7 +62,7 @@ export function apply(ctx) {
    const updated = await ctx.agentPresets.list(); assert(updated.some(p => p.id === 'team:host-smoke:review' && p.name === '[团队] Updated review'));
    assert(updated.some(p => p.id === 'local-review'));
    const use = await execute('/team use review'); assert.equal(use.result.kind, 'success', use.result.text);
-   assert.equal(agent.model.current().model, 'deepseek-reasoner');
+   assert.deepEqual(agent.model.current(), { provider: 'teamwork-platform', model: 'review' });
    const logout = await execute('/team logout'); assert.equal(logout.result.kind, 'success');
    const remaining = await ctx.agentPresets.list(); assert(!remaining.some(p => p.id.startsWith('team:host-smoke:')));
    for (const preset of originalRoster.filter(p => !p.id.startsWith('team:host-smoke:'))) assert(remaining.some(p => p.id === preset.id), `Lost local preset ${preset.id}`);

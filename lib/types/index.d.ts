@@ -11,9 +11,13 @@ export interface Config {
 export declare const Config: z<Schemastery.ObjectS<NoInfer<{
     apiEndpoint: z<string, string, "defined">;
     cachePath: z<string, string, "defined">;
+    autoSync: z<boolean, boolean, "defined">;
+    syncIntervalMs: z<number, number, "defined">;
 }>>, Schemastery.ObjectT<NoInfer<{
     apiEndpoint: z<string, string, "defined">;
     cachePath: z<string, string, "defined">;
+    autoSync: z<boolean, boolean, "defined">;
+    syncIntervalMs: z<number, number, "defined">;
 }>>, "plain">;
 export declare function apply(ctx: Context, config: Config): Promise<void>;
 //# sourceMappingURL=index.d.ts.map

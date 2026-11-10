@@ -26,7 +26,7 @@ test('network and malformed replies preserve cache; revoked membership clears it
     const original = await readFile(path, 'utf8'); mode = 'network'; await expect(client.sync()).rejects.toThrow(); expect(await readFile(path, 'utf8')).toBe(original);
     mode = 'bad'; await expect(client.sync()).rejects.toThrow(); expect(await readFile(path, 'utf8')).toBe(original);
     const restored = new TeamworkClient('http://localhost:3000', path, request); expect(await restored.restore()).toEqual(snapshot);
-    mode = 'revoked'; await expect(client.sync()).rejects.toThrow(); expect(client.current()).toBeUndefined(); await expect(readFile(path)).rejects.toThrow();
+    mode = 'revoked'; await expect(client.sync()).rejects.toThrow(); expect(client.current()).toBeUndefined(); expect(client.authenticated()).toBe(false); await expect(readFile(path)).rejects.toThrow();
   } finally { await rm(dir, { recursive: true }); }
 });
 
