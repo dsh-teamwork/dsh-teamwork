@@ -2,5 +2,5 @@
     - id: dsh-teamwork
       name: '@dsh-teamwork/dsh-teamwork'
       config:
-        apiEndpoint: http://localhost:3000
+        apiEndpoint: http://localhost:3800
         cachePath: ./teamwork-cache.json

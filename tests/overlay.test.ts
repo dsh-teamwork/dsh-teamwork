@@ -15,17 +15,17 @@ test('team updates and removal never touch a same-named local registration', asy
 test('network and malformed replies preserve cache; revoked membership clears it', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'teamwork-')); const path = join(dir, 'cache.json'); let mode = 'ok';
   const request: typeof fetch = async (input) => {
-    if (String(input).endsWith('/exchange')) return Response.json({ token: 'test-token' });
+    if (String(input).endsWith('/auth/plugin/token')) return Response.json({ token: 'test-token' });
     if (mode === 'network') throw new Error('offline');
     if (mode === 'bad') return Response.json({ configs: [] });
     if (mode === 'revoked') return new Response('', { status: 403 });
     return Response.json(snapshot);
   };
   try {
-    const client = new TeamworkClient('http://localhost:3000', path, request); client.beginLogin(); await client.completeLogin('code'); await client.sync();
+    const client = new TeamworkClient('http://localhost:3800', path, request); client.beginLogin(); await client.completeLogin('code'); await client.sync();
     const original = await readFile(path, 'utf8'); mode = 'network'; await expect(client.sync()).rejects.toThrow(); expect(await readFile(path, 'utf8')).toBe(original);
     mode = 'bad'; await expect(client.sync()).rejects.toThrow(); expect(await readFile(path, 'utf8')).toBe(original);
-    const restored = new TeamworkClient('http://localhost:3000', path, request); expect(await restored.restore()).toEqual(snapshot);
+    const restored = new TeamworkClient('http://localhost:3800', path, request); expect(await restored.restore()).toEqual(snapshot);
     mode = 'revoked'; await expect(client.sync()).rejects.toThrow(); expect(client.current()).toBeUndefined(); expect(client.authenticated()).toBe(false); await expect(readFile(path)).rejects.toThrow();
   } finally { await rm(dir, { recursive: true }); }
 });
@@ -36,12 +36,11 @@ test('logout cancels an in-flight sync without resurrecting its cache', async ()
   let started!: () => void;
   const fetching = new Promise<void>(resolve => { started = resolve; });
   const request: typeof fetch = async input => {
-    if (String(input).endsWith('/exchange')) return Response.json({ token: 'test-token' });
-    if (String(input).endsWith('/logout')) return Response.json({ ok: true });
+    if (String(input).endsWith('/auth/plugin/token')) return Response.json({ token: 'test-token' });
     started(); return new Promise<Response>(resolve => { resolveResponse = resolve; });
   };
   try {
-    const client = new TeamworkClient('http://localhost:3000', path, request);
+    const client = new TeamworkClient('http://localhost:3800', path, request);
     client.beginLogin(); await client.completeLogin('code');
     const syncing = client.sync(); const rejected = expect(syncing).rejects.toThrow('Session changed');
     await fetching; const logout = client.logout(); resolveResponse(Response.json(snapshot));
@@ -54,17 +53,18 @@ test('late login completion cannot reauthenticate after logout', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'teamwork-login-'));
   let complete!: (response: Response) => void, started!: () => void;
   const fetching = new Promise<void>(resolve => { started = resolve; });
-  const revoked: string[] = [];
-  const request: typeof fetch = async (input, init) => {
-    if (String(input).endsWith('/exchange')) { started(); return new Promise(resolve => { complete = resolve; }); }
-    if (String(input).endsWith('/logout')) { revoked.push(new Headers(init?.headers).get('authorization')!); return Response.json({ ok: true }); }
+  const calls: string[] = [];
+  const request: typeof fetch = async input => {
+    calls.push(new URL(String(input)).pathname);
+    if (String(input).endsWith('/auth/plugin/token')) { started(); return new Promise(resolve => { complete = resolve; }); }
     return Response.json(snapshot);
   };
   try {
-    const client = new TeamworkClient('http://localhost:3000', join(dir, 'cache.json'), request);
+    const client = new TeamworkClient('http://localhost:3800', join(dir, 'cache.json'), request);
     client.beginLogin(); const login = client.completeLogin('code'); const rejected = expect(login).rejects.toThrow('Login cancelled');
     await fetching; const logout = client.logout(); complete(Response.json({ token: 'late-token' }));
     await rejected; await logout; await expect(client.sync()).rejects.toThrow('Sign in first');
-    expect(revoked).toEqual(['Bearer late-token']);
+    // The late token is dropped, never used: no request carried it.
+    expect(calls).toEqual(['/api/auth/plugin/token']);
   } finally { await rm(dir, { recursive: true }); }
 });

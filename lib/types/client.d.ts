@@ -213,6 +213,7 @@ export declare class TeamworkClient {
     } | undefined;
     clear(): Promise<void>;
     logout(): Promise<void>;
+    /** Forgets the token locally; the platform cannot revoke it, but a removed member is refused on every request. */
     private logoutOnce;
 }
 /** Reconcile only registrations owned by this plugin. The host's local registry is never enumerated or mutated. */

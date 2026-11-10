@@ -18,7 +18,7 @@ import { platformAdapter, platformProvider } from './platform-models.js';
 export const name = 'dsh-teamwork';
 export const inject = ['agentPresets', 'agents', 'llm', 'sessionProjections'];
 export interface Config { apiEndpoint: string; cachePath: string; autoSync?: boolean; syncIntervalMs?: number; }
-export const Config = z.object({ apiEndpoint: z.string().default('http://localhost:3000'), cachePath: z.string().required(), autoSync: z.boolean().default(true), syncIntervalMs: z.number().default(60000) });
+export const Config = z.object({ apiEndpoint: z.string().default('http://localhost:3800'), cachePath: z.string().required(), autoSync: z.boolean().default(true), syncIntervalMs: z.number().default(60000) });
 export async function apply(ctx: Context, config: Config) {
   const client = new TeamworkClient(config.apiEndpoint, config.cachePath);
   ctx.effect(() => ctx.llm.registerAdapter([platformProvider], platformAdapter(client)));

@@ -20,7 +20,7 @@ pnpm typecheck
 ```yaml
 - id: dsh-teamwork
   config:
-    apiEndpoint: http://localhost:3000
+    apiEndpoint: http://localhost:3800
     cachePath: /absolute/path/to/private/teamwork-cache.json
     autoSync: true
     syncIntervalMs: 60000
@@ -40,7 +40,7 @@ pnpm typecheck
 - `/team use <id>`：选择本会话使用的团队模型/预设，不修改本地默认模型。
 - `/team install <id>`：查看固定版本插件的安装确认说明。
 - `/team install <id> confirm`：通过 DSH 插件管理器先下载为禁用状态，检查配置覆盖和条目冲突后再启用。已有本地插件不会被覆盖或升级；有冲突的新包保持禁用，供用户在本地插件管理器中检查。
-- `/team logout`：撤销插件会话并移除团队缓存和注册。
+- `/team logout`：在本地丢弃插件令牌，并移除团队缓存和注册。平台令牌无法在服务端撤销，但被移出团队的成员在下一次请求时即被拒绝。
 
 凭据只保存在内存，重启需要重新登录。非敏感团队配置缓存以 0600 文件权限保存并原子替换，宿主重启时恢复。缓存路径应位于用户私有目录。网络失败保留现有配置；明确的 401/403 清除团队缓存。
 
