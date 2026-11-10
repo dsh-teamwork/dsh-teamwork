@@ -22,3 +22,6 @@ coverage/
 
 # Source maps are published
 # lib/ must be committed for GitHub installation
+
+.teamwork/
+*.tsbuildinfo

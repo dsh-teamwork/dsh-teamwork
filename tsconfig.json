@@ -1,9 +1,12 @@
 {
   "compilerOptions": {
-    "target": "ES2024",
+    "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": ["ES2024", "DOM"],
+    "lib": [
+      "ES2024",
+      "DOM"
+    ],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -13,7 +16,14 @@
     "declarationMap": true,
     "sourceMap": true,
     "outDir": "lib",
-    "rootDir": "src"
+    "rootDir": "src",
+    "types": [
+      "node"
+    ],
+    "jsx": "react-jsx",
+    "declarationDir": "lib/types"
   },
-  "include": ["src/**/*"]
+  "include": [
+    "src/**/*"
+  ]
 }
