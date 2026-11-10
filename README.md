@@ -30,7 +30,7 @@ pnpm typecheck
 
 在 DSH 原生命令输入框中使用：
 
-- `/team login`：打开输出的浏览器链接，完成邮箱 OTP 登录并确认授权。
+- `/team login`：打开输出的浏览器链接，用 Google 或邮件验证码登录并确认授权。
 - `/team authorize <code>`：兑换两分钟有效的一次性授权码。
 - `/team status`：查看登录状态、自动同步开关、团队配置数量、最近同步成功时间和错误。
 - `/team sync`：拉取团队模型、预设和插件目录。
@@ -52,7 +52,7 @@ pnpm typecheck
 
 ## 验证范围
 
-单元测试验证配置隔离、幂等同步、失败保留、缓存恢复、权限失效清理，以及退出时同步/授权请求的并发取消。平台仓库的 `scripts/plugin-smoke.cjs` 验证真实 NextAuth 浏览器授权、Prisma/PostgreSQL 配置获取和插件客户端。
+单元测试验证配置隔离、幂等同步、失败保留、缓存恢复、权限失效清理，以及退出时同步/授权请求的并发取消。授权码换取令牌的服务端逻辑由 platform 仓库的 `packages/shared/src/server/auth/nextauth/__tests__/tokens.test.ts` 覆盖。
 
 已在真实 DSH web 宿主验证团队预设注册、会话模型选择和 `/team list`。真实模型调用需要本地配置的模型密钥。真实 DSH + 本地 npm 测试仓库已验证固定版本插件下载、校验、加载、确认安装、重复安装保护，以及退出团队后保留用户已安装插件。测试包为无外部依赖的受控 fixture；任意第三方包的兼容性仍由 DSH 管理器检查。
 
@@ -66,7 +66,7 @@ DSH_CLI=/tmp/dsh-test-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js pnpm test
 
 测试启动独立临时 profile 和本地 npm registry，创建并打包两个固定版本 fixture，提供 SHA-512 integrity，经真实 DSH 包管理器下载和加载。测试不会发布包，也不修改现有 DSH profile。成功后清理临时目录；失败时报告诊断目录。宿主日志可能含本地浏览器令牌，请勿公开上传完整日志。
 
-安装确认绑定当前会话和包的精确版本；配置改变后必须重新查看安装说明。固定 OTP 和浏览器授权仍由 platform 仓库提供。原生命令是宿主扩展，因此包声明 `dsh.bundle`，不声明不存在的浏览器客户端 bundle。
+安装确认绑定当前会话和包的精确版本；配置改变后必须重新查看安装说明。浏览器登录（Google 或邮件验证码）和授权仍由 platform 仓库提供。原生命令是宿主扩展，因此包声明 `dsh.bundle`，不声明不存在的浏览器客户端 bundle。
 
 测试为隔离的临时 DSH profile 设置 `npm_config_ignore_workspace_root_check=true`，允许 pnpm 9 在该 profile 的 workspace 根目录安装受控包。
 
@@ -78,7 +78,7 @@ DSH_CLI=/tmp/dsh-test-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js pnpm test
 
 ## Platform 模型网关
 
-团队模型和预设统一选择 `teamwork-platform` provider，wire model 为团队配置 ID。插件把 DSH 的文本、工具调用和流式输出转换为 OpenAI Chat Completions 请求，发送到 `apiEndpoint/api/v1/llm/chat/completions`。认证使用内存中的 platform 插件会话令牌，不读取本地供应商密钥，也不提供供应商直连降级。
+团队模型和预设统一选择 `teamwork-platform` provider，wire model 为团队配置 ID。插件把 DSH 的文本、工具调用和流式输出转换为 OpenAI Chat Completions 请求，发送到 `apiEndpoint/api/llm/chat/completions`。认证使用内存中的 platform 插件会话令牌，不读取本地供应商密钥，也不提供供应商直连降级。
 
 供应商地址和真实 API Key 仅配置在 platform 部署环境。缓存只保存配置描述；未登录时，即使有缓存也无法推理。当前适配器先支持文本和工具调用，模型目录读取团队配置中的 `contextWindow` 和 `maxTokens`。只有缺失字段才使用 32K 上下文、4096 输出的兼容值（确保输出不超过上下文）。管理员可在 platform 查询供应商模型列表并补充未提供的能力值；多模态和其他供应商协议后续补齐。
 
