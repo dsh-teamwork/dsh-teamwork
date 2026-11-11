@@ -117,3 +117,7 @@ DSH_CLI=/tmp/dsh-test-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js pnpm test
 继续/重试不插队：如果有队列或引导输入，先在 DSH 原生界面检查处理。确认会在会话、模型、团队配置或登录身份变更后失效。权限检查期间取消不会在检查返回后启动任务；同时提交的请求也不会重复派发。
 
 任务摘要和结果使用原生 session projection，在本地会话恢复时重建；不向 platform 上传会话。错误提示区分凭据、限流、网络和工具条件，不复制上游原始错误正文。恢复检查是启动前检查，不替代 platform 对实际每次请求的实时权限校验。
+
+## 许可证
+
+Apache License 2.0（`LICENSE`）。名称“DSH Teamwork”和鲸鱼标志不随代码授权（`NOTICE`），派生项目需使用自己的名称和标志。
