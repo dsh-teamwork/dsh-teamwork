@@ -2,14 +2,16 @@
   "name": "@dsh-teamwork/dsh-teamwork",
   "version": "0.1.0",
   "description": "Team collaboration plugin for DeepSeek Harness",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "files": [
     "lib",
     "locale",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "build": "tsc",
