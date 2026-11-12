@@ -8,6 +8,8 @@ export interface Config {
     autoSync?: boolean;
     syncIntervalMs?: number;
 }
+/** The hosted service. A member can pick another server in the panel; the profile's `apiEndpoint` sets the default. */
+export declare const DEFAULT_SERVER = "https://dshteamwork.com";
 export declare const Config: z<Schemastery.ObjectS<NoInfer<{
     apiEndpoint: z<string, string, "defined">;
     cachePath: z<string, string, "defined">;

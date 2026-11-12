@@ -31,18 +31,24 @@ Nothing is published yet: the plugin's browser bundle compiles it in.
 
 | Component | Use it for |
 | --- | --- |
-| `Panel` | A full-height screen: header, navigation, scrolling body. It is the theme root. |
+| `Panel` | A full-height screen: header, navigation and a scrolling body in one centred column. It is the theme root; `centered` places a first screen in the middle. |
+| `BrandMark` | The DSH Teamwork mark on its plate, copied from the platform's `docs/brand/icon.svg`. Never drawn without the plate or recoloured. |
+| `Icon` | The stroke icons the screens use (Lucide's paths), in `currentColor`. |
+| `Card`, `Banner` | A bordered surface; a block message with a tone, a title and one action. |
 | `UIRoot` | The theme root for anything that is not a `Panel`. |
-| `Item`, `ItemBody` | One entry in a list: title, subtitle, description, tags, actions, a notice, and a body below a divider. |
+| `Item`, `ItemBody` | One entry in a list: an icon tile, title, subtitle, description, tags, actions, a notice, and a body below a divider. |
 | `Confirm` | An inline confirmation for an action with consequences, in place of a modal. |
-| `EmptyState` | A first screen: what this is and the one thing to do next. |
-| `Button` | `primary`, `secondary`, `ghost`, `danger`; `busy` shows a spinner and blocks a second click. |
+| `EmptyState` | What an empty list means and, when there is one, what to do about it. |
+| `Button` | `primary`, `secondary`, `ghost`, `danger`; sizes `sm`, `md`, `lg`; a leading or trailing `Icon`; `busy` shows a spinner and blocks a second click. |
 | `Badge` | A state or a label; `tone` and an optional `dot`. |
 | `Tabs` | A row of tabs; the caller owns the selection. |
-| `Input`, `Monogram`, `Spinner`, `Notice`, `DefinitionList`, `Toast` | What their names say. |
+| `Field`, `Input` | A labelled input with a hint or an error under it. |
+| `Monogram`, `Spinner`, `Skeleton`, `Notice`, `DefinitionList`, `Toast` | What their names say. |
 
 Utility classes for layout inside a screen: `twui-row` (a wrapping row with
-gaps), `twui-mono`, `twui-muted`, `twui-subtle`.
+gaps), `twui-stack`, `twui-tile`, `twui-link`, `twui-mono`, `twui-muted`,
+`twui-subtle`. `--twui-fill` is a quiet fill drawn from the text colour, which
+shows on any surface in both themes; use it rather than a host layer token.
 
 ## Development
 

@@ -44,7 +44,9 @@ export interface PanelState {
   team: { id: string; name: string; role: 'admin' | 'member' } | null;
   /** The web console, for an admin. */
   consoleUrl: string;
+  /** The server this DSH signs in to and syncs from, and the one it uses unless the member picks another. */
   server: string;
+  defaultServer: string;
   sync: { auto: boolean; running: boolean; lastSuccess?: string; lastError?: string };
   /** The session the member has open, when the host has it loaded. */
   session: {
@@ -67,6 +69,8 @@ export interface PanelOps {
   authorize(code: string): Promise<void>;
   sync(): Promise<void>;
   logout(): Promise<void>;
+  /** Points the plugin at another server, or back to the default with `null`; signs out of the current one. */
+  setServer(server: string | null): Promise<void>;
   /** Selects a team model or preset for the session; returns what changed. */
   use(sessionId: string, id: string): Promise<string>;
   /** Installs a pinned plugin at exactly the version the member confirmed. */
@@ -118,6 +122,7 @@ export function panelRoutes(ops: PanelOps): FetchRoute[] {
     post('authorize', (body) => ops.authorize(text(body.code, '授权码'))),
     post('sync', () => ops.sync()),
     post('logout', () => ops.logout()),
+    post('server', (body) => ops.setServer(body.server === null ? null : text(body.server, '服务器地址'))),
     post('use', async (body) => ({ message: await ops.use(text(body.sessionId, '会话'), text(body.id, '配置 ID')) })),
     post('install', async (body) => ({ message: await ops.install(text(body.id, '插件 ID'), text(body.version, '版本')) })),
   ];

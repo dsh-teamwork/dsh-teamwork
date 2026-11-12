@@ -17,6 +17,18 @@ export const snapshotSchema = z.object({ teamId: z.string().min(1), teamName: z.
 ])) });
 export type Snapshot = z.infer<typeof snapshotSchema>;
 export type TeamConfig = Snapshot['configs'][number];
+/**
+ * A server address as the plugin stores and calls it: https anywhere, plain http only on
+ * this machine, no query or fragment, no trailing slash. Throws a message for the member.
+ */
+export function serverAddress(input: string) {
+  let url: URL;
+  try { url = new URL(input.trim()); } catch { throw new Error('服务器地址无效，请输入完整地址，例如 https://dshteamwork.com'); }
+  const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) throw new Error('服务器地址必须使用 https；只有本机地址（localhost）可以用 http');
+  if (url.search || url.hash || url.username || url.password) throw new Error('服务器地址不能包含查询参数、片段或账号信息');
+  return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
+}
 export class TeamworkClient {
   private token?: string;
   private verifier?: string;
@@ -26,9 +38,21 @@ export class TeamworkClient {
   private enqueue<T>(operation: () => Promise<T>): Promise<T> {
     const next = this.operations.then(operation, operation); this.operations = next.catch(() => {}); return next;
   }
-  constructor(readonly endpoint: string, readonly cachePath: string, private request: typeof fetch = fetch) {
-    const url = new URL(endpoint);
-    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) throw new Error('HTTPS required outside loopback');
+  private server: string;
+  constructor(endpoint: string, readonly cachePath: string, private request: typeof fetch = fetch) {
+    this.server = serverAddress(endpoint);
+  }
+  /** The DSH Teamwork server this client signs in to and syncs from. */
+  get endpoint() { return this.server; }
+  /**
+   * Points the client at another server. A token and a team belong to one server, so
+   * this signs out and drops the cached configuration, as `logout` does.
+   */
+  setEndpoint(endpoint: string) {
+    const next = serverAddress(endpoint);
+    if (next === this.server) return Promise.resolve();
+    this.server = next;
+    return this.logout();
   }
   beginLogin() {
     this.epoch++;
@@ -111,4 +135,25 @@ export function modelData(snapshot: Snapshot, config: TeamConfig) {
     return model?.kind === 'model' ? model.data : undefined;
   }
   return config.data;
+}
+
+/**
+ * The server the member picked in the panel, kept beside the configuration cache
+ * (`teamwork-cache.json` → `teamwork-cache.server.json`). Absent, the profile's
+ * `apiEndpoint` applies, which defaults to the hosted service.
+ */
+export class ServerChoice {
+  constructor(readonly path: string) {}
+  static beside(cachePath: string) { return new ServerChoice(cachePath.replace(/(\.json)?$/, '.server.json')); }
+  async read(): Promise<string | undefined> {
+    try { return serverAddress(z.object({ server: z.string() }).parse(JSON.parse(await readFile(this.path, 'utf8'))).server); }
+    catch { return undefined; }
+  }
+  async write(server: string | undefined) {
+    if (server === undefined) { await rm(this.path, { force: true }); return; }
+    await mkdir(dirname(this.path), { recursive: true, mode: 0o700 });
+    const temporary = `${this.path}.${randomBytes(8).toString('hex')}.tmp`;
+    try { await writeFile(temporary, JSON.stringify({ server }), { mode: 0o600 }); await rename(temporary, this.path); }
+    finally { await rm(temporary, { force: true }); }
+  }
 }

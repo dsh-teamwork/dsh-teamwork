@@ -1,6 +1,7 @@
+# apiEndpoint defaults to the hosted service, https://dshteamwork.com. Set it here for a
+# self-hosted team, or pick another server in the Teamwork panel.
 - insert:
     - id: dsh-teamwork
       name: '@dsh-teamwork/dsh-teamwork'
       config:
-        apiEndpoint: http://localhost:3800
         cachePath: ./teamwork-cache.json

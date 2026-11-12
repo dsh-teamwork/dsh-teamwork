@@ -8,6 +8,7 @@ const ops: PanelOps = {
   authorize: async (code) => { calls.push(['authorize', [code]]); },
   sync: async () => { throw new Error('同步失败'); },
   logout: async () => {},
+  setServer: async (server) => { calls.push(['server', [server]]); },
   use: async (sessionId, id) => `used ${id} in ${sessionId}`,
   install: async (id, version) => { calls.push(['install', [id, version]]); return 'installed'; },
 };
@@ -17,7 +18,7 @@ const post = (name: string, body?: unknown) =>
 
 describe('panel routes', () => {
   it('registers POST-only routes under /api/teamwork', () => {
-    expect([...routes.keys()].sort()).toEqual(['authorize', 'install', 'login', 'logout', 'state', 'sync', 'use'].map((n) => `${ROUTE_PREFIX}/${n}`));
+    expect([...routes.keys()].sort()).toEqual(['authorize', 'install', 'login', 'logout', 'server', 'state', 'sync', 'use'].map((n) => `${ROUTE_PREFIX}/${n}`));
     for (const route of routes.values()) expect(route.methods).toEqual(['POST']);
   });
 
@@ -43,6 +44,14 @@ describe('panel routes', () => {
     expect(await response.json()).toEqual({ error: '同步失败' });
     expect((await post('authorize', '{not json')).status).toBe(400);
     expect((await post('use', { sessionId: 's1' })).status).toBe(400);
+  });
+
+  it('sets a server, or goes back to the default with null, and refuses an empty one', async () => {
+    calls.length = 0;
+    await post('server', { server: 'http://localhost:3800' });
+    await post('server', { server: null });
+    expect(calls).toEqual([['server', ['http://localhost:3800']], ['server', [null]]]);
+    expect((await post('server', { server: ' ' })).status).toBe(400);
   });
 
   it('never caches an answer', async () => {

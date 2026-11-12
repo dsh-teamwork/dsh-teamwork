@@ -29,6 +29,7 @@ export const api = {
   authorize: (code: string) => call('authorize', { code }),
   sync: () => call('sync'),
   logout: () => call('logout'),
+  setServer: (server: string | null) => call('server', { server }),
   use: (sessionId: string, id: string) => call<{ message: string }>('use', { sessionId, id }),
   install: (id: string, version: string) => call<{ message: string }>('install', { id, version }),
 };
