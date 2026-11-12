@@ -3,6 +3,13 @@
   "version": "0.2.0",
   "description": "Team collaboration plugin for DeepSeek Harness",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dsh-teamwork/dsh-teamwork.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
