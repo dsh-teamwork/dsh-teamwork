@@ -10,16 +10,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The pnpm version comes from `packageManager` in package.json; naming it here too fails the step.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
           registry-url: https://registry.npmjs.org
-      - run: pnpm install
+      - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: pnpm publish --access public
+      # A tag checks out a detached HEAD, which pnpm's branch check refuses; the tag already names the commit.
+      - run: pnpm publish --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
