@@ -134,6 +134,16 @@ DSH_CLI=/tmp/dsh-test-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js pnpm test
 
 任务摘要和结果使用原生 session projection，在本地会话恢复时重建；不向 platform 上传会话。错误提示区分凭据、限流、网络和工具条件，不复制上游原始错误正文。恢复检查是启动前检查，不替代 platform 对实际每次请求的实时权限校验。
 
+## 发布
+
+发布到 npm 用 trusted publishing（OIDC），不存任何 npm 令牌，做法和 `motionhub-dev/motions` 相同：
+
+1. 把 `package.json` 的 `version` 改成新版本，合进 `main`。
+2. 在 `main` 的那个提交上打 `v<version>` 并推送。`.github/workflows/release.yml` 分两步：`package` 不带 OIDC 权限，检查 tag 指向 `main` 的历史、和版本号一致、提交的 `lib/` 与源码构建一致，再测试并打包；`stage` 在受保护的 `npm-release` 环境里，核对拿到的正是打出来的那个包（SHA-256），关掉生命周期脚本后执行 `npm stage publish`。
+3. 维护者用 `npm stage list` 找到这次暂存，再用 `npm stage approve <stage-id>`（需要 2FA）正式发布。
+
+一次性设置：GitHub 仓库里建 `npm-release` 环境（限定维护者审批、只允许受保护的 tag）；npm 上给 `@dsh-teamwork/dsh-teamwork` 配置 Trusted Publisher，指向本仓库、`release.yml` 和 `npm-release` 环境。仓库变量 `PUBLISHING=off` 可暂停暂存。
+
 ## 许可证
 
 Apache License 2.0（`LICENSE`）。名称“DSH Teamwork”和鲸鱼标志不随代码授权（`NOTICE`），派生项目需使用自己的名称和标志。
