@@ -59,7 +59,7 @@ export declare const taskProjection: {
     stateVersion: number;
 };
 export declare function outcomeText(outcome: string): string;
-export declare function recoveryHint(code: string | null, outcome: string): "登录或凭据无效：团队模型请 /team login；本地模型请检查本地凭据。" | "模型限流：稍后再显式继续，不自动重复任务。" | "工具条件不满足：运行 /team tools 和 /team plugins 检查。" | "模型连接或服务异常：检查连接后显式继续；原始任务可能已经执行部分操作。" | "任务已取消；历史与已完成的文件修改保留，继续前请检查现有结果。" | "任务未完成：查看 DSH 会话错误，检查权限、工具与已有修改后再继续。" | "达到输出上限：检查结果后使用 /team continue <后续指令>。" | "继续时发送新的后续指令；不会回滚文件或清空历史。";
+export declare function recoveryHint(code: string | null, outcome: string): "登录或凭据无效：团队模型请 /teamwork login；本地模型请检查本地凭据。" | "模型限流：稍后再显式继续，不自动重复任务。" | "工具条件不满足：运行 /teamwork tools 和 /teamwork plugins 检查。" | "模型连接或服务异常：检查连接后显式继续；原始任务可能已经执行部分操作。" | "任务已取消；历史与已完成的文件修改保留，继续前请检查现有结果。" | "任务未完成：查看 DSH 会话错误，检查权限、工具与已有修改后再继续。" | "达到输出上限：检查结果后使用 /teamwork continue <后续指令>。" | "继续时发送新的后续指令；不会回滚文件或清空历史。";
 export declare function assertIdle(agent: Pick<Agent, 'status' | 'inbox'>): void;
 export declare class TaskActions {
     private inspect;
