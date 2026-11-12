@@ -20,4 +20,4 @@ Edit `~/.dsh/profiles/web/cordis.patch.yml`:
 
 ## Sign In
 
-Open the DSH web UI and use the dshteam panel to sign in.
+Open the DSH web UI, choose **Teamwork** in the left sidebar and sign in from the panel, or run `/teamwork login` in the command box.

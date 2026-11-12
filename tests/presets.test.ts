@@ -20,8 +20,8 @@ test('revision comparison includes team identity and survives a serialized sessi
   expect(presetProjection.stateSchema.parse(stamp)).toEqual(stamp);
 });
 test('snapshot resolves referenced model capabilities locally and missing references never fall back', () => {
-  const snapshot = snapshotSchema.parse({teamId:'t',configs:[{id:'m',kind:'model',name:'Kimi',version:2,data:{provider:'kimi',model:'kimi',contextWindow:128000,maxTokens:8192}},{id:'p',kind:'preset',name:'Review',version:1,data:{modelConfigId:'m',description:'Review code',requiredTools:['Read']}}]});
+  const snapshot = snapshotSchema.parse({teamId:'t',teamName:'T',role:'member',configs:[{id:'m',kind:'model',name:'Kimi',version:2,data:{provider:'kimi',model:'kimi',contextWindow:128000,maxTokens:8192}},{id:'p',kind:'preset',name:'Review',version:1,data:{modelConfigId:'m',description:'Review code',requiredTools:['Read']}}]});
   expect(modelData(snapshot,snapshot.configs[1])?.maxTokens).toBe(8192);
   expect(modelData({...snapshot,configs:[snapshot.configs[1]]},snapshot.configs[1])).toBeUndefined();
-  expect(snapshotSchema.safeParse({teamId:'t',configs:[{id:'p',kind:'preset',name:'bad',version:1,data:{modelConfigId:'m',provider:'local',model:'secret'}}]}).success).toBe(false);
+  expect(snapshotSchema.safeParse({teamId:'t',teamName:'T',role:'member',configs:[{id:'p',kind:'preset',name:'bad',version:1,data:{modelConfigId:'m',provider:'local',model:'secret'}}]}).success).toBe(false);
 });

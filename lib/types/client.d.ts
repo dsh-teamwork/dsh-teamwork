@@ -1,6 +1,11 @@
 import { z } from 'zod';
 export declare const snapshotSchema: z.ZodObject<{
     teamId: z.ZodString;
+    teamName: z.ZodString;
+    role: z.ZodEnum<{
+        admin: "admin";
+        member: "member";
+    }>;
     configs: z.ZodArray<z.ZodDiscriminatedUnion<[z.ZodObject<{
         kind: z.ZodLiteral<"model">;
         data: z.ZodObject<{
@@ -65,6 +70,8 @@ export declare class TeamworkClient {
     private api;
     sync(): Promise<{
         teamId: string;
+        teamName: string;
+        role: "admin" | "member";
         configs: ({
             kind: "model";
             data: {
@@ -114,6 +121,8 @@ export declare class TeamworkClient {
     private syncOnce;
     restore(): Promise<{
         teamId: string;
+        teamName: string;
+        role: "admin" | "member";
         configs: ({
             kind: "model";
             data: {
@@ -165,6 +174,8 @@ export declare class TeamworkClient {
     authenticated(): boolean;
     current(): {
         teamId: string;
+        teamName: string;
+        role: "admin" | "member";
         configs: ({
             kind: "model";
             data: {
