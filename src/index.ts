@@ -10,7 +10,7 @@ import type {} from '@deepseek-ai/dsh-tools';
 import type { SessionId } from '@deepseek-ai/dsh-session';
 import type { Agent } from '@deepseek-ai/dsh-agent';
 import type { PresetContext } from './preset-context.js';
-import { presetProjection, sameRevision, toolReport, assertBlank } from './preset-session.js';
+import { PresetStamps, presetStampPath, sameRevision, toolReport, assertBlank } from './preset-session.js';
 import { modelData, type TeamConfig } from './client.js';
 import { taskProjection, TaskActions, recoveryHint, retryInstruction, outcomeText } from './task-session.js';
 import { pluginState, stateText, type PluginState } from './plugin-status.js';
@@ -25,8 +25,8 @@ export async function apply(ctx: Context, config: Config) {
   ctx.effect(() => ctx.llm.registerAdapter([platformProvider], platformAdapter(client)));
   const taskState = await ctx.sessionProjections.register(taskProjection);
   ctx.effect(() => () => taskState.dispose());
-  const projection = await ctx.sessionProjections.register(presetProjection);
-  ctx.effect(() => () => projection.dispose());
+  const stamps = new PresetStamps(presetStampPath(config.cachePath));
+  await stamps.load();
   const overlay = new TeamOverlay(async (id, item) => ctx.agentPresets.register({
     id, name: `[团队] ${item.name}`,
     ...(item.kind === 'preset' ? { description: item.data.description ?? '' } : {}),
@@ -64,13 +64,15 @@ export async function apply(ctx: Context, config: Config) {
     const missing = (await plugins(preset)).filter(p=>p.state!=='ready');
     if (missing.length) throw new Error(missing.map(p=>p.text).join('\n'));
   };
-  const stamp = (agent: Agent, preset: PresetContext) => agent.session.append('teamwork/preset', {teamId:preset.teamId,id:preset.id,version:preset.version});
+  // A stamp that fails to save is retaken on the session's next request; the session itself is unaffected.
+  const keep = (write: Promise<void>) => { write.catch(error => ctx.logger.warn('团队预设版本记录保存失败：%s', (error as Error).message)); };
+  const stamp = (agent: Agent, preset: PresetContext) => keep(stamps.set(String(agent.id), preset));
   const detail = (agent: Agent, preset: PresetContext, preview = false) => {
     const snapshot = client.current();
     const latest = snapshot?.teamId === preset.teamId ? snapshot.configs.find(c => c.id===preset.id) : undefined;
     const tools = requirements(agent, preset);
     const labels = {available:'已注册（执行仍受宿主权限约束）',conditional:'条件可用，执行时检查',missing:'缺失',unknown:'无法检查'};
-    const saved = preview ? null : projection.stateOf(agent.session);
+    const saved = preview ? null : stamps.get(String(agent.id));
     const revision = latest ? latest.version === preset.version ? '已是最新版本' : `可用版本 v${latest.version}；开始对话后请新建会话使用更新` : '此预设已不在当前团队配置中';
     return [`${preset.name} · v${preset.version}`, `来源：团队 ${preset.teamId} / 预设 ${preset.id}`, revision,
       latest && snapshot && !modelData(snapshot,latest) ? '关联模型已不可用，请联系管理员重新关联团队模型。' : '',
@@ -87,7 +89,7 @@ export async function apply(ctx: Context, config: Config) {
     const preset = activePreset(agent);
     if (preset) {
       if (preset.pluginDependencies?.length) await checkPlugins(preset);
-      const saved = projection.stateOf(agent.session);
+      const saved = stamps.get(String(agent.id));
       if (saved && !sameRevision(saved,preset)) throw new Error('恢复会话的团队预设版本已变化，请新建会话。');
       const missing = requirements(agent,preset).filter(t=>t.required && ['missing','unknown'].includes(t.state));
       if (missing.length) throw new Error(`缺少必需工具：${missing.map(t=>t.name).join(', ')}。请安装或启用后重试。`);
@@ -107,7 +109,7 @@ export async function apply(ctx: Context, config: Config) {
     }
     const preset=activePreset(agent);
     if(preset) {
-      const saved=projection.stateOf(agent.session);
+      const saved=stamps.get(String(agent.id));
       if(saved && !sameRevision(saved,preset)) throw new Error('恢复会话的预设版本不一致，请 /teamwork new <预设ID>。');
       if(preset.pluginDependencies?.length) await checkPlugins(preset);
       const missing=requirements(agent,preset).filter(t=>t.required && ['missing','unknown'].includes(t.state));
@@ -116,7 +118,7 @@ export async function apply(ctx: Context, config: Config) {
   };
   const actions=new TaskActions(agent=>readiness(agent,true),agent=>{
     const model=agent.model.current(), usesTeam=model?.provider===platformProvider || !!activePreset(agent);
-    return JSON.stringify({live:ctx.agents.get(agent.id)===agent,seq:agent.session.seq,model,preset:projection.stateOf(agent.session),
+    return JSON.stringify({live:ctx.agents.get(agent.id)===agent,seq:agent.session.seq,model,preset:stamps.get(String(agent.id)),
       ...(usesTeam ? {team:client.current(),authenticated:client.authenticated(),authRevision:client.sessionRevision()} : {})});
   });
   const pendingInstalls = new Map<string, string>();
@@ -137,15 +139,15 @@ export async function apply(ctx: Context, config: Config) {
     const active = activePreset(agent);
     if (active) {
       agent.model.select({provider:platformProvider,model:active.id});
-      if (!sameRevision(projection.stateOf(agent.session),active)) stamp(agent,active);
-    }
+      if (!sameRevision(stamps.get(String(agent.id)),active)) stamp(agent,active);
+    } else keep(stamps.clear(String(agent.id)));
   });
   ctx.on('agent/created', ({ agent, source }) => {
     const snapshot = client.current();
     const selected = ctx.agentPresets.presetForSession(agent.session);
     const item = snapshot?.configs.find(c => `team:${snapshot.teamId}:${c.id}` === selected);
     const preset = activePreset(agent);
-    if (preset && !projection.stateOf(agent.session)) stamp(agent,preset);
+    if (preset && !stamps.get(String(agent.id))) stamp(agent,preset);
     if (source !== 'resume' && item && item.kind !== 'plugin') agent.model.select({ provider: platformProvider, model: item.id });
     return undefined;
   });
@@ -163,7 +165,7 @@ export async function apply(ctx: Context, config: Config) {
       const unavailable = requirements(agent, candidate as PresetContext).filter(t=>t.required && ['missing','unknown'].includes(t.state));
       if (unavailable.length) throw new Error(`缺少必需工具：${unavailable.map(t=>t.name).join(', ')}。请先通过本地插件管理器安装或启用。`);
       await ctx.agentPresets.select(agent, `team:${snapshot!.teamId}:${item.id}`);
-      const active = activePreset(agent); if (active && !sameRevision(projection.stateOf(agent.session),active)) stamp(agent,active);
+      const active = activePreset(agent); if (active && !sameRevision(stamps.get(String(agent.id)),active)) stamp(agent,active);
     }
     agent.model.select({ provider: platformProvider, model: item.id });
     return { preset: item.kind === 'preset', text: `本会话已选择 ${item.name}。本地默认配置未改变。` };
