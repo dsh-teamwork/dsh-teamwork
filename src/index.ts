@@ -4,7 +4,7 @@ import type {} from '@deepseek-ai/dsh-agent';
 import type {} from '@deepseek-ai/dsh-commands';
 import type {} from '@deepseek-ai/dsh-plugin-manager';
 import type {} from '@deepseek-ai/dsh-agent-preset-registry';
-import { TeamOverlay, TeamworkClient } from './client.js';
+import { ServerChoice, serverAddress, TeamOverlay, TeamworkClient } from './client.js';
 import { ConfigSync } from './config-sync.js';
 import type {} from '@deepseek-ai/dsh-tools';
 import type { SessionId } from '@deepseek-ai/dsh-session';
@@ -19,9 +19,14 @@ import { platformAdapter, platformProvider } from './platform-models.js';
 export const name = 'dsh-teamwork';
 export const inject = ['agentPresets', 'agents', 'llm', 'sessionProjections'];
 export interface Config { apiEndpoint: string; cachePath: string; autoSync?: boolean; syncIntervalMs?: number; }
-export const Config = z.object({ apiEndpoint: z.string().default('http://localhost:3800'), cachePath: z.string().required(), autoSync: z.boolean().default(true), syncIntervalMs: z.number().default(60000) });
+/** The hosted service. A member can pick another server in the panel; the profile's `apiEndpoint` sets the default. */
+export const DEFAULT_SERVER = 'https://dshteamwork.com';
+export const Config = z.object({ apiEndpoint: z.string().default(DEFAULT_SERVER), cachePath: z.string().required(), autoSync: z.boolean().default(true), syncIntervalMs: z.number().default(60000) });
 export async function apply(ctx: Context, config: Config) {
   const client = new TeamworkClient(config.apiEndpoint, config.cachePath);
+  const serverChoice = ServerChoice.beside(config.cachePath);
+  const chosen = await serverChoice.read();
+  if (chosen) await client.setEndpoint(chosen);
   ctx.effect(() => ctx.llm.registerAdapter([platformProvider], platformAdapter(client)));
   const taskState = await ctx.sessionProjections.register(taskProjection);
   ctx.effect(() => () => taskState.dispose());
@@ -213,8 +218,9 @@ export async function apply(ctx: Context, config: Config) {
       return {
         authenticated: status.authenticated,
         team: snapshot ? { id: snapshot.teamId, name: snapshot.teamName, role: snapshot.role } : null,
-        consoleUrl: `${config.apiEndpoint.replace(/\/+$/, '')}/team`,
-        server: config.apiEndpoint,
+        consoleUrl: `${client.endpoint}/team`,
+        server: client.endpoint,
+        defaultServer: serverAddress(config.apiEndpoint),
         sync: { auto: status.autoSync, running: status.syncing, lastSuccess: status.lastSuccess, lastError: status.lastError },
         session: agent ? {
           id: String(agent.id),
@@ -231,6 +237,14 @@ export async function apply(ctx: Context, config: Config) {
     authorize: (code) => authorize(code),
     sync: () => configSync.sync(),
     async logout() { pendingInstalls.clear(); try { await client.logout(); } finally { await overlay.apply(); } },
+    async setServer(server) {
+      const next = server === null ? serverAddress(config.apiEndpoint) : serverAddress(server);
+      pendingInstalls.clear();
+      try {
+        await client.setEndpoint(next);
+        await serverChoice.write(next === serverAddress(config.apiEndpoint) ? undefined : next);
+      } finally { await overlay.apply(client.current()); }
+    },
     async use(sessionId, id) {
       const agent = sessionAgent(sessionId);
       if (!agent) throw new Error('当前会话尚未加载，请先在会话中发送或打开它后再试。');

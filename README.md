@@ -17,12 +17,12 @@ pnpm typecheck
 
 ## 接入 DSH
 
-安装插件后，在 profile 中配置 `dsh-teamwork` 条目：
+安装插件后，默认连接官方服务 `https://dshteamwork.com`，不用任何配置。自建团队可以在 Teamwork 面板的登录页更改服务器地址（例如本地开发的 `http://localhost:3800`），选择保存在配置缓存旁的 `<缓存名>.server.json`；也可以在 profile 的 `dsh-teamwork` 条目里改默认值：
 
 ```yaml
 - id: dsh-teamwork
   config:
-    apiEndpoint: http://localhost:3800
+    apiEndpoint: https://teamwork.example.com   # 默认 https://dshteamwork.com
     cachePath: /absolute/path/to/private/teamwork-cache.json
     autoSync: true
     syncIntervalMs: 60000
@@ -34,10 +34,10 @@ pnpm typecheck
 
 DSH web 和桌面端的左侧栏有 Teamwork 入口，打开后是主区域的 Teamwork 面板：
 
-- 未登录：点"在浏览器中登录"打开网站授权页，把网页给出的授权码粘贴回面板。
-- 顶栏：团队名和身份、同步状态、立即同步、退出；管理员多一个跳到网页 `/team` 的按钮。管理团队只在网页完成。
-- 预设：每个预设的模型、就绪状态（必需工具、依赖插件），"在当前会话使用"（仅限尚未开始对话的会话）和"用它新建会话"。
-- 团队模型：在当前会话使用，只改本会话，不改本地默认设置。
+- 未登录：三步完成登录（在浏览器中登录 → 复制授权码 → 粘贴授权）。页面底部显示当前服务器，可以改成自建或本地地址，或恢复默认；服务器只接受 https，本机地址可以用 http。更改服务器会退出当前登录并清除旧服务器的团队配置。
+- 顶栏：团队名和身份、当前服务器、同步状态、立即同步、退出；管理员多一个跳到网页 `/team` 的"管理团队"。管理团队只在网页完成。
+- 预设：每个预设的模型、就绪状态（必需工具、依赖插件），"用于当前会话"（仅限尚未开始对话的会话）和"新建会话"。
+- 团队模型：用于当前会话，只改本会话，不改本地默认设置。
 - 团队插件：固定版本的状态；安装前在面板里确认，确认绑定当时的精确版本。
 
 面板通过宿主端的 `/api/teamwork/*` 路由（`src/panel.ts`）工作，与 `/teamwork` 命令调用同一组函数；平台令牌只留在宿主进程里，不会发到浏览器。DSH 只允许本机所有者访问这些路由。会话恢复相关的子命令（`session`、`continue`、`cancel`、`retry`）只保留为命令。
@@ -94,7 +94,7 @@ DSH_CLI=/tmp/dsh-test-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js pnpm test
 
 ## Platform 模型网关
 
-团队模型和预设统一选择 `teamwork-platform` provider，wire model 为团队配置 ID。插件把 DSH 的文本、工具调用和流式输出转换为 OpenAI Chat Completions 请求，发送到 `apiEndpoint/api/llm/chat/completions`。认证使用内存中的 platform 插件会话令牌，不读取本地供应商密钥，也不提供供应商直连降级。
+团队模型和预设统一选择 `teamwork-platform` provider，wire model 为团队配置 ID。插件把 DSH 的文本、工具调用和流式输出转换为 OpenAI Chat Completions 请求，发送到当前服务器的 `/api/llm/chat/completions`。认证使用内存中的 platform 插件会话令牌，不读取本地供应商密钥，也不提供供应商直连降级。
 
 供应商地址和真实 API Key 仅配置在 platform 部署环境。缓存只保存配置描述；未登录时，即使有缓存也无法推理。当前适配器先支持文本和工具调用，模型目录读取团队配置中的 `contextWindow` 和 `maxTokens`。只有缺失字段才使用 32K 上下文、4096 输出的兼容值（确保输出不超过上下文）。管理员可在 platform 查询供应商模型列表并补充未提供的能力值；多模态和其他供应商协议后续补齐。
 

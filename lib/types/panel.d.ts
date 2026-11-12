@@ -47,7 +47,9 @@ export interface PanelState {
     } | null;
     /** The web console, for an admin. */
     consoleUrl: string;
+    /** The server this DSH signs in to and syncs from, and the one it uses unless the member picks another. */
     server: string;
+    defaultServer: string;
     sync: {
         auto: boolean;
         running: boolean;
@@ -87,6 +89,8 @@ export interface PanelOps {
     authorize(code: string): Promise<void>;
     sync(): Promise<void>;
     logout(): Promise<void>;
+    /** Points the plugin at another server, or back to the default with `null`; signs out of the current one. */
+    setServer(server: string | null): Promise<void>;
     /** Selects a team model or preset for the session; returns what changed. */
     use(sessionId: string, id: string): Promise<string>;
     /** Installs a pinned plugin at exactly the version the member confirmed. */

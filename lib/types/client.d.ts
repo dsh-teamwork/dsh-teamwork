@@ -54,8 +54,12 @@ export declare const snapshotSchema: z.ZodObject<{
 }, z.core.$strip>;
 export type Snapshot = z.infer<typeof snapshotSchema>;
 export type TeamConfig = Snapshot['configs'][number];
+/**
+ * A server address as the plugin stores and calls it: https anywhere, plain http only on
+ * this machine, no query or fragment, no trailing slash. Throws a message for the member.
+ */
+export declare function serverAddress(input: string): string;
 export declare class TeamworkClient {
-    readonly endpoint: string;
     readonly cachePath: string;
     private request;
     private token?;
@@ -64,7 +68,15 @@ export declare class TeamworkClient {
     private epoch;
     private operations;
     private enqueue;
+    private server;
     constructor(endpoint: string, cachePath: string, request?: typeof fetch);
+    /** The DSH Teamwork server this client signs in to and syncs from. */
+    get endpoint(): string;
+    /**
+     * Points the client at another server. A token and a team belong to one server, so
+     * this signs out and drops the cached configuration, as `logout` does.
+     */
+    setEndpoint(endpoint: string): Promise<void>;
     beginLogin(): string;
     completeLogin(code: string): Promise<void>;
     private api;
@@ -259,4 +271,16 @@ export declare function modelData(snapshot: Snapshot, config: TeamConfig): {
     contextWindow?: number | undefined;
     maxTokens?: number | undefined;
 } | undefined;
+/**
+ * The server the member picked in the panel, kept beside the configuration cache
+ * (`teamwork-cache.json` → `teamwork-cache.server.json`). Absent, the profile's
+ * `apiEndpoint` applies, which defaults to the hosted service.
+ */
+export declare class ServerChoice {
+    readonly path: string;
+    constructor(path: string);
+    static beside(cachePath: string): ServerChoice;
+    read(): Promise<string | undefined>;
+    write(server: string | undefined): Promise<void>;
+}
 //# sourceMappingURL=client.d.ts.map
