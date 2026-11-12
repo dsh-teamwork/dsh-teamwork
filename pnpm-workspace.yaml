@@ -1,0 +1,5 @@
+# `ui/` is @dsh-teamwork/ui, the shared component library. It lives here until
+# it moves to its own repository (dsh-teamwork/dsh-teamwork-ui); the plugin's
+# browser bundle compiles it in, so nothing is published from it yet.
+packages:
+  - ui

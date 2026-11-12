@@ -17,7 +17,7 @@ test('team model uses platform only, with session credential and opaque config I
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const port = (server.address() as {port:number}).port;
   const dir = await mkdtemp(join(tmpdir(), 'platform-adapter-'));
-  const client = new TeamworkClient(`http://127.0.0.1:${port}`, join(dir,'cache'), async input => Response.json(String(input).endsWith('/auth/plugin/token') ? {token:'platform-session-only'} : {teamId:'t', configs:[{id:'config1',kind:'model',name:'Team Kimi',version:1,data:{provider:'kimi',model:'kimi-for-coding',contextWindow:131072,maxTokens:8192}}]}));
+  const client = new TeamworkClient(`http://127.0.0.1:${port}`, join(dir,'cache'), async input => Response.json(String(input).endsWith('/auth/plugin/token') ? {token:'platform-session-only'} : {teamId:'t', teamName:'T', role:'member', configs:[{id:'config1',kind:'model',name:'Team Kimi',version:1,data:{provider:'kimi',model:'kimi-for-coding',contextWindow:131072,maxTokens:8192}}]}));
   try {
     client.beginLogin(); await client.completeLogin('code'); await client.sync();
     const adapter = platformAdapter(client);

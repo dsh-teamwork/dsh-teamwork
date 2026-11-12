@@ -1,1 +1,0 @@
-{"version":3,"file":"TeamworkStatus.d.ts","sourceRoot":"","sources":["../../../src/ui/TeamworkStatus.tsx"],"names":[],"mappings":"AAAA,OAAO,KAAK,MAAM,OAAO,CAAC;AAE1B,MAAM,WAAW,mBAAmB;IAClC,eAAe,EAAE,OAAO,CAAC;IACzB,QAAQ,CAAC,EAAE,MAAM,CAAC;IAClB,gBAAgB,EAAE,MAAM,CAAC;CAC1B;AAED,wBAAgB,cAAc,CAAC,EAAE,eAAe,EAAE,QAAQ,EAAE,gBAAgB,EAAE,EAAE,mBAAmB,qBAalG"}

@@ -3,7 +3,7 @@ import { TeamOverlay, TeamworkClient, type Snapshot } from '../src/client.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-const snapshot: Snapshot = { teamId: 'team1', configs: [{ id: 'p1', name: 'Same name', kind: 'preset', version: 1, data: { provider: 'deepseek', model: 'chat', systemPrompt: 'Review' } }] };
+const snapshot: Snapshot = { teamId: 'team1', teamName: 'Team one', role: 'member', configs: [{ id: 'p1', name: 'Same name', kind: 'preset', version: 1, data: { provider: 'deepseek', model: 'chat', systemPrompt: 'Review' } }] };
 test('team updates and removal never touch a same-named local registration', async () => {
   const registrations = new Map<string, string>([['local', 'Same name']]); let count = 0;
   const overlay = new TeamOverlay(async (id, config) => { if (registrations.has(id)) throw new Error('collision'); registrations.set(id, config.name); count++; return async () => { registrations.delete(id); }; });

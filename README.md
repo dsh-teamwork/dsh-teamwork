@@ -11,7 +11,9 @@ pnpm test
 pnpm typecheck
 ```
 
-插件包含可发布的 `lib` 输出；修改源码后应重新构建。
+插件包含可发布的 `lib` 输出；修改源码后应重新构建。`pnpm build` 同时编译宿主端（`src/` → `lib/`）和浏览器端（`src/web/` → `lib/web/client.js`）。
+
+仓库是 pnpm workspace：`ui/` 是共用组件库 `@dsh-teamwork/ui`，供本插件的面板使用，将来给 web 端和其他 DSH 插件共用，之后拆到独立仓库 `dsh-teamwork/dsh-teamwork-ui`。它的约定见 [`ui/README.md`](ui/README.md)。
 
 ## 接入 DSH
 
@@ -27,6 +29,20 @@ pnpm typecheck
 ```
 
 包的 `cordis.patch.yml` 使用 `insert` 声明新条目。手动 `--patch` 加载时也需使用 insert，并将 name 指向本仓库 `lib/index.js` 的绝对路径。
+
+## 侧栏面板
+
+DSH web 和桌面端的左侧栏有 Teamwork 入口，打开后是主区域的 Teamwork 面板：
+
+- 未登录：点"在浏览器中登录"打开网站授权页，把网页给出的授权码粘贴回面板。
+- 顶栏：团队名和身份、同步状态、立即同步、退出；管理员多一个跳到网页 `/team` 的按钮。管理团队只在网页完成。
+- 预设：每个预设的模型、就绪状态（必需工具、依赖插件），"在当前会话使用"（仅限尚未开始对话的会话）和"用它新建会话"。
+- 团队模型：在当前会话使用，只改本会话，不改本地默认设置。
+- 团队插件：固定版本的状态；安装前在面板里确认，确认绑定当时的精确版本。
+
+面板通过宿主端的 `/api/teamwork/*` 路由（`src/panel.ts`）工作，与 `/teamwork` 命令调用同一组函数；平台令牌只留在宿主进程里，不会发到浏览器。DSH 只允许本机所有者访问这些路由。会话恢复相关的子命令（`session`、`continue`、`cancel`、`retry`）只保留为命令。
+
+## 命令
 
 在 DSH 原生命令输入框中使用：
 
@@ -66,7 +82,7 @@ DSH_CLI=/tmp/dsh-test-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js pnpm test
 
 测试启动独立临时 profile 和本地 npm registry，创建并打包两个固定版本 fixture，提供 SHA-512 integrity，经真实 DSH 包管理器下载和加载。测试不会发布包，也不修改现有 DSH profile。成功后清理临时目录；失败时报告诊断目录。宿主日志可能含本地浏览器令牌，请勿公开上传完整日志。
 
-安装确认绑定当前会话和包的精确版本；配置改变后必须重新查看安装说明。浏览器登录（Google 或邮件验证码）和授权仍由 platform 仓库提供。原生命令是宿主扩展，因此包声明 `dsh.bundle`，不声明不存在的浏览器客户端 bundle。
+安装确认绑定当前会话和包的精确版本；配置改变后必须重新查看安装说明。浏览器登录（Google 或邮件验证码）和授权仍由 platform 仓库提供。包声明 `dsh.bundle`（宿主端插件和原生命令）和 `dsh.client`（浏览器端面板，`exports["./client"]` 指向 `lib/web/client.js`）。
 
 测试为隔离的临时 DSH profile 设置 `npm_config_ignore_workspace_root_check=true`，允许 pnpm 9 在该 profile 的 workspace 根目录安装受控包。
 
@@ -93,7 +109,7 @@ DSH_CLI=/tmp/dsh-test-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js pnpm test
 - 必需工具缺失/无法检查时，`/teamwork use` 拒绝选择；通过其他原生入口选择的预设，也在每次模型请求前重新检查。可选工具缺失只展示提示。
 - DSH 只允许空白会话切换预设。开始第一轮后或执行中，使用 `/teamwork new <id>` 创建新会话；不在原会话静默改提示词、不清空历史。
 - 同步更新后，已有 Agent 保留 DSH 原生旧 revision，`/teamwork info` 展示新版本；空白会话再次 `/teamwork use` 可更新。
-- 会话通过原生 session projection 记录团队/预设/版本。宿主恢复会话时若重新挂载的版本与记录不一致，阻止继续推理并提示新建会话；当前不保存历史预设定义，不承诺跨重启恢复已删除的旧 revision。上线前没有版本记录的旧会话从首次观察开始记录。
+- 每个会话开始时的团队/预设/版本记录在配置缓存旁的 `<缓存名>.sessions.json`（0600，原子替换），不写进会话日志：DSH 拒绝重新打开日志里含有它不认识的事件类型的会话，而第三方插件写不了它接受的可忽略记录。宿主恢复会话时若重新挂载的版本与记录不一致，阻止继续推理并提示新建会话；当前不保存历史预设定义，不承诺跨重启恢复已删除的旧 revision。没有记录的会话（包括分叉出的新会话）从首次请求开始记录。
 - 预设版本固定不冻结服务端策略：成员权限、模型路由和输出限制仍采用 platform 当前配置。
 
 本地定向宿主检查：`DSH_CLI=/path/to/dsh/lib/bin.js pnpm test:presets`，不调用真实模型，不安装测试插件。

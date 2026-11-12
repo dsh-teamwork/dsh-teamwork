@@ -8,17 +8,16 @@
   "types": "lib/types/index.d.ts",
   "files": [
     "lib",
-    "locale",
     "cordis.patch.yml",
     "LICENSE",
     "NOTICE"
   ],
   "scripts": {
-    "build": "tsc",
-    "watch": "tsc -w",
+    "build": "tsc && node scripts/build-web.mjs",
+    "watch": "tsc -w & node scripts/build-web.mjs --watch",
     "prepublishOnly": "pnpm build",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json && pnpm --filter @dsh-teamwork/ui typecheck",
+    "test": "vitest run && pnpm --filter @dsh-teamwork/ui test",
     "cli": "tsx src/cli.ts",
     "test:host": "node tests/host/run.mjs",
     "test:presets": "node tests/host/run.mjs --presets"
@@ -35,10 +34,12 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.0",
+    "esbuild": "0.25.12",
     "react": "^18.3.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
-    "vitest": "^2.1.0"
+    "vitest": "^2.1.0",
+    "@dsh-teamwork/ui": "workspace:*"
   },
   "packageManager": "pnpm@9.15.9",
   "dependencies": {
@@ -52,6 +53,22 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-workspace"
+      ]
     }
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": "./lib/web/client.js",
+    "./package.json": "./package.json"
   }
 }
