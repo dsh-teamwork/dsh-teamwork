@@ -1,4 +1,4 @@
-# apiEndpoint defaults to the hosted service, https://dshteamwork.com. Set it here for a
+# apiEndpoint defaults to the hosted service, https://www.dshteamwork.com. Set it here for a
 # self-hosted team, or pick another server in the Teamwork panel.
 - insert:
     - id: dsh-teamwork

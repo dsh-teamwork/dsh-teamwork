@@ -17,12 +17,12 @@ pnpm typecheck
 
 ## 接入 DSH
 
-安装插件后，默认连接官方服务 `https://dshteamwork.com`，不用任何配置。自建团队可以在 Teamwork 面板的登录页更改服务器地址（例如本地开发的 `http://localhost:3800`），选择保存在配置缓存旁的 `<缓存名>.server.json`；也可以在 profile 的 `dsh-teamwork` 条目里改默认值：
+安装插件后，默认连接官方服务 `https://www.dshteamwork.com`，不用任何配置。自建团队可以在 Teamwork 面板的登录页更改服务器地址（例如本地开发的 `http://localhost:3800`），选择保存在配置缓存旁的 `<缓存名>.server.json`；也可以在 profile 的 `dsh-teamwork` 条目里改默认值：
 
 ```yaml
 - id: dsh-teamwork
   config:
-    apiEndpoint: https://teamwork.example.com   # 默认 https://dshteamwork.com
+    apiEndpoint: https://teamwork.example.com   # 默认 https://www.dshteamwork.com
     cachePath: /absolute/path/to/private/teamwork-cache.json
     autoSync: true
     syncIntervalMs: 60000

@@ -23,7 +23,7 @@ export type TeamConfig = Snapshot['configs'][number];
  */
 export function serverAddress(input: string) {
   let url: URL;
-  try { url = new URL(input.trim()); } catch { throw new Error('服务器地址无效，请输入完整地址，例如 https://dshteamwork.com'); }
+  try { url = new URL(input.trim()); } catch { throw new Error('服务器地址无效，请输入完整地址，例如 https://www.dshteamwork.com'); }
   const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) throw new Error('服务器地址必须使用 https；只有本机地址（localhost）可以用 http');
   if (url.search || url.hash || url.username || url.password) throw new Error('服务器地址不能包含查询参数、片段或账号信息');

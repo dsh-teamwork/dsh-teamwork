@@ -20,7 +20,7 @@ export const name = 'dsh-teamwork';
 export const inject = ['agentPresets', 'agents', 'llm', 'sessionProjections'];
 export interface Config { apiEndpoint: string; cachePath: string; autoSync?: boolean; syncIntervalMs?: number; }
 /** The hosted service. A member can pick another server in the panel; the profile's `apiEndpoint` sets the default. */
-export const DEFAULT_SERVER = 'https://dshteamwork.com';
+export const DEFAULT_SERVER = 'https://www.dshteamwork.com';
 export const Config = z.object({ apiEndpoint: z.string().default(DEFAULT_SERVER), cachePath: z.string().required(), autoSync: z.boolean().default(true), syncIntervalMs: z.number().default(60000) });
 export async function apply(ctx: Context, config: Config) {
   const client = new TeamworkClient(config.apiEndpoint, config.cachePath);

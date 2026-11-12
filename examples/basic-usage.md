@@ -14,7 +14,7 @@ Edit `~/.dsh/profiles/web/cordis.patch.yml`:
 - id: dsh-teamwork
   name: '@dsh-teamwork/dsh-teamwork'
   config:
-    apiEndpoint: https://dshteamwork.com   # the default; set your own server here
+    apiEndpoint: https://www.dshteamwork.com   # the default; set your own server here
     autoSync: true
 ```
 
