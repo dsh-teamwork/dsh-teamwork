@@ -54,13 +54,16 @@ export class TeamworkClient {
     this.server = next;
     return this.logout();
   }
-  beginLogin() {
+  /** The sign-in page's address; with `redirectUri`, the page sends the code there instead of showing it. */
+  beginLogin(redirectUri?: string) {
     this.epoch++;
     this.verifier = randomBytes(32).toString('base64url');
     const challenge = createHash('sha256').update(this.verifier).digest('base64url');
-    return `${this.endpoint}/plugin?challenge=${challenge}`;
+    return `${this.endpoint}/plugin?${new URLSearchParams({ challenge, ...(redirectUri ? { redirect_uri: redirectUri } : {}) })}`;
   }
-  completeLogin(code: string) {
+  /** Takes the code alone or the whole `/teamwork authorize <code>` line the sign-in page shows, so the panel accepts what was copied. */
+  completeLogin(pasted: string) {
+    const code = pasted.trim().replace(/^\/?teamwork\s+authorize\s+/i, '');
     const verifier = this.verifier, epoch = this.epoch;
     return this.enqueue(async () => {
       if (!verifier || epoch !== this.epoch) throw new Error('Begin login first');

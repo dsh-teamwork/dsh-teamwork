@@ -6,7 +6,7 @@ const client = new TeamworkClient(process.env.TEAMWORK_URL ?? 'http://localhost:
 const terminal = createInterface({ input: stdin, output: stdout });
 try {
   console.log('Open this URL in your browser:', client.beginLogin());
-  await client.completeLogin((await terminal.question('Paste the one-time authorization code: ')).trim());
+  await client.completeLogin((await terminal.question('Paste the line or code shown on the page: ')).trim());
   console.log('Signed in. Commands: sync, list, logout, quit. Tokens stay in memory.');
   for (;;) {
     const command = (await terminal.question('teamwork> ')).trim();

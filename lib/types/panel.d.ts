@@ -112,7 +112,11 @@ export interface PanelState {
 /** What the host half implements for the routes. Each throws an `Error` whose message is shown to the member. */
 export interface PanelOps {
     state(sessionId: string | undefined): Promise<PanelState>;
-    login(): string;
+    /** The sign-in page; `automatic` when the code comes back to this DSH by itself (src/login-callback.ts). */
+    login(): Promise<{
+        url: string;
+        automatic: boolean;
+    }>;
     authorize(code: string): Promise<void>;
     sync(): Promise<void>;
     logout(): Promise<void>;

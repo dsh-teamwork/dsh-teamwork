@@ -63,12 +63,16 @@ export function apply(ctx) {
    assert(updated.some(p => p.id === 'local-review'));
    const use = await execute('/teamwork use review'); assert.equal(use.result.kind, 'success', use.result.text);
    assert.deepEqual(agent.model.current(), { provider: 'teamwork-platform', model: 'review' });
+   const login = await execute('/teamwork login'); assert.equal(login.result.kind, 'success', login.result.text);
+   const callback = new URL(login.result.text.match(/https?:\/\/\S+/)[0]).searchParams.get('redirect_uri');
+   assert.match(callback ?? '', /^http:\/\/127\.0\.0\.1:\d+\/callback$/, 'Login must listen on loopback inside the real host');
+   assert.equal((await fetch(`${callback}?code=not-a-code`)).status, 400, 'A wrong code must be refused by the listener');
    const logout = await execute('/teamwork logout'); assert.equal(logout.result.kind, 'success');
    const remaining = await ctx.agentPresets.list(); assert(!remaining.some(p => p.id.startsWith('team:host-smoke:')));
    for (const preset of originalRoster.filter(p => !p.id.startsWith('team:host-smoke:'))) assert(remaining.some(p => p.id === preset.id), `Lost local preset ${preset.id}`);
    assert((await ctx.pluginManager.listBundles()).some(b => b.name === '@teamwork-test/fixture'), 'Logout must not uninstall a user-approved plugin');
    await releaseLocal();
-   await writeFile(process.env.TEAMWORK_TEST_RESULT, JSON.stringify({ passed: true, checks: ['corrupt cache startup recovery', 'real DSH load', 'preset registration', 'session model selection', 'literal additive team prompt', 'install confirmation', 'stale version confirmation rejected', 'package installation', 'duplicate install protection', 'configuration-overriding bundle blocked before activation', 'preset update', 'local preset preservation', 'logout cleanup', 'installed plugin preserved after logout'] }));
+   await writeFile(process.env.TEAMWORK_TEST_RESULT, JSON.stringify({ passed: true, checks: ['corrupt cache startup recovery', 'real DSH load', 'loopback sign-in listener', 'preset registration', 'session model selection', 'literal additive team prompt', 'install confirmation', 'stale version confirmation rejected', 'package installation', 'duplicate install protection', 'configuration-overriding bundle blocked before activation', 'preset update', 'local preset preservation', 'logout cleanup', 'installed plugin preserved after logout'] }));
   } catch (error) { await writeFile(process.env.TEAMWORK_TEST_RESULT, JSON.stringify({ passed: false, error: String(error), stack: error.stack })); }
  }, 3000);
  ctx.effect(() => () => clearTimeout(timer));

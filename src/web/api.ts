@@ -25,7 +25,7 @@ async function call<T>(route: string, payload: Record<string, unknown> = {}): Pr
 
 export const api = {
   state: (sessionId: string | undefined) => call<PanelState>('state', { sessionId }),
-  login: () => call<{ url: string }>('login'),
+  login: () => call<{ url: string; automatic: boolean }>('login'),
   authorize: (code: string) => call('authorize', { code }),
   sync: () => call('sync'),
   logout: () => call('logout'),

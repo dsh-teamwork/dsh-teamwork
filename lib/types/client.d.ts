@@ -77,8 +77,10 @@ export declare class TeamworkClient {
      * this signs out and drops the cached configuration, as `logout` does.
      */
     setEndpoint(endpoint: string): Promise<void>;
-    beginLogin(): string;
-    completeLogin(code: string): Promise<void>;
+    /** The sign-in page's address; with `redirectUri`, the page sends the code there instead of showing it. */
+    beginLogin(redirectUri?: string): string;
+    /** Takes the code alone or the whole `/teamwork authorize <code>` line the sign-in page shows, so the panel accepts what was copied. */
+    completeLogin(pasted: string): Promise<void>;
     private api;
     sync(): Promise<{
         teamId: string;

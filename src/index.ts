@@ -17,6 +17,7 @@ import { pluginState, stateText, type PluginState } from './plugin-status.js';
 import { panelRoutes, type FetchRoute, type PanelOps, type PanelPreset } from './panel.js';
 import { platformAdapter, platformProvider } from './platform-models.js';
 import { Bridge } from './bridge.js';
+import { listenForCode, type LoginCallback } from './login-callback.js';
 import { offerSchema, pairingSchema, RelayError, RelayLink, relayClientIdPath } from './relay.js';
 import type { PanelPhone } from './panel.js';
 export const name = 'dsh-teamwork';
@@ -161,11 +162,21 @@ export async function apply(ctx: Context, config: Config) {
     throw new Error(relay.status === 'connected' ? '中转服务暂时无法处理，请稍后再试' : '还没有连上中转服务，无法管理手机');
   };
   ctx.effect(() => () => relay.stop());
-  const authorize = async (code: string) => { pendingInstalls.clear(); try { await client.completeLogin(code); } finally { await overlay.apply(client.current()); relay.refresh(); } if (config.autoSync !== false) await configSync.sync(); };
+  // The loopback listener of the sign-in in progress, if any (src/login-callback.ts).
+  let callback: LoginCallback | undefined;
+  const stopCallback = () => { callback?.close(); callback = undefined; };
+  ctx.effect(() => () => stopCallback());
+  const authorize = async (code: string) => { pendingInstalls.clear(); try { await client.completeLogin(code); } finally { await overlay.apply(client.current()); relay.refresh(); } stopCallback(); if (config.autoSync !== false) await configSync.sync(); };
+  /** The sign-in page's address, and whether the code comes back by itself; without a listener it is pasted. */
+  const beginLogin = async () => {
+    stopCallback();
+    callback = await listenForCode(authorize).catch((error: Error) => { ctx.logger.warn('无法在本机接收授权码，需要手动粘贴：%s', error.message); return undefined; });
+    return { url: client.beginLogin(callback?.uri), automatic: callback !== undefined };
+  };
   const restore = async () => { await client.restore(); await overlay.apply(client.current()); relay.refresh(); };
-  const logout = async () => { pendingInstalls.clear(); try { await client.logout(); } finally { await overlay.apply(); relay.refresh(); } };
+  const logout = async () => { pendingInstalls.clear(); stopCallback(); try { await client.logout(); } finally { await overlay.apply(); relay.refresh(); } };
   ctx.provide('dshTeamwork', {
-    beginLogin: () => client.beginLogin(), completeLogin: authorize,
+    beginLogin, completeLogin: authorize,
     sync: () => configSync.sync(),
     status: () => configSync.status(),
     reload: restore,
@@ -270,7 +281,7 @@ export async function apply(ctx: Context, config: Config) {
         plugins: await plugins(),
       };
     },
-    login: () => client.beginLogin(),
+    login: beginLogin,
     authorize: (code) => authorize(code),
     sync: () => configSync.sync(),
     logout,
@@ -339,7 +350,12 @@ export async function apply(ctx: Context, config: Config) {
             if(id!=='confirm') {actions.review(agent,taskState.stateOf(agent.session).outcome); return {kind:'success',text:'重试会发送一条后续指令，请 Agent 核对已有结果后继续未完成任务，仍可能产生新的修改。不会重放原工具调用或回滚文件。确认请运行 /teamwork retry confirm（两分钟内有效，会话或配置变化后需重新确认）。'};}
             await actions.submit(agent,retryInstruction,true); return {kind:'success',text:'已提交确认后的恢复指令，没有自动重放原工具调用。'};
           }
-          if (action === 'login') return { kind: 'success', text: `在浏览器完成登录和授权：${client.beginLogin()}\n然后运行 /teamwork authorize <授权码>` };
+          if (action === 'login') {
+            const { url, automatic } = await beginLogin();
+            return { kind: 'success', text: automatic
+              ? `在浏览器登录并确认授权：${url}\n确认后这里会自动完成登录。没有自动完成时，把网页上显示的那一行粘贴到这里运行。`
+              : `在浏览器登录并确认授权：${url}\n然后把网页上显示的那一行粘贴到这里运行（/teamwork authorize <授权码>）。` };
+          }
           if (action === 'authorize') { await authorize(id ?? ''); return { kind: 'success', text: '已授权。运行 /teamwork status 查看配置同步状态。' }; }
           if (action === 'sync') { await configSync.sync(); return { kind: 'success', text: '团队配置已同步，本地配置保持不变。' }; }
           if (action === 'logout') { await logout(); return { kind: 'success', text: '已退出并移除团队配置。' }; }
