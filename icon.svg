@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="teamworkGradient" x1="32" y1="8" x2="32" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#6B9FFF"/>
+      <stop offset="100%" stop-color="#3B7DDB"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="20" r="9" fill="url(#teamworkGradient)"/>
+  <circle cx="18" cy="45" r="8" fill="url(#teamworkGradient)"/>
+  <circle cx="46" cy="45" r="8" fill="url(#teamworkGradient)"/>
+  <path d="M32 29v9M25 41l5-3M39 41l-5-3" stroke="#6B9FFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
