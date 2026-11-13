@@ -292,7 +292,9 @@ function Header({ state, run }: { state: PanelState; run: Run }) {
   const { teams, sync } = state;
   // One team reads as before; several are counted here and named on each preset and model.
   const only = teams.length === 1 ? teams[0] : undefined;
-  const console = teams.some((t) => t.role === 'admin') ? only?.consoleUrl ?? `${state.server}/teams` : undefined;
+  // An admin of one team goes straight to its console; of several, to the list to pick from.
+  const admin = teams.filter((t) => t.role === 'admin');
+  const console = admin.length === 1 ? admin[0].consoleUrl : admin.length ? `${state.server}/teams` : undefined;
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: '1 1 260px' }}>
