@@ -18,7 +18,7 @@ const post = (name: string, body?: unknown) =>
 
 describe('panel routes', () => {
   it('registers POST-only routes under /api/teamwork', () => {
-    expect([...routes.keys()].sort()).toEqual(['authorize', 'install', 'login', 'logout', 'server', 'state', 'sync', 'use'].map((n) => `${ROUTE_PREFIX}/${n}`));
+    expect([...routes.keys()].sort()).toEqual(['authorize', 'decide-phone', 'install', 'login', 'logout', 'pair-phone', 'revoke-phone', 'server', 'state', 'sync', 'use'].map((n) => `${ROUTE_PREFIX}/${n}`));
     for (const route of routes.values()) expect(route.methods).toEqual(['POST']);
   });
 

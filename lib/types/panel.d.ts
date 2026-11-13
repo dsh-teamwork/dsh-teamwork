@@ -45,6 +45,21 @@ export interface PanelPreset {
  * waits for the member to sign in again.
  */
 export type RelayStatus = 'off' | 'connecting' | 'connected' | 'refused';
+/** A phone paired with this computer through the relay; `pending` until the member confirms it here. */
+export interface PanelPhone {
+    id: string;
+    deviceName: string;
+    status: 'pending' | 'confirmed';
+    createdAt: string;
+    lastUsedAt: string | null;
+}
+/** A single-use pairing code, and the link the app's QR scanner reads. */
+export interface PanelPairingOffer {
+    code: string;
+    expiresAt: string;
+    /** `dshteamwork://pair?server=…&code=…`, drawn as a QR code. */
+    link: string;
+}
 export interface PanelState {
     authenticated: boolean;
     /** A team cached from an earlier sign-in is shown, but not usable, until the member signs in again. */
@@ -66,6 +81,8 @@ export interface PanelState {
     };
     /** The phone's way in through the hosted relay (`src/relay.ts`); `off` where the server runs none. */
     relay: RelayStatus;
+    /** Phones paired with this computer; empty while the relay is not connected. */
+    phones: PanelPhone[];
     /** The session the member has open, when the host has it loaded. */
     session: {
         id: string;
@@ -105,6 +122,12 @@ export interface PanelOps {
     use(sessionId: string, id: string): Promise<string>;
     /** Installs a pinned plugin at exactly the version the member confirmed. */
     install(id: string, version: string): Promise<string>;
+    /** A fresh pairing code from the relay; earlier unused codes stop working. */
+    pairPhone(): Promise<PanelPairingOffer>;
+    /** Confirms or refuses a phone that redeemed a code. */
+    decidePhone(id: string, accept: boolean): Promise<void>;
+    /** Cuts a paired phone off. */
+    revokePhone(id: string): Promise<void>;
 }
 export declare const ROUTE_PREFIX = "/api/teamwork";
 /** The shape `connection.fetch.register` takes (`@deepseek-ai/dsh-client-connection`). */

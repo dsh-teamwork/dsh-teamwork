@@ -3,11 +3,12 @@ import {
   Badge, Banner, BrandMark, Button, Card, Confirm, DefinitionList, EmptyState, Field, Icon, Input, Item, ItemBody, Notice, Panel,
   Skeleton, Tabs, Toast, type Tone,
 } from '@dsh-teamwork/ui';
-import type { PanelPlugin, PanelPreset, PanelState, PluginState, ToolState } from '../panel.js';
+import qrcode from 'qrcode-generator';
+import type { PanelPairingOffer, PanelPhone, PanelPlugin, PanelPreset, PanelState, PluginState, ToolState } from '../panel.js';
 import { api } from './api.js';
 import { currentSessionTracker, type Host } from './host.js';
 
-type Tab = 'presets' | 'models' | 'plugins';
+type Tab = 'presets' | 'models' | 'plugins' | 'phones';
 type Run = (action: () => Promise<unknown>, done?: string | ((result: any) => string)) => Promise<boolean>;
 
 const REFRESH_MS = 5000;
@@ -112,6 +113,7 @@ export function TeamworkPanel({ host: dsh }: { host: Host }) {
     { id: 'presets' as const, label: '预设', count: state.presets.length },
     { id: 'models' as const, label: '团队模型', count: state.models.length },
     { id: 'plugins' as const, label: '团队插件', count: state.plugins.length },
+    { id: 'phones' as const, label: '手机', count: state.phones.length },
   ];
   return (
     <Panel label="Teamwork" header={<Header state={state} run={run} />} nav={<Tabs<Tab> label="团队配置" items={tabs} value={tab} onChange={setTab} />}>
@@ -131,6 +133,7 @@ export function TeamworkPanel({ host: dsh }: { host: Host }) {
       {tab === 'plugins' && (state.plugins.length
         ? state.plugins.map((p) => <PluginItem key={p.id} plugin={p} run={run} />)
         : <Card><EmptyState icon="puzzle" title="团队没有固定插件版本">固定的插件版本会出现在这里，由你确认后安装。</EmptyState></Card>)}
+      {tab === 'phones' && <Phones state={state} run={run} />}
       {toastNode}
     </Panel>
   );
@@ -486,5 +489,102 @@ function ListSkeleton() {
         </div>
       ))}
     </>
+  );
+}
+
+/* ── Phones ──────────────────────────────────────────────────────────────── */
+
+const relayText: Record<Exclude<PanelState['relay'], 'connected'>, [string, string]> = {
+  off: ['服务器没有开启手机接入', '只有提供中转服务的服务器（如官方服务 www.dshteamwork.com）才能让手机连到这台电脑。'],
+  connecting: ['正在连接中转服务…', '连上之后就可以在这里配对手机。'],
+  refused: ['中转服务拒绝了这台电脑', '登录可能已失效，或另一个 DSH 正以这台电脑的身份连接。退出后重新登录即可重试。'],
+};
+
+const shortTime = (iso: string) => new Date(iso).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+function Phones({ state, run }: { state: PanelState; run: Run }) {
+  const [offer, setOffer] = useState<PanelPairingOffer>();
+  const [revoking, setRevoking] = useState<PanelPhone>();
+  const pending = state.phones.filter((p) => p.status === 'pending');
+  const paired = state.phones.filter((p) => p.status === 'confirmed');
+  // A phone redeemed the code: the code is spent, so stop showing it.
+  const seen = useRef(pending.length);
+  useEffect(() => {
+    if (pending.length > seen.current) setOffer(undefined);
+    seen.current = pending.length;
+  }, [pending.length]);
+
+  if (state.relay !== 'connected') {
+    const [title, body] = relayText[state.relay];
+    return <Card><EmptyState icon="smartphone" title={title}>{body}</EmptyState></Card>;
+  }
+  return (
+    <>
+      <Card>
+        {offer
+          ? <PairingCode offer={offer} onDone={() => setOffer(undefined)} />
+          : <EmptyState icon="smartphone" title="在手机上操作这台电脑的 DSH"
+              action={<Button icon="plus" onClick={() => run(async () => setOffer(await api.pairPhone()))}>配对新手机</Button>}>
+              用 DSH Teamwork App 扫描这里显示的二维码，再在这台电脑上确认，手机就能查看会话、发送消息和处理审批。
+            </EmptyState>}
+      </Card>
+      {pending.map((phone) => (
+        <Item key={phone.id} icon="smartphone" title={phone.deviceName} subtitle={`${shortTime(phone.createdAt)} 申请配对`}
+          tags={<Badge tone="warning" dot>等待你确认</Badge>}
+          description="确认后，这台手机可以查看这台电脑上的会话、发送消息、回答 Agent 的提问和处理审批。不是你本人的手机请拒绝。"
+          actions={<>
+            <Button size="sm" variant="ghost" onClick={() => run(() => api.decidePhone(phone.id, false), '已拒绝')}>拒绝</Button>
+            <Button size="sm" onClick={() => run(() => api.decidePhone(phone.id, true), `${phone.deviceName} 已配对`)}>确认配对</Button>
+          </>} />
+      ))}
+      {paired.map((phone) => (
+        <Item key={phone.id} icon="smartphone" title={phone.deviceName}
+          subtitle={phone.lastUsedAt ? `最近使用 ${shortTime(phone.lastUsedAt)}` : `配对于 ${shortTime(phone.createdAt)}`}
+          tags={<Badge tone="success" dot>已配对</Badge>}
+          actions={<Button size="sm" variant="ghost" onClick={() => setRevoking(phone)}>解除配对</Button>} />
+      ))}
+      {revoking && (
+        <Confirm title={`解除与 ${revoking.deviceName} 的配对？`} description="这台手机会立即断开，之后需要重新扫码配对才能再连到这台电脑。"
+          confirmLabel="解除配对" cancelLabel="取消"
+          onCancel={() => setRevoking(undefined)}
+          onConfirm={() => { const phone = revoking; setRevoking(undefined); void run(() => api.revokePhone(phone.id), '已解除配对'); }} />
+      )}
+    </>
+  );
+}
+
+function PairingCode({ offer, onDone }: { offer: PanelPairingOffer; onDone(): void }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
+  const left = Math.max(0, Math.round((Date.parse(offer.expiresAt) - now) / 1000));
+  useEffect(() => { if (left === 0) onDone(); }, [left, onDone]);
+  return (
+    <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+      <QrCode value={offer.link} size={168} />
+      <div style={{ display: 'grid', gap: 8, minWidth: 200, flex: '1 1 200px' }}>
+        <h2 style={{ fontSize: 15, fontWeight: 650 }}>用 DSH Teamwork App 扫码</h2>
+        <span className="twui-subtle">也可以在 App 里手动输入配对码：</span>
+        <span className="twui-mono" style={{ fontSize: 20, letterSpacing: '0.12em' }}>{offer.code.slice(0, 4)} {offer.code.slice(4)}</span>
+        <span className="twui-subtle">{Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')} 后失效，只能使用一次。扫码后请回到这里确认。</span>
+        <div><Button size="sm" variant="ghost" onClick={onDone}>取消</Button></div>
+      </div>
+    </div>
+  );
+}
+
+/** A QR code drawn as one SVG path, dark on a light quiet zone so any camera reads it in either theme. */
+function QrCode({ value, size }: { value: string; size: number }) {
+  const qr = qrcode(0, 'M');
+  qr.addData(value);
+  qr.make();
+  const count = qr.getModuleCount();
+  let d = '';
+  for (let row = 0; row < count; row++) for (let col = 0; col < count; col++) if (qr.isDark(row, col)) d += `M${col + 4} ${row + 4}h1v1h-1z`;
+  const extent = count + 8;
+  return (
+    <svg role="img" aria-label="配对二维码" width={size} height={size} viewBox={`0 0 ${extent} ${extent}`} shapeRendering="crispEdges" style={{ borderRadius: 8, flex: 'none' }}>
+      <rect width={extent} height={extent} fill="#ffffff" />
+      <path d={d} fill="#000000" />
+    </svg>
   );
 }

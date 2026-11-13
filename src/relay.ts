@@ -25,6 +25,31 @@ export const RELAY_CLOSE = { badHello: 4400, unauthorized: 4401, replaced: 4409 
 
 const discoverySchema = z.object({ url: z.string().url() });
 const welcomeSchema = z.object({ t: z.literal('welcome'), hostId: z.string().min(1) });
+const replySchema = z.object({ t: z.literal('reply'), id: z.string(), value: z.unknown().optional(), error: z.string().optional() });
+
+/** What the relay pushes unasked: a phone redeemed this computer's code, or a pairing ended. */
+export type RelayEvent = { t: 'paired' } | { t: 'revoked'; pairingId: string };
+const eventSchema = z.union([z.object({ t: z.literal('paired') }).loose(), z.object({ t: z.literal('revoked'), pairingId: z.string() })]);
+
+/** A request the relay answers once welcomed (its `src/protocol.ts`, `PluginRequestSchema`). */
+export type RelayRequest =
+  | { t: 'offer' }
+  | { t: 'pairings' }
+  | { t: 'decide'; pairingId: string; accept: boolean }
+  | { t: 'revoke'; pairingId: string };
+
+/** A pairing as the relay lists it (`src/pairing.ts`, `PairingView`). */
+export const pairingSchema = z.object({
+  id: z.string(), deviceName: z.string(), status: z.enum(['pending', 'confirmed']), createdAt: z.string(), lastUsedAt: z.string().nullable(),
+});
+export const offerSchema = z.object({ code: z.string().min(1), expiresAt: z.string() });
+
+/** The relay answered a request with one of its error codes (`invalid_code`, `not_found`, `internal`). */
+export class RelayError extends Error {
+  constructor(readonly code: string) { super(code); }
+}
+
+const REQUEST_TIMEOUT_MS = 10_000;
 
 export interface RelayLinkOptions {
   /** The server the member signed in to, read on every attempt. */
@@ -39,6 +64,7 @@ export interface RelayLinkOptions {
   /** The WebSocket class to dial with: Node's global by default. */
   WebSocket?: typeof globalThis.WebSocket;
   onStatus?: (status: RelayStatus) => void;
+  onEvent?: (event: RelayEvent) => void;
   /** Longest wait between reconnection attempts. */
   maxBackoffMs?: number;
   /** How long to wait before asking a server without a relay again. */
@@ -53,6 +79,7 @@ export class RelayLink {
   /** Bumped by every refresh and stop, so a late callback of an older run changes nothing. */
   private run = 0;
   private hostId?: string;
+  private requests = new Map<string, { resolve(value: unknown): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }>();
 
   constructor(private readonly options: RelayLinkOptions) {}
 
@@ -75,7 +102,28 @@ export class RelayLink {
     this.set('off');
   }
 
+  /** Ask the relay something, once connected; rejects when it is not, or does not answer in time. */
+  request(request: RelayRequest): Promise<unknown> {
+    const socket = this.socket;
+    if (this.state !== 'connected' || !socket) return Promise.reject(new Error('relay not connected'));
+    const id = randomBytes(8).toString('hex');
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { this.requests.delete(id); reject(new Error('relay did not answer')); }, REQUEST_TIMEOUT_MS);
+      this.requests.set(id, { resolve, reject, timer });
+      socket.send(JSON.stringify({ ...request, id }));
+    });
+  }
+
+  private failRequests() {
+    for (const [id, pending] of this.requests) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error('relay connection closed'));
+      this.requests.delete(id);
+    }
+  }
+
   private halt() {
+    this.failRequests();
     clearTimeout(this.timer);
     this.timer = undefined;
     const socket = this.socket;
@@ -128,15 +176,28 @@ export class RelayLink {
     socket.addEventListener('open', () => socket.send(JSON.stringify(hello)));
     socket.addEventListener('message', (event) => {
       if (run !== this.run) return;
-      const welcome = welcomeSchema.safeParse(parseJson(String(event.data)));
-      if (!welcome.success) return;
-      this.hostId = welcome.data.hostId;
-      this.attempt = 0;
-      this.set('connected');
+      const frame = parseJson(String(event.data));
+      const welcome = welcomeSchema.safeParse(frame);
+      if (welcome.success) {
+        this.hostId = welcome.data.hostId;
+        this.attempt = 0;
+        return this.set('connected');
+      }
+      const reply = replySchema.safeParse(frame);
+      if (reply.success) {
+        const pending = this.requests.get(reply.data.id);
+        if (!pending) return;
+        this.requests.delete(reply.data.id);
+        clearTimeout(pending.timer);
+        return reply.data.error ? pending.reject(new RelayError(reply.data.error)) : pending.resolve(reply.data.value);
+      }
+      const pushed = eventSchema.safeParse(frame);
+      if (pushed.success) this.options.onEvent?.(pushed.data as RelayEvent);
     });
     socket.addEventListener('close', (event) => {
       if (run !== this.run || this.socket !== socket) return;
       this.socket = undefined;
+      this.failRequests();
       if (event.code === RELAY_CLOSE.unauthorized || event.code === RELAY_CLOSE.replaced) return this.set('refused');
       this.set('connecting');
       this.retry(run, this.backoff());
