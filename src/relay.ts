@@ -15,6 +15,7 @@ import { createRequire } from 'node:module';
 import { hostname } from 'node:os';
 import { dirname } from 'node:path';
 import { z } from 'zod';
+import { forwardedSchema, type Forwarded } from './bridge.js';
 import type { RelayStatus } from './panel.js';
 
 export type { RelayStatus };
@@ -65,6 +66,8 @@ export interface RelayLinkOptions {
   WebSocket?: typeof globalThis.WebSocket;
   onStatus?: (status: RelayStatus) => void;
   onEvent?: (event: RelayEvent) => void;
+  /** A phone's frame for this computer, or the news that its phone left or lost its pairing (`src/bridge.ts`). */
+  onForward?: (frame: Forwarded) => void;
   /** Longest wait between reconnection attempts. */
   maxBackoffMs?: number;
   /** How long to wait before asking a server without a relay again. */
@@ -112,6 +115,11 @@ export class RelayLink {
       this.requests.set(id, { resolve, reject, timer });
       socket.send(JSON.stringify({ ...request, id }));
     });
+  }
+
+  /** Pass a frame back to the relay; dropped while not connected, since the phone is gone too. */
+  send(frame: unknown) {
+    if (this.state === 'connected' && this.socket?.readyState === 1) this.socket.send(JSON.stringify(frame));
   }
 
   private failRequests() {
@@ -191,6 +199,8 @@ export class RelayLink {
         clearTimeout(pending.timer);
         return reply.data.error ? pending.reject(new RelayError(reply.data.error)) : pending.resolve(reply.data.value);
       }
+      const forwarded = forwardedSchema.safeParse(frame);
+      if (forwarded.success) this.options.onForward?.(forwarded.data);
       const pushed = eventSchema.safeParse(frame);
       if (pushed.success) this.options.onEvent?.(pushed.data as RelayEvent);
     });
