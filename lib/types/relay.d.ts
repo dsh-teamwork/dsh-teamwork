@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { RelayStatus } from './panel.js';
 export type { RelayStatus };
 /** The relay's close codes this side acts on; any other close reconnects. */
@@ -6,6 +7,46 @@ export declare const RELAY_CLOSE: {
     readonly unauthorized: 4401;
     readonly replaced: 4409;
 };
+/** What the relay pushes unasked: a phone redeemed this computer's code, or a pairing ended. */
+export type RelayEvent = {
+    t: 'paired';
+} | {
+    t: 'revoked';
+    pairingId: string;
+};
+/** A request the relay answers once welcomed (its `src/protocol.ts`, `PluginRequestSchema`). */
+export type RelayRequest = {
+    t: 'offer';
+} | {
+    t: 'pairings';
+} | {
+    t: 'decide';
+    pairingId: string;
+    accept: boolean;
+} | {
+    t: 'revoke';
+    pairingId: string;
+};
+/** A pairing as the relay lists it (`src/pairing.ts`, `PairingView`). */
+export declare const pairingSchema: z.ZodObject<{
+    id: z.ZodString;
+    deviceName: z.ZodString;
+    status: z.ZodEnum<{
+        pending: "pending";
+        confirmed: "confirmed";
+    }>;
+    createdAt: z.ZodString;
+    lastUsedAt: z.ZodNullable<z.ZodString>;
+}, z.core.$strip>;
+export declare const offerSchema: z.ZodObject<{
+    code: z.ZodString;
+    expiresAt: z.ZodString;
+}, z.core.$strip>;
+/** The relay answered a request with one of its error codes (`invalid_code`, `not_found`, `internal`). */
+export declare class RelayError extends Error {
+    readonly code: string;
+    constructor(code: string);
+}
 export interface RelayLinkOptions {
     /** The server the member signed in to, read on every attempt. */
     endpoint: () => string;
@@ -19,6 +60,7 @@ export interface RelayLinkOptions {
     /** The WebSocket class to dial with: Node's global by default. */
     WebSocket?: typeof globalThis.WebSocket;
     onStatus?: (status: RelayStatus) => void;
+    onEvent?: (event: RelayEvent) => void;
     /** Longest wait between reconnection attempts. */
     maxBackoffMs?: number;
     /** How long to wait before asking a server without a relay again. */
@@ -33,6 +75,7 @@ export declare class RelayLink {
     /** Bumped by every refresh and stop, so a late callback of an older run changes nothing. */
     private run;
     private hostId?;
+    private requests;
     constructor(options: RelayLinkOptions);
     get status(): RelayStatus;
     /** The relay's id for this computer, once welcomed. */
@@ -40,6 +83,9 @@ export declare class RelayLink {
     /** Start over: after sign-in, sign-out or a change of server. */
     refresh(): void;
     stop(): void;
+    /** Ask the relay something, once connected; rejects when it is not, or does not answer in time. */
+    request(request: RelayRequest): Promise<unknown>;
+    private failRequests;
     private halt;
     private set;
     private retry;

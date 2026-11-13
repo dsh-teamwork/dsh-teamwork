@@ -16,7 +16,8 @@ import { taskProjection, TaskActions, recoveryHint, retryInstruction, outcomeTex
 import { pluginState, stateText, type PluginState } from './plugin-status.js';
 import { panelRoutes, type FetchRoute, type PanelOps, type PanelPreset } from './panel.js';
 import { platformAdapter, platformProvider } from './platform-models.js';
-import { RelayLink, relayClientIdPath } from './relay.js';
+import { offerSchema, pairingSchema, RelayError, RelayLink, relayClientIdPath } from './relay.js';
+import type { PanelPhone } from './panel.js';
 export const name = 'dsh-teamwork';
 export const inject = ['agentPresets', 'agents', 'llm', 'sessionProjections'];
 export interface Config { apiEndpoint: string; cachePath: string; autoSync?: boolean; syncIntervalMs?: number; }
@@ -129,12 +130,27 @@ export async function apply(ctx: Context, config: Config) {
   });
   const pendingInstalls = new Map<string, string>();
   // The phone's way in (dsh-teamwork-premium ADR 0008): open only while signed in, and only to a server that runs a relay.
-  const relay = new RelayLink({
+  // Phones paired with this computer, as the relay last listed them; re-read on connecting and whenever one is paired or revoked.
+  let phones: PanelPhone[] = [];
+  const relay: RelayLink = new RelayLink({
     endpoint: () => client.endpoint,
     token: () => client.authenticated() ? client.platformCredential() : undefined,
     clientIdPath: relayClientIdPath(config.cachePath),
-    onStatus: (status) => ctx.logger.debug('relay: %s', status),
+    onStatus: (status) => {
+      ctx.logger.debug('relay: %s', status);
+      if (status === 'connected') void readPhones();
+      else phones = [];
+    },
+    onEvent: () => void readPhones(),
   });
+  const readPhones = async () => {
+    try { phones = pairingSchema.array().parse(await relay.request({ t: 'pairings' })); }
+    catch (error) { ctx.logger.warn('无法读取已配对的手机：%s', (error as Error).message); }
+  };
+  const phoneError = (error: unknown): never => {
+    if (error instanceof RelayError && error.code === 'not_found') throw new Error('这台设备已不在配对列表中');
+    throw new Error(relay.status === 'connected' ? '中转服务暂时无法处理，请稍后再试' : '还没有连上中转服务，无法管理手机');
+  };
   ctx.effect(() => () => relay.stop());
   const authorize = async (code: string) => { pendingInstalls.clear(); try { await client.completeLogin(code); } finally { await overlay.apply(client.current()); relay.refresh(); } if (config.autoSync !== false) await configSync.sync(); };
   const restore = async () => { await client.restore(); await overlay.apply(client.current()); relay.refresh(); };
@@ -233,6 +249,7 @@ export async function apply(ctx: Context, config: Config) {
         defaultServer: serverAddress(config.apiEndpoint),
         sync: { auto: status.autoSync, running: status.syncing, lastSuccess: status.lastSuccess, lastError: status.lastError },
         relay: relay.status,
+        phones,
         session: agent ? {
           id: String(agent.id),
           model: selection ? { provider: selection.provider, model: selection.model, team: selection.provider === platformProvider } : null,
@@ -255,6 +272,19 @@ export async function apply(ctx: Context, config: Config) {
         await client.setEndpoint(next);
         await serverChoice.write(next === serverAddress(config.apiEndpoint) ? undefined : next);
       } finally { await overlay.apply(client.current()); relay.refresh(); }
+    },
+    async pairPhone() {
+      const offer = offerSchema.parse(await relay.request({ t: 'offer' }).catch(phoneError));
+      const link = `dshteamwork://pair?${new URLSearchParams({ server: client.endpoint, code: offer.code })}`;
+      return { ...offer, link };
+    },
+    async decidePhone(id, accept) {
+      await relay.request({ t: 'decide', pairingId: id, accept }).catch(phoneError);
+      await readPhones();
+    },
+    async revokePhone(id) {
+      await relay.request({ t: 'revoke', pairingId: id }).catch(phoneError);
+      await readPhones();
     },
     async use(sessionId, id) {
       const agent = sessionAgent(sessionId);

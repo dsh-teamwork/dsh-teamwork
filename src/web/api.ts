@@ -1,4 +1,4 @@
-import { ROUTE_PREFIX, type PanelState } from '../panel.js';
+import { ROUTE_PREFIX, type PanelPairingOffer, type PanelState } from '../panel.js';
 
 // Relative to the page, like the host's own calls, so a DSH served under a path still reaches it.
 const base = ROUTE_PREFIX.slice(1) + '/';
@@ -32,4 +32,7 @@ export const api = {
   setServer: (server: string | null) => call('server', { server }),
   use: (sessionId: string, id: string) => call<{ message: string }>('use', { sessionId, id }),
   install: (id: string, version: string) => call<{ message: string }>('install', { id, version }),
+  pairPhone: () => call<PanelPairingOffer>('pair-phone', {}),
+  decidePhone: (id: string, accept: boolean) => call<void>('decide-phone', { id, accept }),
+  revokePhone: (id: string) => call<void>('revoke-phone', { id }),
 };

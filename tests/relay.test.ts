@@ -19,6 +19,8 @@ class FakeSocket {
 }
 
 const tick = (ms = 0) => new Promise(resolve => setTimeout(resolve, ms));
+/** Waits until `check` holds, so a test does not depend on how fast the file system or the event loop is. */
+const until = async (check: () => boolean) => { for (let i = 0; i < 100 && !check(); i++) await tick(5); };
 
 async function link(overrides: { status?: number; token?: string } = {}) {
   FakeSocket.made = [];
@@ -58,7 +60,7 @@ describe('the relay link', () => {
 
   it('introduces this computer and reports connected once the relay welcomes it', async () => {
     const { relay, dir } = await link();
-    relay.refresh(); await tick(5);
+    relay.refresh(); await until(() => FakeSocket.made.length > 0);
     const socket = FakeSocket.made[0]!;
     expect(socket.url).toBe('wss://relay.example.test/plugin');
     socket.emit('open');
@@ -75,18 +77,18 @@ describe('the relay link', () => {
 
   it('reconnects after a dropped socket', async () => {
     const { relay } = await link();
-    relay.refresh(); await tick(5);
+    relay.refresh(); await until(() => FakeSocket.made.length > 0);
     FakeSocket.made[0]!.emit('close', { code: 1006 });
     expect(relay.status).toBe('connecting');
-    await tick(40);
-    expect(FakeSocket.made).toHaveLength(2);
+    await until(() => FakeSocket.made.length > 1);
+    expect(FakeSocket.made.length).toBeGreaterThan(1);
     relay.stop();
   });
 
   it('stops when the relay refuses the sign-in, or another connection from this computer replaced it', async () => {
     for (const code of [RELAY_CLOSE.unauthorized, RELAY_CLOSE.replaced]) {
       const { relay } = await link();
-      relay.refresh(); await tick(5);
+      relay.refresh(); await until(() => FakeSocket.made.length > 0);
       FakeSocket.made[0]!.emit('close', { code });
       await tick(40);
       expect(relay.status).toBe('refused');
@@ -97,7 +99,7 @@ describe('the relay link', () => {
 
   it('closes the socket on sign-out, and a late close of it changes nothing', async () => {
     const { relay, signOut } = await link();
-    relay.refresh(); await tick(5);
+    relay.refresh(); await until(() => FakeSocket.made.length > 0);
     const socket = FakeSocket.made[0]!;
     socket.emit('open');
     signOut(); relay.refresh();
@@ -106,5 +108,37 @@ describe('the relay link', () => {
     socket.emit('close', { code: 1006 }); await tick(40);
     expect(FakeSocket.made).toHaveLength(1);
     expect(relay.status).toBe('off');
+  });
+
+  it('pairs each answer with its request, rejects the relay’s error codes, and hands pushed events on', async () => {
+    const events: unknown[] = [];
+    const { relay } = await link();
+    (relay as unknown as { options: { onEvent(e: unknown): void } }).options.onEvent = (e) => events.push(e);
+    await expect(relay.request({ t: 'pairings' })).rejects.toThrow('relay not connected');
+    relay.refresh(); await until(() => FakeSocket.made.length > 0);
+    const socket = FakeSocket.made[0]!;
+    socket.emit('open');
+    socket.emit('message', { data: JSON.stringify({ t: 'welcome', hostId: 'host-1' }) });
+
+    const offer = relay.request({ t: 'offer' });
+    const revoke = relay.request({ t: 'revoke', pairingId: 'p-1' });
+    const [, offerFrame, revokeFrame] = socket.sent as Array<{ id: string; t: string; pairingId?: string }>;
+    expect(offerFrame).toMatchObject({ t: 'offer' });
+    expect(revokeFrame).toMatchObject({ t: 'revoke', pairingId: 'p-1' });
+    // Answers arrive out of order and still reach their own request.
+    socket.emit('message', { data: JSON.stringify({ t: 'reply', id: revokeFrame.id, error: 'not_found' }) });
+    socket.emit('message', { data: JSON.stringify({ t: 'reply', id: offerFrame.id, value: { code: 'ABCD2345', expiresAt: 'soon' } }) });
+    await expect(offer).resolves.toEqual({ code: 'ABCD2345', expiresAt: 'soon' });
+    await expect(revoke).rejects.toMatchObject({ code: 'not_found' });
+
+    socket.emit('message', { data: JSON.stringify({ t: 'paired', pairing: { id: 'p-2' } }) });
+    socket.emit('message', { data: JSON.stringify({ t: 'revoked', pairingId: 'p-2' }) });
+    expect(events).toEqual([{ t: 'paired', pairing: { id: 'p-2' } }, { t: 'revoked', pairingId: 'p-2' }]);
+
+    // A request still waiting when the socket drops fails at once, rather than at its timeout.
+    const waiting = relay.request({ t: 'pairings' });
+    socket.emit('close', { code: 1006 });
+    await expect(waiting).rejects.toThrow('relay connection closed');
+    relay.stop();
   });
 });
