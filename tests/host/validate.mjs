@@ -9,8 +9,8 @@ export function apply(ctx) {
    const cache = process.env.TEAMWORK_TEST_CACHE;
    const snapshot = JSON.parse(await readFile(process.env.TEAMWORK_TEST_SNAPSHOT, 'utf8'));
    assert.equal(ctx.dshTeamwork.list(), undefined, 'Corrupt cache must not prevent host startup or authenticate');
-   await writeFile(cache, JSON.stringify(snapshot)); await ctx.dshTeamwork.reload();
-   const releaseLocal = await ctx.agentPresets.register({ id: 'local-review', name: '[团队] Review', plugins: [] });
+   await writeFile(cache, JSON.stringify({ teams: [snapshot] })); await ctx.dshTeamwork.reload();
+   const releaseLocal = await ctx.agentPresets.register({ id: 'local-review', name: '[Host smoke] Review', plugins: [] });
    const originalRoster = await ctx.agentPresets.list();
    assert(originalRoster.some(p => p.id === 'team:host-smoke:review'));
    const id = `teamwork-host-${process.pid}`;
@@ -34,11 +34,11 @@ export function apply(ctx) {
    assert.equal(prompt.result.kind, 'success'); assert.match(prompt.result.text, /confirm/);
    assert.equal(ctx.get('teamworkFixture'), undefined, 'Unconfirmed install must not run code');
    snapshot.configs[1].data.version = '2.0.0';
-   await writeFile(cache, JSON.stringify(snapshot)); await ctx.dshTeamwork.reload();
+   await writeFile(cache, JSON.stringify({ teams: [snapshot] })); await ctx.dshTeamwork.reload();
    const staleConfirmation = await execute('/teamwork install fixture confirm');
    assert.equal(staleConfirmation.result.kind, 'error');
    snapshot.configs[1].data.version = '1.0.0';
-   await writeFile(cache, JSON.stringify(snapshot)); await ctx.dshTeamwork.reload();
+   await writeFile(cache, JSON.stringify({ teams: [snapshot] })); await ctx.dshTeamwork.reload();
    await execute('/teamwork install fixture');
    const install = await execute('/teamwork install fixture confirm');
    assert.equal(install.result.kind, 'success', install.result.text);
@@ -58,8 +58,8 @@ export function apply(ctx) {
    const afterPlugins = await ctx.pluginManager.listPlugins();
    for (const before of originalPlugins) { const after = afterPlugins.find(p => p.entryId === before.entryId); assert.equal(after?.enabled, before.enabled, `Changed local plugin ${before.entryId}`); }
    snapshot.configs[0].version = 2; snapshot.configs[0].name = 'Updated review'; snapshot.configs[0].data.model = 'deepseek-reasoner';
-   await writeFile(cache, JSON.stringify(snapshot)); await ctx.dshTeamwork.reload();
-   const updated = await ctx.agentPresets.list(); assert(updated.some(p => p.id === 'team:host-smoke:review' && p.name === '[团队] Updated review'));
+   await writeFile(cache, JSON.stringify({ teams: [snapshot] })); await ctx.dshTeamwork.reload();
+   const updated = await ctx.agentPresets.list(); assert(updated.some(p => p.id === 'team:host-smoke:review' && p.name === '[Host smoke] Updated review'));
    assert(updated.some(p => p.id === 'local-review'));
    const use = await execute('/teamwork use review'); assert.equal(use.result.kind, 'success', use.result.text);
    assert.deepEqual(agent.model.current(), { provider: 'teamwork-platform', model: 'review' });

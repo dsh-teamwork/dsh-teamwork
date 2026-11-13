@@ -17,7 +17,7 @@ describe('the server a member signs in to', () => {
   it('signs out and drops the cache when it changes, since a token belongs to one server', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'server-'));
     const request = (async (input: string | URL) => Response.json(String(input).endsWith('/auth/plugin/token')
-      ? { token: 't' } : { teamId: 'a', teamName: 'A', role: 'member', configs: [] })) as typeof fetch;
+      ? { token: 't' } : { teams: [{ teamId: 'a', teamName: 'A', role: 'member', configs: [] }] })) as typeof fetch;
     const client = new TeamworkClient('https://dshteamwork.com', join(dir, 'cache.json'), request);
     client.beginLogin(); await client.completeLogin('code'); await client.sync();
     await client.setEndpoint('https://dshteamwork.com/');

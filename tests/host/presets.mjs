@@ -7,7 +7,7 @@ export function apply(ctx) {
       const snapshot = JSON.parse(await readFile(process.env.TEAMWORK_TEST_SNAPSHOT,'utf8'));
       const preset = snapshot.configs[0];
       preset.data.description='Team code review'; preset.data.instructions='Provide a diff'; preset.data.requiredTools=[]; preset.data.optionalTools=['missing-optional-fixture'];
-      const save = async()=>{await writeFile(process.env.TEAMWORK_TEST_CACHE,JSON.stringify(snapshot));await ctx.dshTeamwork.reload();};
+      const save = async()=>{await writeFile(process.env.TEAMWORK_TEST_CACHE,JSON.stringify({ teams: [snapshot] }));await ctx.dshTeamwork.reload();};
       await save();
       const id=`preset-${process.pid}`, agentPreset='team:host-smoke:review';
       await ctx.agents.create({sessionId:id,meta:{cwd:process.env.TEAMWORK_TEST_CWD,agentPreset},setup:async child=>{await ctx.agentPresets.mount(child,agentPreset);}});

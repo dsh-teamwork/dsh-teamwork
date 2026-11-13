@@ -173,7 +173,7 @@ function SignIn({ state, run }: { state: PanelState; run: Run }) {
       <div style={{ display: 'grid', justifyItems: 'center', gap: 12, textAlign: 'center' }}>
         <BrandMark size={56} title="DSH Teamwork" />
         <div style={{ display: 'grid', gap: 6 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 650, letterSpacing: '-0.01em' }}>{state.team ? `重新登录 ${state.team.name}` : '登录 DSH Teamwork'}</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 650, letterSpacing: '-0.01em' }}>{state.teams.length === 1 ? `重新登录 ${state.teams[0].name}` : state.teams.length ? '重新登录 DSH Teamwork' : '登录 DSH Teamwork'}</h1>
           <p className="twui-muted">团队的模型、预设和插件版本，一处发布，每位成员的 DSH 自动保持一致。</p>
         </div>
       </div>
@@ -289,15 +289,23 @@ function ServerSetting({ state, run }: { state: PanelState; run: Run }) {
 /* ── Signed in ───────────────────────────────────────────────────────────── */
 
 function Header({ state, run }: { state: PanelState; run: Run }) {
-  const { team, sync } = state;
+  const { teams, sync } = state;
+  // One team reads as before; several are counted here and named on each preset and model.
+  const only = teams.length === 1 ? teams[0] : undefined;
+  // An admin of one team goes straight to its console; of several, to the list to pick from.
+  const admin = teams.filter((t) => t.role === 'admin');
+  const manageUrl = admin.length === 1 ? admin[0].consoleUrl : admin.length ? `${state.server}/teams` : undefined;
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: '1 1 260px' }}>
         <BrandMark size={36} title="DSH Teamwork" />
         <div style={{ minWidth: 0, display: 'grid', gap: 2 }}>
           <div className="twui-row" style={{ gap: 8 }}>
-            <h1 style={{ fontSize: 15, fontWeight: 650, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{team?.name ?? '尚未同步团队'}</h1>
-            {team && <Badge outline>{team.role === 'admin' ? '管理员' : '成员'}</Badge>}
+            <h1 style={{ fontSize: 15, fontWeight: 650, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              title={teams.map((t) => t.name).join('、') || undefined}>
+              {only?.name ?? (teams.length ? `${teams.length} 个团队` : '尚未同步团队')}
+            </h1>
+            {only && <Badge outline>{only.role === 'admin' ? '管理员' : '成员'}</Badge>}
           </div>
           <span className="twui-subtle twui-row" style={{ gap: 4 }} title="退出后可以更改服务器">
             <Icon name="server" size={12} /><span className="twui-mono">{host(state.server)}</span>
@@ -312,8 +320,8 @@ function Header({ state, run }: { state: PanelState; run: Run }) {
           : sync.lastError ? <Badge tone="warning" dot>同步失败</Badge> : <Badge tone="success" dot>{synced(sync.lastSuccess)}</Badge>}
         <Button size="sm" icon="refresh" aria-label="立即同步" title="立即同步" busy={sync.running}
           onClick={() => run(() => api.sync(), '团队配置已同步，本地配置保持不变')} />
-        {team?.role === 'admin' && (
-          <Button size="sm" trailingIcon="external" onClick={() => window.open(state.consoleUrl, '_blank', 'noopener')}>管理团队</Button>
+        {manageUrl && (
+          <Button size="sm" trailingIcon="external" onClick={() => window.open(manageUrl, '_blank', 'noopener')}>管理团队</Button>
         )}
         <Button size="sm" variant="ghost" icon="logout" onClick={() => run(() => api.logout(), '已退出，团队配置已从这台 DSH 移除')}>退出</Button>
       </div>
@@ -362,7 +370,7 @@ function PresetItem({ preset, state, dsh, run, onInstall }: { preset: PanelPrese
     <Item
       icon="layers"
       title={preset.name}
-      subtitle={`${preset.id} · v${preset.version}`}
+      subtitle={state.teams.length > 1 ? `${preset.teamName} · ${preset.id} · v${preset.version}` : `${preset.id} · v${preset.version}`}
       description={preset.description || undefined}
       tags={
         <>
@@ -373,8 +381,8 @@ function PresetItem({ preset, state, dsh, run, onInstall }: { preset: PanelPrese
       actions={
         <>
           <Button variant="ghost" size="sm" trailingIcon={open ? 'chevronDown' : 'chevronRight'} aria-expanded={open} onClick={() => setOpen(!open)}>详情</Button>
-          <Button size="sm" icon="plus" disabled={!ready || !state.team} onClick={() => {
-            dsh.uiWorkspace.startSession(undefined, { agentPreset: `team:${state.team!.id}:${preset.id}` });
+          <Button size="sm" icon="plus" disabled={!ready} onClick={() => {
+            dsh.uiWorkspace.startSession(undefined, { agentPreset: `team:${preset.teamId}:${preset.id}` });
             dsh.layout.selectPanel(null);
           }}>新建会话</Button>
           {!active && (
@@ -421,7 +429,7 @@ function ModelItem({ model, state, run }: { model: PanelState['models'][number];
     <Item
       icon="cpu"
       title={model.name}
-      subtitle={`${model.id} · v${model.version}`}
+      subtitle={state.teams.length > 1 ? `${model.teamName} · ${model.id} · v${model.version}` : `${model.id} · v${model.version}`}
       description="由团队服务器代为调用，provider 密钥留在服务器上。只改当前会话，不改本地默认模型。"
       tags={<Badge><span className="twui-mono">{model.upstream}</span></Badge>}
       actions={active ? <Badge tone="accent" dot>本会话正在使用</Badge> : (

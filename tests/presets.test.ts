@@ -22,10 +22,14 @@ test('revision comparison includes team identity and survives a serialized sessi
   expect(sameRevision(stamp,{...preset,teamId:'other'})).toBe(false);
 });
 test('snapshot resolves referenced model capabilities locally and missing references never fall back', () => {
-  const snapshot = snapshotSchema.parse({teamId:'t',teamName:'T',role:'member',configs:[{id:'m',kind:'model',name:'Kimi',version:2,data:{provider:'kimi',model:'kimi',contextWindow:128000,maxTokens:8192}},{id:'p',kind:'preset',name:'Review',version:1,data:{modelConfigId:'m',description:'Review code',requiredTools:['Read']}}]});
-  expect(modelData(snapshot,snapshot.configs[1])?.maxTokens).toBe(8192);
-  expect(modelData({...snapshot,configs:[snapshot.configs[1]]},snapshot.configs[1])).toBeUndefined();
-  expect(snapshotSchema.safeParse({teamId:'t',teamName:'T',role:'member',configs:[{id:'p',kind:'preset',name:'bad',version:1,data:{modelConfigId:'m',provider:'local',model:'secret'}}]}).success).toBe(false);
+  const team = {teamId:'t',teamName:'T',role:'member',configs:[{id:'m',kind:'model',name:'Kimi',version:2,data:{provider:'kimi',model:'kimi',contextWindow:128000,maxTokens:8192}},{id:'p',kind:'preset',name:'Review',version:1,data:{modelConfigId:'m',description:'Review code',requiredTools:['Read']}}]};
+  const snapshot = snapshotSchema.parse({teams:[team]});
+  const preset = snapshot.teams[0]!.configs[1]!;
+  expect(modelData(snapshot,preset)?.maxTokens).toBe(8192);
+  expect(modelData({teams:[{...snapshot.teams[0]!,configs:[preset]}]},preset)).toBeUndefined();
+  // A model of the same id in another team is not this preset's model: references never cross teams.
+  expect(modelData({teams:[{...snapshot.teams[0]!,configs:[preset]},{...snapshot.teams[0]!,teamId:'other',configs:[snapshot.teams[0]!.configs[0]!]}]},preset)).toBeUndefined();
+  expect(snapshotSchema.safeParse({teams:[{teamId:'t',teamName:'T',role:'member',configs:[{id:'p',kind:'preset',name:'bad',version:1,data:{modelConfigId:'m',provider:'local',model:'secret'}}]}]}).success).toBe(false);
 });
 test('preset stamps live in a file of the plugin, survive a restart, and never in the session log', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'stamps-'));

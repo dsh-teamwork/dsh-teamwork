@@ -17,7 +17,7 @@ export declare class ConfigSync {
         syncing: boolean;
         lastSuccess: string | undefined;
         lastError: string | undefined;
-        teamId: string | undefined;
+        teams: string[];
         configCount: number;
     };
     sync(): Promise<void>;
