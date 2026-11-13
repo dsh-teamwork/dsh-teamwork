@@ -170,7 +170,7 @@ function SignIn({ state, run }: { state: PanelState; run: Run }) {
         <div style={{ display: 'grid', gap: 16 }}>
           <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 10 }}>
             <Step n={1} state={step > 1 ? 'done' : 'active'}>在浏览器中登录并确认授权</Step>
-            <Step n={2} state={step === 2 ? 'active' : 'todo'}>复制网页上显示的授权码（两分钟内有效）</Step>
+            <Step n={2} state={step === 2 ? 'active' : 'todo'}>复制网页上显示的整行内容（两分钟内有效）</Step>
             <Step n={3} state={step === 2 && code.trim() ? 'active' : 'todo'}>粘贴到下方，完成授权</Step>
           </ol>
           {!opened ? (
@@ -179,7 +179,7 @@ function SignIn({ state, run }: { state: PanelState; run: Run }) {
             <form style={{ display: 'grid', gap: 12 }} onSubmit={(e) => { e.preventDefault(); if (code.trim()) void authorize(); }}>
               <Field label="授权码" htmlFor="teamwork-code">
                 <Input id="teamwork-code" size="lg" className="twui-mono" value={code} onChange={(e) => setCode(e.target.value)}
-                  placeholder="例如 7Q4K-M2XP" autoComplete="off" spellCheck={false} autoFocus style={{ letterSpacing: '0.08em' }} />
+                  placeholder="/teamwork authorize eyJhbGci…" autoComplete="off" spellCheck={false} autoFocus />
               </Field>
               <Button type="submit" variant="primary" size="lg" block busy={busy} disabled={!code.trim()}>完成授权</Button>
               <p className="twui-subtle" style={{ textAlign: 'center' }}>

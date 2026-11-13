@@ -60,7 +60,9 @@ export class TeamworkClient {
     const challenge = createHash('sha256').update(this.verifier).digest('base64url');
     return `${this.endpoint}/plugin?challenge=${challenge}`;
   }
-  completeLogin(code: string) {
+  /** Takes the code alone or the whole `/teamwork authorize <code>` line the sign-in page shows, so the panel accepts what was copied. */
+  completeLogin(pasted: string) {
+    const code = pasted.trim().replace(/^\/?teamwork\s+authorize\s+/i, '');
     const verifier = this.verifier, epoch = this.epoch;
     return this.enqueue(async () => {
       if (!verifier || epoch !== this.epoch) throw new Error('Begin login first');

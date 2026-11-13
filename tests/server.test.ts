@@ -29,6 +29,16 @@ describe('the server a member signs in to', () => {
     expect(client.beginLogin()).toMatch(/^http:\/\/localhost:3800\/plugin\?challenge=/);
   });
 
+  it('accepts the whole line the sign-in page shows, not only the bare code', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'server-'));
+    const sent: unknown[] = [];
+    const request = (async (_input: string | URL, init?: RequestInit) => { sent.push(JSON.parse(String(init?.body)).code); return Response.json({ token: 't' }); }) as typeof fetch;
+    const client = new TeamworkClient('http://localhost:3800', join(dir, 'cache.json'), request);
+    client.beginLogin(); await client.completeLogin('  /teamwork authorize eyJ.a.b\n');
+    client.beginLogin(); await client.completeLogin('eyJ.c.d');
+    expect(sent).toEqual(['eyJ.a.b', 'eyJ.c.d']);
+  });
+
   it('remembers the choice beside the cache, and forgets an unreadable one', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'server-'));
     const choice = ServerChoice.beside(join(dir, 'teamwork-cache.json'));
