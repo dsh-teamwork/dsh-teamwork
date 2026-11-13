@@ -28,6 +28,8 @@ pnpm typecheck
     syncIntervalMs: 60000
 ```
 
+**手机接入（托管服务）**：登录后，插件会向服务器询问 `GET /api/relay`。服务器提供中转时，插件主动连出一条 WebSocket，并用登录得到的令牌表明身份。服务器那边会把这台电脑登记为你的主机，面板顶部显示“手机可连接”。DSH Teamwork App 之后就能经由这条连接操作这台电脑上的 DSH。自建的社区版服务器不提供中转，插件也就不会连出。这台电脑的标识保存在缓存旁的 `<缓存名>.host.json`；退出登录会断开连接。
+
 包的 `cordis.patch.yml` 使用 `insert` 声明新条目。手动 `--patch` 加载时也需使用 insert，并将 name 指向本仓库 `lib/index.js` 的绝对路径。
 
 ## 侧栏面板

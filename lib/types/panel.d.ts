@@ -37,6 +37,14 @@ export interface PanelPreset {
     }>;
     plugins: PanelPlugin[];
 }
+/**
+ * The outbound link to the hosted mobile relay (`src/relay.ts`). `off`: not
+ * signed in, or the server runs no relay. `connecting`: discovering or dialling.
+ * `connected`: the relay welcomed this computer. `refused`: the relay refused
+ * the sign-in, or another connection from this computer replaced this one; it
+ * waits for the member to sign in again.
+ */
+export type RelayStatus = 'off' | 'connecting' | 'connected' | 'refused';
 export interface PanelState {
     authenticated: boolean;
     /** A team cached from an earlier sign-in is shown, but not usable, until the member signs in again. */
@@ -56,6 +64,8 @@ export interface PanelState {
         lastSuccess?: string;
         lastError?: string;
     };
+    /** The phone's way in through the hosted relay (`src/relay.ts`); `off` where the server runs none. */
+    relay: RelayStatus;
     /** The session the member has open, when the host has it loaded. */
     session: {
         id: string;

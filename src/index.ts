@@ -16,6 +16,7 @@ import { taskProjection, TaskActions, recoveryHint, retryInstruction, outcomeTex
 import { pluginState, stateText, type PluginState } from './plugin-status.js';
 import { panelRoutes, type FetchRoute, type PanelOps, type PanelPreset } from './panel.js';
 import { platformAdapter, platformProvider } from './platform-models.js';
+import { RelayLink, relayClientIdPath } from './relay.js';
 export const name = 'dsh-teamwork';
 export const inject = ['agentPresets', 'agents', 'llm', 'sessionProjections'];
 export interface Config { apiEndpoint: string; cachePath: string; autoSync?: boolean; syncIntervalMs?: number; }
@@ -127,15 +128,24 @@ export async function apply(ctx: Context, config: Config) {
       ...(usesTeam ? {team:client.current(),authenticated:client.authenticated(),authRevision:client.sessionRevision()} : {})});
   });
   const pendingInstalls = new Map<string, string>();
-  const authorize = async (code: string) => { pendingInstalls.clear(); try { await client.completeLogin(code); } finally { await overlay.apply(client.current()); } if (config.autoSync !== false) await configSync.sync(); };
-  const restore = async () => { await client.restore(); await overlay.apply(client.current()); };
+  // The phone's way in (dsh-teamwork-premium ADR 0008): open only while signed in, and only to a server that runs a relay.
+  const relay = new RelayLink({
+    endpoint: () => client.endpoint,
+    token: () => client.authenticated() ? client.platformCredential() : undefined,
+    clientIdPath: relayClientIdPath(config.cachePath),
+    onStatus: (status) => ctx.logger.debug('relay: %s', status),
+  });
+  ctx.effect(() => () => relay.stop());
+  const authorize = async (code: string) => { pendingInstalls.clear(); try { await client.completeLogin(code); } finally { await overlay.apply(client.current()); relay.refresh(); } if (config.autoSync !== false) await configSync.sync(); };
+  const restore = async () => { await client.restore(); await overlay.apply(client.current()); relay.refresh(); };
+  const logout = async () => { pendingInstalls.clear(); try { await client.logout(); } finally { await overlay.apply(); relay.refresh(); } };
   ctx.provide('dshTeamwork', {
     beginLogin: () => client.beginLogin(), completeLogin: authorize,
     sync: () => configSync.sync(),
     status: () => configSync.status(),
     reload: restore,
     list: () => client.current(),
-    async logout() { pendingInstalls.clear(); try { await client.logout(); } finally { await overlay.apply(); } },
+    logout,
   });
   // Selecting a team preset chooses a model for that session only, never the local default.
   ctx.on('agent-preset/selected', (sessionId) => {
@@ -222,6 +232,7 @@ export async function apply(ctx: Context, config: Config) {
         server: client.endpoint,
         defaultServer: serverAddress(config.apiEndpoint),
         sync: { auto: status.autoSync, running: status.syncing, lastSuccess: status.lastSuccess, lastError: status.lastError },
+        relay: relay.status,
         session: agent ? {
           id: String(agent.id),
           model: selection ? { provider: selection.provider, model: selection.model, team: selection.provider === platformProvider } : null,
@@ -236,14 +247,14 @@ export async function apply(ctx: Context, config: Config) {
     login: () => client.beginLogin(),
     authorize: (code) => authorize(code),
     sync: () => configSync.sync(),
-    async logout() { pendingInstalls.clear(); try { await client.logout(); } finally { await overlay.apply(); } },
+    logout,
     async setServer(server) {
       const next = server === null ? serverAddress(config.apiEndpoint) : serverAddress(server);
       pendingInstalls.clear();
       try {
         await client.setEndpoint(next);
         await serverChoice.write(next === serverAddress(config.apiEndpoint) ? undefined : next);
-      } finally { await overlay.apply(client.current()); }
+      } finally { await overlay.apply(client.current()); relay.refresh(); }
     },
     async use(sessionId, id) {
       const agent = sessionAgent(sessionId);
@@ -285,7 +296,7 @@ export async function apply(ctx: Context, config: Config) {
           if (action === 'login') return { kind: 'success', text: `在浏览器完成登录和授权：${client.beginLogin()}\n然后运行 /teamwork authorize <授权码>` };
           if (action === 'authorize') { await authorize(id ?? ''); return { kind: 'success', text: '已授权。运行 /teamwork status 查看配置同步状态。' }; }
           if (action === 'sync') { await configSync.sync(); return { kind: 'success', text: '团队配置已同步，本地配置保持不变。' }; }
-          if (action === 'logout') { pendingInstalls.clear(); try { await client.logout(); } finally { await overlay.apply(); } return { kind: 'success', text: '已退出并移除团队配置。' }; }
+          if (action === 'logout') { await logout(); return { kind: 'success', text: '已退出并移除团队配置。' }; }
           if (action === 'status') { const status = configSync.status(); return { kind: 'success', text: [`登录：${status.authenticated ? '已登录' : '未登录（缓存不代表有效登录）'}`, `自动同步：${status.autoSync ? '开启' : '关闭'}`, `团队：${status.teamId ?? '无'} · 配置：${status.configCount}`, `最近成功同步：${status.lastSuccess ?? '本次启动尚未同步'}`, status.syncing ? '正在同步' : '', status.lastError ?? ''].filter(Boolean).join('\n') }; }
           const snapshot = client.current();
           const item = snapshot?.configs.find(c => c.id === id);
