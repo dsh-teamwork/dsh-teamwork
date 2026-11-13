@@ -22,6 +22,9 @@ export interface PanelPlugin {
 }
 export interface PanelPreset {
     id: string;
+    /** The team that publishes it; a member in several teams sees each team's presets. */
+    teamId: string;
+    teamName: string;
     name: string;
     version: number;
     description: string;
@@ -62,14 +65,16 @@ export interface PanelPairingOffer {
 }
 export interface PanelState {
     authenticated: boolean;
-    /** A team cached from an earlier sign-in is shown, but not usable, until the member signs in again. */
-    team: {
+    /**
+     * Every team the member is in (platform ADR 0013), each with its web console. Teams cached from an earlier
+     * sign-in are shown, but not usable, until the member signs in again.
+     */
+    teams: Array<{
         id: string;
         name: string;
         role: 'admin' | 'member';
-    } | null;
-    /** The web console, for an admin. */
-    consoleUrl: string;
+        consoleUrl: string;
+    }>;
     /** The server this DSH signs in to and syncs from, and the one it uses unless the member picks another. */
     server: string;
     defaultServer: string;
@@ -103,6 +108,8 @@ export interface PanelState {
     presets: PanelPreset[];
     models: Array<{
         id: string;
+        teamId: string;
+        teamName: string;
         name: string;
         version: number;
         upstream: string;

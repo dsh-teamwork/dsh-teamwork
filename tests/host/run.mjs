@@ -40,6 +40,7 @@ const registry = createServer((req, res) => {
 await new Promise(resolve => registry.listen(0, '127.0.0.1', resolve));
 const home = join(work, 'home'), cache = join(work, 'cache.json'), result = join(work, 'result.json');
 await mkdir(home); const registryUrl = `http://127.0.0.1:${registry.address().port}/`;
+// One team; the host scripts write it to the cache as `{ teams: [snapshot] }`.
 const snapshot = { teamId: 'host-smoke', teamName: 'Host smoke', role: 'member', configs: [
   { id: 'review', kind: 'preset', name: 'Review', version: 1, data: { provider: 'deepseek', model: 'deepseek-chat', systemPrompt: 'Review {{literal_team_token}}.' } },
   { id: 'fixture', kind: 'plugin', name: 'Fixture', version: 1, data: { package: '@teamwork-test/fixture', version: '1.0.0', description: 'Local install fixture' } },

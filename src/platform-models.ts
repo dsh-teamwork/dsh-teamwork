@@ -2,7 +2,7 @@ import { PiAiAdapter, type ResolvedPiAiProviderProfile } from '@deepseek-ai/dsh-
 import { resolveRetryPolicy } from '@deepseek-ai/dsh-llm';
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy';
 import type { Model } from '@earendil-works/pi-ai';
-import { modelData, type TeamworkClient, type Snapshot } from './client.js';
+import { allConfigs, modelData, type TeamworkClient, type Snapshot } from './client.js';
 export const platformProvider = 'teamwork-platform';
 /** Provider credentials never exist here: the adapter authenticates only to platform. */
 export function platformAdapter(client: TeamworkClient) {
@@ -15,7 +15,7 @@ export function platformAdapter(client: TeamworkClient) {
       if (snapshot === previous) return profiles;
       previous = snapshot;
       const baseUrl = `${client.endpoint.replace(/\/$/, '')}/api/llm`;
-      const models: Model<'openai-completions'>[] = (snapshot?.configs ?? []).filter(c => c.kind !== 'plugin' && modelData(snapshot!, c)).map(c => { const data = modelData(snapshot!, c)!; return ({
+      const models: Model<'openai-completions'>[] = allConfigs(snapshot).filter(c => c.kind !== 'plugin' && modelData(snapshot!, c)).map(c => { const data = modelData(snapshot!, c)!; return ({
         id: c.id, name: c.name, provider: platformProvider, api: 'openai-completions', baseUrl,
         reasoning: false, input: ['text'], contextWindow: data.contextWindow ?? Math.max(32768, data.maxTokens ?? 0), maxTokens: data.maxTokens ?? Math.min(4096, data.contextWindow ?? 32768),
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },

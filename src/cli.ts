@@ -12,7 +12,7 @@ try {
     const command = (await terminal.question('teamwork> ')).trim();
     if (command === 'quit') break;
     try {
-      if (command === 'sync') { const next = await client.sync(); console.log(`Synced ${next.configs.length} team configurations. Reload the DSH plugin to apply.`); }
+      if (command === 'sync') { const next = await client.sync(); console.log(`Synced ${next.teams.reduce((n, t) => n + t.configs.length, 0)} configurations from ${next.teams.length} teams. Reload the DSH plugin to apply.`); }
       else if (command === 'list') console.log(JSON.stringify(client.current(), null, 2));
       else if (command === 'logout') { await client.logout(); console.log('Signed out. Reload the DSH plugin to remove team registrations.'); break; }
     } catch (error) { console.error((error as Error).message); }

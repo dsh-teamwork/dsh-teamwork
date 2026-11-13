@@ -3,21 +3,33 @@ import { TeamOverlay, TeamworkClient, type Snapshot } from '../src/client.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-const snapshot: Snapshot = { teamId: 'team1', teamName: 'Team one', role: 'member', configs: [{ id: 'p1', name: 'Same name', kind: 'preset', version: 1, data: { provider: 'deepseek', model: 'chat', systemPrompt: 'Review' } }] };
+const team1 = { teamId: 'team1', teamName: 'Team one', role: 'member' as const, configs: [{ id: 'p1', name: 'Same name', kind: 'preset' as const, version: 1, data: { provider: 'deepseek', model: 'chat', systemPrompt: 'Review' } }] };
+const snapshot: Snapshot = { teams: [team1] };
 test('team updates and removal never touch a same-named local registration', async () => {
   const registrations = new Map<string, string>([['local', 'Same name']]); let count = 0;
   const overlay = new TeamOverlay(async (id, config) => { if (registrations.has(id)) throw new Error('collision'); registrations.set(id, config.name); count++; return async () => { registrations.delete(id); }; });
   await overlay.apply(snapshot); await overlay.apply(snapshot); expect(count).toBe(1);
-  await overlay.apply({ ...snapshot, configs: [{ ...snapshot.configs[0]!, name: 'Updated', version: 2 }] });
+  await overlay.apply({ teams: [{ ...team1, configs: [{ ...team1.configs[0]!, name: 'Updated', version: 2 }] }] });
   expect(registrations.get('local')).toBe('Same name'); expect(registrations.get('team:team1:p1')).toBe('Updated');
   await overlay.apply(); expect([...registrations]).toEqual([['local', 'Same name']]);
+});
+test('registers every team’s entries under its own team, and re-registers a team that was renamed', async () => {
+  const registrations = new Map<string, string>();
+  const overlay = new TeamOverlay(async (id, config, team) => { registrations.set(id, `[${team.teamName}] ${config.name}`); return async () => { registrations.delete(id); }; });
+  const team2 = { teamId: 'team2', teamName: 'Team two', role: 'admin' as const, configs: [{ ...team1.configs[0]!, id: 'p2' }] };
+  await overlay.apply({ teams: [team1, team2] });
+  expect(Object.fromEntries(registrations)).toEqual({ 'team:team1:p1': '[Team one] Same name', 'team:team2:p2': '[Team two] Same name' });
+  await overlay.apply({ teams: [{ ...team1, teamName: 'Team uno' }, team2] });
+  expect(registrations.get('team:team1:p1')).toBe('[Team uno] Same name');
+  await overlay.apply({ teams: [team2] });
+  expect([...registrations.keys()]).toEqual(['team:team2:p2']);
 });
 test('network and malformed replies preserve cache; revoked membership clears it', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'teamwork-')); const path = join(dir, 'cache.json'); let mode = 'ok';
   const request: typeof fetch = async (input) => {
     if (String(input).endsWith('/auth/plugin/token')) return Response.json({ token: 'test-token' });
     if (mode === 'network') throw new Error('offline');
-    if (mode === 'bad') return Response.json({ configs: [] });
+    if (mode === 'bad') return Response.json({ teamId: 'old-shape', configs: [] });
     if (mode === 'revoked') return new Response('', { status: 403 });
     return Response.json(snapshot);
   };

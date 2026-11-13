@@ -14,7 +14,8 @@ export class ConfigSync {
   status() {
     return { authenticated: this.client.authenticated(), autoSync: this.enabled,
       syncing: !!this.flight, lastSuccess: this.lastSuccess, lastError: this.lastError,
-      teamId: this.client.current()?.teamId, configCount: this.client.current()?.configs.length ?? 0 };
+      teams: (this.client.current()?.teams ?? []).map(team => team.teamName),
+      configCount: (this.client.current()?.teams ?? []).reduce((count, team) => count + team.configs.length, 0) };
   }
   sync(): Promise<void> {
     if (this.stopped) return Promise.reject(new Error('Plugin stopped'));

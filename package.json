@@ -1,6 +1,6 @@
 {
   "name": "@dsh-teamwork/dsh-teamwork",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "Team collaboration plugin for DeepSeek Harness",
   "license": "Apache-2.0",
   "repository": {
