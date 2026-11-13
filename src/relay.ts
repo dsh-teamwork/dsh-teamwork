@@ -117,7 +117,10 @@ export class RelayLink {
     });
   }
 
-  /** Pass a frame back to the relay; dropped while not connected, since the phone is gone too. */
+  /**
+   * Pass a frame to the relay: a phone's answer (`src/bridge.ts`), or `waiting`
+   * when an agent waits on its member. Dropped while not connected.
+   */
   send(frame: unknown) {
     if (this.state === 'connected' && this.socket?.readyState === 1) this.socket.send(JSON.stringify(frame));
   }

@@ -88,7 +88,10 @@ export declare class RelayLink {
     stop(): void;
     /** Ask the relay something, once connected; rejects when it is not, or does not answer in time. */
     request(request: RelayRequest): Promise<unknown>;
-    /** Pass a frame back to the relay; dropped while not connected, since the phone is gone too. */
+    /**
+     * Pass a frame to the relay: a phone's answer (`src/bridge.ts`), or `waiting`
+     * when an agent waits on its member. Dropped while not connected.
+     */
     send(frame: unknown): void;
     private failRequests;
     private halt;
