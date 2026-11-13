@@ -4,7 +4,7 @@ import { panelRoutes, ROUTE_PREFIX, type PanelOps } from '../src/panel.js';
 const calls: Array<[string, unknown[]]> = [];
 const ops: PanelOps = {
   state: async (sessionId) => { calls.push(['state', [sessionId]]); return { authenticated: false } as never; },
-  login: () => 'https://teamwork.example.com/plugin?challenge=abc',
+  login: async () => ({ url: 'https://teamwork.example.com/plugin?challenge=abc', automatic: true }),
   authorize: async (code) => { calls.push(['authorize', [code]]); },
   sync: async () => { throw new Error('同步失败'); },
   logout: async () => {},

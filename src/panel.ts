@@ -95,7 +95,8 @@ export interface PanelState {
 /** What the host half implements for the routes. Each throws an `Error` whose message is shown to the member. */
 export interface PanelOps {
   state(sessionId: string | undefined): Promise<PanelState>;
-  login(): string;
+  /** The sign-in page; `automatic` when the code comes back to this DSH by itself (src/login-callback.ts). */
+  login(): Promise<{ url: string; automatic: boolean }>;
   authorize(code: string): Promise<void>;
   sync(): Promise<void>;
   logout(): Promise<void>;
@@ -154,7 +155,7 @@ export function panelRoutes(ops: PanelOps): FetchRoute[] {
   const session = (body: Record<string, unknown>) => (typeof body.sessionId === 'string' && body.sessionId ? body.sessionId : undefined);
   return [
     post('state', (body) => ops.state(session(body))),
-    post('login', () => ({ url: ops.login() })),
+    post('login', () => ops.login()),
     post('authorize', (body) => ops.authorize(text(body.code, '授权码'))),
     post('sync', () => ops.sync()),
     post('logout', () => ops.logout()),
