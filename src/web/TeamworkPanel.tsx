@@ -294,7 +294,7 @@ function Header({ state, run }: { state: PanelState; run: Run }) {
   const only = teams.length === 1 ? teams[0] : undefined;
   // An admin of one team goes straight to its console; of several, to the list to pick from.
   const admin = teams.filter((t) => t.role === 'admin');
-  const console = admin.length === 1 ? admin[0].consoleUrl : admin.length ? `${state.server}/teams` : undefined;
+  const manageUrl = admin.length === 1 ? admin[0].consoleUrl : admin.length ? `${state.server}/teams` : undefined;
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: '1 1 260px' }}>
@@ -320,8 +320,8 @@ function Header({ state, run }: { state: PanelState; run: Run }) {
           : sync.lastError ? <Badge tone="warning" dot>同步失败</Badge> : <Badge tone="success" dot>{synced(sync.lastSuccess)}</Badge>}
         <Button size="sm" icon="refresh" aria-label="立即同步" title="立即同步" busy={sync.running}
           onClick={() => run(() => api.sync(), '团队配置已同步，本地配置保持不变')} />
-        {console && (
-          <Button size="sm" trailingIcon="external" onClick={() => window.open(console, '_blank', 'noopener')}>管理团队</Button>
+        {manageUrl && (
+          <Button size="sm" trailingIcon="external" onClick={() => window.open(manageUrl, '_blank', 'noopener')}>管理团队</Button>
         )}
         <Button size="sm" variant="ghost" icon="logout" onClick={() => run(() => api.logout(), '已退出，团队配置已从这台 DSH 移除')}>退出</Button>
       </div>
