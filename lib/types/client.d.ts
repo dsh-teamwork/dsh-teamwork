@@ -78,7 +78,8 @@ export declare class TeamworkClient {
      */
     setEndpoint(endpoint: string): Promise<void>;
     beginLogin(): string;
-    completeLogin(code: string): Promise<void>;
+    /** Takes the code alone or the whole `/teamwork authorize <code>` line the sign-in page shows, so the panel accepts what was copied. */
+    completeLogin(pasted: string): Promise<void>;
     private api;
     sync(): Promise<{
         teamId: string;
