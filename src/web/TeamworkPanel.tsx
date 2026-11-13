@@ -300,6 +300,8 @@ function Header({ state, run }: { state: PanelState; run: Run }) {
         </div>
       </div>
       <div className="twui-row" style={{ marginLeft: 'auto' }}>
+        {state.relay === 'connected' && <Badge tone="success" dot title="手机可以通过 DSH Teamwork App 连到这台电脑">手机可连接</Badge>}
+        {state.relay === 'refused' && <Badge tone="warning" dot title="中转服务拒绝了这台电脑的连接：重新登录后会再试">手机连接被拒绝</Badge>}
         {sync.running
           ? <Badge>正在同步…</Badge>
           : sync.lastError ? <Badge tone="warning" dot>同步失败</Badge> : <Badge tone="success" dot>{synced(sync.lastSuccess)}</Badge>}
