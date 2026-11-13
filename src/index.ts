@@ -16,6 +16,7 @@ import { taskProjection, TaskActions, recoveryHint, retryInstruction, outcomeTex
 import { pluginState, stateText, type PluginState } from './plugin-status.js';
 import { panelRoutes, type FetchRoute, type PanelOps, type PanelPreset } from './panel.js';
 import { platformAdapter, platformProvider } from './platform-models.js';
+import { Bridge } from './bridge.js';
 import { offerSchema, pairingSchema, RelayError, RelayLink, relayClientIdPath } from './relay.js';
 import type { PanelPhone } from './panel.js';
 export const name = 'dsh-teamwork';
@@ -132,6 +133,13 @@ export async function apply(ctx: Context, config: Config) {
   // The phone's way in (dsh-teamwork-premium ADR 0008): open only while signed in, and only to a server that runs a relay.
   // Phones paired with this computer, as the relay last listed them; re-read on connecting and whenever one is paired or revoked.
   let phones: PanelPhone[] = [];
+  // A paired phone's calls, replayed against this DSH's own web server through the allow-list; set where DSH serves web.
+  let launchUrl: (() => string) | undefined;
+  const bridge = new Bridge({
+    launchUrl: () => launchUrl?.(),
+    send: (frame) => relay.send(frame),
+    log: (message, error) => ctx.logger.warn('%s：%s', message, (error as Error | undefined)?.message ?? ''),
+  });
   const relay: RelayLink = new RelayLink({
     endpoint: () => client.endpoint,
     token: () => client.authenticated() ? client.platformCredential() : undefined,
@@ -139,9 +147,10 @@ export async function apply(ctx: Context, config: Config) {
     onStatus: (status) => {
       ctx.logger.debug('relay: %s', status);
       if (status === 'connected') void readPhones();
-      else phones = [];
+      else { phones = []; bridge.dropAll(); }
     },
     onEvent: () => void readPhones(),
+    onForward: (frame) => bridge.handle(frame),
   });
   const readPhones = async () => {
     try { phones = pairingSchema.array().parse(await relay.request({ t: 'pairings' })); }
@@ -303,6 +312,13 @@ export async function apply(ctx: Context, config: Config) {
   ctx.inject(['connection'], (scoped) => {
     const { connection } = scoped as unknown as { connection: { fetch: { register(route: FetchRoute): () => Promise<void> } } };
     for (const route of panelRoutes(panel)) scoped.effect(() => { const dispose = connection.fetch.register(route); return () => { void dispose(); }; });
+  });
+  ctx.inject(['connection', 'webServer'], (scoped) => {
+    const { connection, webServer } = scoped as unknown as { connection: { authenticatedUrl(base: string): string }; webServer: { getOrigin(): string } };
+    scoped.effect(() => {
+      launchUrl = () => connection.authenticatedUrl(webServer.getOrigin());
+      return () => { launchUrl = undefined; bridge.dropAll(); };
+    });
   });
   ctx.inject(['commands'], (child) => {
     child.effect(() => child.commands.register({

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { type Forwarded } from './bridge.js';
 import type { RelayStatus } from './panel.js';
 export type { RelayStatus };
 /** The relay's close codes this side acts on; any other close reconnects. */
@@ -61,6 +62,8 @@ export interface RelayLinkOptions {
     WebSocket?: typeof globalThis.WebSocket;
     onStatus?: (status: RelayStatus) => void;
     onEvent?: (event: RelayEvent) => void;
+    /** A phone's frame for this computer, or the news that its phone left or lost its pairing (`src/bridge.ts`). */
+    onForward?: (frame: Forwarded) => void;
     /** Longest wait between reconnection attempts. */
     maxBackoffMs?: number;
     /** How long to wait before asking a server without a relay again. */
@@ -85,6 +88,8 @@ export declare class RelayLink {
     stop(): void;
     /** Ask the relay something, once connected; rejects when it is not, or does not answer in time. */
     request(request: RelayRequest): Promise<unknown>;
+    /** Pass a frame back to the relay; dropped while not connected, since the phone is gone too. */
+    send(frame: unknown): void;
     private failRequests;
     private halt;
     private set;
