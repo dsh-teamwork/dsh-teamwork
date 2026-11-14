@@ -24,4 +24,7 @@ coverage/
 # lib/ must be committed for GitHub installation
 
 .teamwork/
+.dsh-home/
+cordis.local.patch.yml
+teamwork-cache*.json
 *.tsbuildinfo
