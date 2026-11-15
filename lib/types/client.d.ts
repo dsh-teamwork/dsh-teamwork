@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { PanelProfile } from './panel.js';
 /** `GET /api/configs`: every team the member is in, each with its configuration (platform ADR 0013). */
 export declare const snapshotSchema: z.ZodObject<{
     teams: z.ZodArray<z.ZodObject<{
@@ -292,6 +293,11 @@ export declare class TeamworkClient {
     platformCredential(): string;
     sessionRevision(): number;
     authenticated(): boolean;
+    profile(): Promise<PanelProfile>;
+    updateProfile(input: {
+        name: string | null;
+        locale: 'en' | 'zh-CN';
+    }): Promise<PanelProfile>;
     current(): {
         teams: {
             teamId: string;

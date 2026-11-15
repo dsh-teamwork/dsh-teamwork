@@ -245,4 +245,66 @@ export const css = String.raw`
 .twui-panel-content { display: grid; gap: 12px; align-content: start; padding-top: 20px; padding-bottom: 32px; }
 .twui-panel[data-centered] .twui-panel-body { display: grid; place-items: center; }
 .twui-panel[data-centered] .twui-panel-content { width: 100%; }
+
+/* Custom selects: the popup stays in the theme root and flips near the viewport edge. */
+.twui-select { position: relative; min-width: 0; max-width: 100%; }
+.twui-select-trigger { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 36px; padding: 7px 11px; border: 1px solid var(--twui-border); border-radius: var(--twui-radius-md); font: inherit; color: var(--twui-fg); background: var(--twui-fill); cursor: pointer; }
+.twui-select-trigger > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.twui-select-trigger:hover:not(:disabled), .twui-select-trigger[aria-expanded="true"] { background: var(--twui-fill-strong); }
+.twui-select-trigger:disabled { opacity: .5; cursor: not-allowed; }
+.twui-select-menu { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; min-width: 100%; width: max-content; max-width: min(300px, 80cqw); max-height: min(288px, 45vh); overflow-y: auto; padding: 5px; border: 1px solid var(--twui-border-strong); border-radius: var(--twui-radius-md); background: var(--twui-surface); color: var(--twui-fg); box-shadow: 0 8px 28px color-mix(in srgb, var(--twui-fg) 15%, transparent); }
+.twui-select-menu[data-side="top"] { top: auto; bottom: calc(100% + 6px); }
+.twui-select-option { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 9px 10px; border-radius: var(--twui-radius-sm); cursor: pointer; overflow-wrap: anywhere; }
+.twui-select-option > span { display: grid; gap: 2px; }
+.twui-select-option small { font-size: 12px; color: var(--twui-fg-muted); }
+.twui-select-option[data-active] { background: var(--twui-hover); }
+.twui-select-option[aria-selected="true"] { color: var(--twui-accent); }
+.twui-select-option[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+
+/* Screen composition */
+.twui-brand-lockup { display: flex; align-items: center; gap: 12px; }
+.twui-brand-lockup h1 { font-size: 17px; font-weight: 600; letter-spacing: -.02em; }
+.twui-header-actions { margin-left: auto; gap: 4px; }
+.twui-header-actions .twui-badge { background: transparent; font-size: 12px; }
+.twui-header-actions .twui-btn[aria-current="page"] { color: var(--twui-fg); background: var(--twui-fill); }
+.twui-action-divider { height: 18px; border-left: 1px solid var(--twui-border); margin: 0 8px; }
+.twui-page-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin-top: 6px; }
+.twui-page-heading h2, .twui-page-title { font-size: 22px; font-weight: 600; letter-spacing: -.025em; }
+.twui-team-scope { gap: 4px; color: var(--twui-fg-muted); min-width: 0; }
+.twui-team-scope .twui-select { max-width: min(280px, 60cqw); }
+.twui-session-context { display: flex; align-items: center; gap: 12px; padding: 14px 16px; margin-top: 10px; background: var(--twui-fill); border-radius: var(--twui-radius-md); }
+.twui-session-context > svg { color: var(--twui-accent); }
+.twui-session-context strong { font-weight: 500; }
+.twui-resource-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; justify-content: space-between; margin-top: 12px; }
+.twui-resource-toolbar .twui-input { flex: 0 1 240px; }
+.twui-resource-toolbar .twui-tabs { border: 0; gap: 4px; }
+.twui-resource-toolbar .twui-tab { padding: 7px 14px; margin: 0; border: 0; border-radius: var(--twui-radius-sm); }
+.twui-resource-toolbar .twui-tab[aria-selected="true"] { background: var(--twui-fill); }
+.twui-resource-list .twui-item { border: 0; border-bottom: 1px solid var(--twui-border); border-radius: 0; box-shadow: none; background: transparent; }
+.twui-resource-list .twui-item-main { padding: 24px 2px; align-items: center; }
+.twui-resource-list .twui-tile { width: 42px; height: 42px; color: var(--twui-accent); align-self: start; }
+.twui-resource-list .twui-item-subtitle { font: inherit; font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--twui-fill); color: var(--twui-fg-muted); }
+.twui-resource-list .twui-item-tags { margin-top: 8px; }
+.twui-resource-list .twui-item-title { font-size: 15px; font-weight: 500; }
+.twui-account-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; margin-top: 12px; align-items: start; }
+.twui-account-grid > section { gap: 20px; min-width: 0; }
+.twui-account-grid h3 { font-size: 15px; font-weight: 500; }
+.twui-account-grid .twui-input { width: 100%; }
+.twui-panel-content { gap: 16px; padding-top: 28px; }
+@container (max-width: 680px) {
+  .twui-account-grid { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+  .twui-header-actions { width: 100%; justify-content: flex-end; }
+  .twui-panel-column { padding-inline: 16px; }
+  .twui-resource-toolbar .twui-input { flex: 1 1 180px; }
+}
+@container (max-width: 380px) {
+  .twui-header-actions { gap: 0; }
+  .twui-header-actions .twui-btn { padding-inline: 7px; font-size: 12px; }
+  .twui-sync-status { flex-basis: 100%; display: flex; justify-content: flex-end; }
+  .twui-action-divider { margin-inline: 4px; }
+}
+@media (pointer: coarse) {
+  .twui-select-trigger, .twui-select-option, .twui-btn { min-height: 44px; height: auto; }
+  .twui-input { min-height: 44px; font-size: 16px; }
+}
 `;

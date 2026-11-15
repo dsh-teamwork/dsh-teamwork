@@ -7,7 +7,7 @@
  * loads a client module: CommonJS inside `__ModuleLoader__.load`, with React
  * taken from the host.
  */
-import { PANEL_ID, type Host } from './host.js';
+import { PANEL_ID, currentSessionTracker, type Host } from './host.js';
 import { TeamworkPanel } from './TeamworkPanel.js';
 
 interface Slots {
@@ -17,8 +17,12 @@ interface Slots {
 
 export const inject = ['slots', 'sessions', 'layout', 'uiWorkspace'];
 
-export function apply(ctx: Host & { slots: Slots }) {
+export function apply(ctx: Host & { slots: Slots; effect(callback: () => (() => void)): void }) {
+  const trackSession = currentSessionTracker(ctx.sessions.list);
+  trackSession();
+  ctx.effect(() => ctx.sessions.list.subscribe(() => { trackSession(); }));
   const host: Host = {
+    currentSession: trackSession,
     get sessions() { return ctx.sessions; },
     get layout() { return ctx.layout; },
     get uiWorkspace() { return ctx.uiWorkspace; },

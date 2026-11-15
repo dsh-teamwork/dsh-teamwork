@@ -41,7 +41,8 @@ test('preset stamps live in a file of the plugin, survive a restart, and never i
   const second = new PresetStamps(path); await second.load();
   expect(second.get('s1')).toEqual({teamId:'t',id:'p',version:1});
   expect(sameRevision(second.get('s1'),{...preset,version:2})).toBe(false);
-  expect((await stat(path)).mode & 0o777).toBe(0o600);
+  // Windows does not implement POSIX permission bits; keep this invariant on POSIX hosts.
+  if (process.platform !== 'win32') expect((await stat(path)).mode & 0o777).toBe(0o600);
   await second.clear('s1');
   expect(JSON.parse(await readFile(path,'utf8'))).toEqual({});
   // An unreadable file starts empty: the stamp is retaken on the next request.

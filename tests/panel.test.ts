@@ -3,6 +3,8 @@ import { panelRoutes, ROUTE_PREFIX, type PanelOps } from '../src/panel.js';
 
 const calls: Array<[string, unknown[]]> = [];
 const ops: PanelOps = {
+  profile: async () => ({ id: 'user', email: 'user@example.com', name: null, image: null, locale: 'en' }),
+  updateProfile: async input => { calls.push(['profile', [input]]); return { id: 'user', email: 'user@example.com', image: null, ...input }; },
   state: async (sessionId) => { calls.push(['state', [sessionId]]); return { authenticated: false } as never; },
   login: async () => ({ url: 'https://teamwork.example.com/plugin?challenge=abc', automatic: true }),
   authorize: async (code) => { calls.push(['authorize', [code]]); },
@@ -17,8 +19,16 @@ const post = (name: string, body?: unknown) =>
   routes.get(`${ROUTE_PREFIX}/${name}`)!.fetch(new Request(`http://dsh.local${ROUTE_PREFIX}/${name}`, { method: 'POST', body: typeof body === 'string' ? body : JSON.stringify(body ?? {}) }));
 
 describe('panel routes', () => {
+  it('proxies only editable profile fields and rejects invalid updates', async () => {
+    calls.length = 0;
+    expect((await post('update-profile', { name: 'Ada', locale: 'en', token: 'ignored' })).status).toBe(200);
+    expect(calls).toEqual([['profile', [{ name: 'Ada', locale: 'en' }]]]);
+    expect((await post('update-profile', { name: 'x'.repeat(81), locale: 'en' })).status).toBe(400);
+    expect((await post('update-profile', { name: null, locale: 'invalid' })).status).toBe(400);
+    expect(calls).toHaveLength(1);
+  });
   it('registers POST-only routes under /api/teamwork', () => {
-    expect([...routes.keys()].sort()).toEqual(['authorize', 'decide-phone', 'install', 'login', 'logout', 'pair-phone', 'revoke-phone', 'server', 'state', 'sync', 'use'].map((n) => `${ROUTE_PREFIX}/${n}`));
+    expect([...routes.keys()].sort()).toEqual(['authorize', 'decide-phone', 'install', 'login', 'logout', 'pair-phone', 'profile', 'revoke-phone', 'server', 'state', 'sync', 'update-profile', 'use'].map((n) => `${ROUTE_PREFIX}/${n}`));
     for (const route of routes.values()) expect(route.methods).toEqual(['POST']);
   });
 

@@ -1,4 +1,4 @@
-import { ROUTE_PREFIX, type PanelPairingOffer, type PanelState } from '../panel.js';
+import { ROUTE_PREFIX, type PanelPairingOffer, type PanelState, type PanelProfile } from '../panel.js';
 
 // Relative to the page, like the host's own calls, so a DSH served under a path still reaches it.
 const base = ROUTE_PREFIX.slice(1) + '/';
@@ -24,6 +24,8 @@ async function call<T>(route: string, payload: Record<string, unknown> = {}): Pr
 }
 
 export const api = {
+  profile: () => call<PanelProfile>('profile'),
+  updateProfile: (input: { name: string | null; locale: 'en' | 'zh-CN' }) => call<PanelProfile>('update-profile', input),
   state: (sessionId: string | undefined) => call<PanelState>('state', { sessionId }),
   login: () => call<{ url: string; automatic: boolean }>('login'),
   authorize: (code: string) => call('authorize', { code }),

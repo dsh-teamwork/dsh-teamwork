@@ -12,6 +12,8 @@ export type { PluginState };
 export type ToolState = 'available' | 'conditional' | 'missing' | 'unknown';
 export interface PanelPlugin {
     id: string;
+    teamId?: string;
+    teamName?: string;
     name: string;
     package?: string;
     version: string;
@@ -116,8 +118,20 @@ export interface PanelState {
     }>;
     plugins: PanelPlugin[];
 }
+export interface PanelProfile {
+    id: string;
+    email: string | null;
+    name: string | null;
+    image: string | null;
+    locale: 'en' | 'zh-CN' | null;
+}
 /** What the host half implements for the routes. Each throws an `Error` whose message is shown to the member. */
 export interface PanelOps {
+    profile(): Promise<PanelProfile>;
+    updateProfile(input: {
+        name: string | null;
+        locale: 'en' | 'zh-CN';
+    }): Promise<PanelProfile>;
     state(sessionId: string | undefined): Promise<PanelState>;
     /** The sign-in page; `automatic` when the code comes back to this DSH by itself (src/login-callback.ts). */
     login(): Promise<{

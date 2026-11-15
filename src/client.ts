@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { z } from 'zod';
+import type { PanelProfile } from './panel.js';
 const common = { id: z.string().min(1), name: z.string(), version: z.number().int().positive() };
 const route = { provider: z.string().min(1), model: z.string().min(1), contextWindow: z.number().int().positive().max(10000000).optional(), maxTokens: z.number().int().positive().max(10000000).optional() };
 const teamSchema = z.object({ teamId: z.string().min(1), teamName: z.string(), role: z.enum(['admin', 'member']), configs: z.array(z.discriminatedUnion('kind', [
@@ -115,6 +116,14 @@ export class TeamworkClient {
   platformCredential() { if (!this.token) throw new Error('Sign in to platform first'); return this.token; }
   sessionRevision() { return this.epoch; }
   authenticated() { return !!this.token; }
+  profile(): Promise<PanelProfile> {
+    if (!this.token) return Promise.reject(new Error('请先登录 Teamwork'));
+    return this.api('profile');
+  }
+  updateProfile(input: { name: string | null; locale: 'en' | 'zh-CN' }): Promise<PanelProfile> {
+    if (!this.token) return Promise.reject(new Error('请先登录 Teamwork'));
+    return this.api('profile', 'PATCH', input);
+  }
   current() { return this.snapshot; }
   async clear() { this.snapshot = undefined; await rm(this.cachePath, { force: true }); }
   logout() { this.epoch++; return this.enqueue(() => this.logoutOnce()); }

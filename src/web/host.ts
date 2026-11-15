@@ -14,6 +14,8 @@ export interface Observable<T> {
 }
 
 export interface Host {
+  /** Tracked for the entire client plugin lifetime, including while the panel is closed. */
+  currentSession?(): string | undefined;
   /** `ctx.sessions` (`@deepseek-ai/dsh-api-session-controller`). */
   sessions: { list: Observable<{ byId: Record<string, SessionSummary> }> };
   /** `ctx.layout` (`@deepseek-ai/dsh-client-ui-layout`). */

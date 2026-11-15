@@ -43,6 +43,7 @@ Nothing is published yet: the plugin's browser bundle compiles it in.
 | `Badge` | A state or a label; `tone` and an optional `dot`. |
 | `Tabs` | A row of tabs; the caller owns the selection. |
 | `Field`, `Input` | A labelled input with a hint or an error under it. |
+| `Select` | A themed button/listbox dropdown, with keyboard selection, disabled options, outside dismissal and focus restoration. No native select popup. |
 | `Monogram`, `Spinner`, `Skeleton`, `Notice`, `DefinitionList`, `Toast` | What their names say. |
 
 Utility classes for layout inside a screen: `twui-row` (a wrapping row with

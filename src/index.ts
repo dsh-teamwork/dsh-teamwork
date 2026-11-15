@@ -55,12 +55,17 @@ export async function apply(ctx: Context, config: Config) {
     const tools = ctx.get('tools');
     return toolReport(preset, name => !tools ? 'unknown' : !tools.get(name, agent) ? 'missing' : tools.executable(name, agent) ? 'available' : 'conditional');
   };
-  const plugins = async (preset?: PresetContext) => {
-    const snapshot = client.current();
+  const readPluginInventory = async () => {
     const manager = ctx.get('pluginManager');
     const bundles = manager ? await manager.listBundles() : [];
     const entries = manager ? await manager.listPlugins() : [];
+    return { manager, bundles, entries };
+  };
+  const plugins = async (preset?: PresetContext, readInventory = readPluginInventory) => {
+    const snapshot = client.current();
     const dependencies = preset ? preset.pluginDependencies ?? [] : allConfigs(snapshot).filter(c=>c.kind==='plugin').map(c=>({pluginConfigId:c.id,version:c.data.version}));
+    if (!dependencies.length) return [];
+    const { manager, bundles, entries } = await readInventory();
     return dependencies.map(dependency=>{
       const item = allConfigs(snapshot).find(c=>c.id===dependency.pluginConfigId && c.kind==='plugin');
       // A preset's pin counts only in the preset's own team.
@@ -292,8 +297,13 @@ export async function apply(ctx: Context, config: Config) {
   };
   const sessionAgent = (sessionId: string | undefined) => sessionId ? ctx.agents.get(sessionId as SessionId) : undefined;
   const panel: PanelOps = {
+    profile: () => client.profile(),
+    updateProfile: (input) => client.updateProfile(input),
     async state(sessionId) {
       const status = configSync.status(), snapshot = client.current(), agent = sessionAgent(sessionId);
+      // Inventory scans read the whole host. Share one within this response, never across requests.
+      let inventory: ReturnType<typeof readPluginInventory> | undefined;
+      const readInventory = () => inventory ??= readPluginInventory();
       const presets: PanelPreset[] = [];
       for (const team of snapshot?.teams ?? []) for (const item of team.configs) {
         if (item.kind !== 'preset') continue;
@@ -304,7 +314,7 @@ export async function apply(ctx: Context, config: Config) {
           model: item.data.modelConfigId ? linked?.name ?? item.data.modelConfigId : `${item.data.provider}/${item.data.model}`,
           modelAvailable: !!modelData(snapshot!, item),
           tools: agent ? requirements(agent, candidate) : toolReport(candidate, () => 'unknown'),
-          plugins: item.data.pluginDependencies?.length ? await plugins({teamId:team.teamId,pluginDependencies:item.data.pluginDependencies} as PresetContext) : [],
+          plugins: item.data.pluginDependencies?.length ? await plugins({teamId:team.teamId,pluginDependencies:item.data.pluginDependencies} as PresetContext, readInventory) : [],
         });
       }
       const selection = agent?.model.current(), active = agent && activePreset(agent), boundary = agent && ctx.agents.turnBoundaryOf(agent.session);
@@ -325,7 +335,10 @@ export async function apply(ctx: Context, config: Config) {
         presets,
         models: (snapshot?.teams ?? []).flatMap(team => team.configs.flatMap(c => c.kind === 'model'
           ? [{ id: c.id, teamId: team.teamId, teamName: team.teamName, name: c.name, version: c.version, upstream: `${c.data.provider}/${c.data.model}` }] : [])),
-        plugins: await plugins(),
+        plugins: (await plugins(undefined, readInventory)).map(plugin => {
+          const team = teamOf(snapshot, plugin.id);
+          return { ...plugin, teamId: team?.teamId, teamName: team?.teamName };
+        }),
       };
     },
     login: beginLogin,

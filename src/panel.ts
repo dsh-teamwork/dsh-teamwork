@@ -15,6 +15,8 @@ export type ToolState = 'available' | 'conditional' | 'missing' | 'unknown';
 
 export interface PanelPlugin {
   id: string;
+  teamId?: string;
+  teamName?: string;
   name: string;
   package?: string;
   version: string;
@@ -96,8 +98,18 @@ export interface PanelState {
   plugins: PanelPlugin[];
 }
 
+export interface PanelProfile {
+  id: string;
+  email: string | null;
+  name: string | null;
+  image: string | null;
+  locale: 'en' | 'zh-CN' | null;
+}
+
 /** What the host half implements for the routes. Each throws an `Error` whose message is shown to the member. */
 export interface PanelOps {
+  profile(): Promise<PanelProfile>;
+  updateProfile(input: { name: string | null; locale: 'en' | 'zh-CN' }): Promise<PanelProfile>;
   state(sessionId: string | undefined): Promise<PanelState>;
   /** The sign-in page; `automatic` when the code comes back to this DSH by itself (src/login-callback.ts). */
   login(): Promise<{ url: string; automatic: boolean }>;
@@ -159,6 +171,12 @@ export function panelRoutes(ops: PanelOps): FetchRoute[] {
   const session = (body: Record<string, unknown>) => (typeof body.sessionId === 'string' && body.sessionId ? body.sessionId : undefined);
   return [
     post('state', (body) => ops.state(session(body))),
+    post('profile', () => ops.profile()),
+    post('update-profile', (body) => {
+      if (body.name !== null && (typeof body.name !== 'string' || body.name.length > 80)) throw new Error('显示名称不能超过 80 个字符');
+      if (body.locale !== 'en' && body.locale !== 'zh-CN') throw new Error('请选择有效的语言');
+      return ops.updateProfile({ name: body.name as string | null, locale: body.locale });
+    }),
     post('login', () => ops.login()),
     post('authorize', (body) => ops.authorize(text(body.code, '授权码'))),
     post('sync', () => ops.sync()),

@@ -12,3 +12,4 @@ export { Badge, Button, Field, Input, Monogram, Skeleton, Spinner, Tabs } from '
 export type { ButtonProps, ButtonVariant, TabItem, Tone } from './controls.js';
 export { Banner, Card, Confirm, DefinitionList, EmptyState, Item, ItemBody, Notice, Panel, Toast } from './layout.js';
 export { css, STYLE_ELEMENT_ID } from './styles.js';
+export { Select, type SelectOption } from './select.js';
