@@ -1,4 +1,4 @@
-/** Authenticated Noise transport. Keep the mobile wire copy byte-identical; interop tests exercise both. */
+/** Noise-authenticated native AES-GCM transport. Keep the mobile wire copy byte-identical; interop tests exercise both. */
 import { type NoiseComponents } from '@chainsafe/libp2p-noise';
 export declare const MAX_MESSAGE: number;
 export declare function base64(bytes: Uint8Array): string;
@@ -7,7 +7,7 @@ export type SecurePacket = {
     t: 'sealed';
     pairingId: string;
     channelId: string;
-    kind: 'commit' | 'reveal' | 'noise';
+    kind: 'commit' | 'reveal' | 'noise' | 'data';
     data: string;
 };
 export declare function securePacket(value: unknown): value is SecurePacket;
@@ -18,12 +18,18 @@ export interface Identity {
 }
 export declare function deviceIdentity(seed: string): Promise<Identity>;
 export declare function newChannelId(random: RandomBytes): string;
+/** Implemented by Expo Crypto on mobile and Node/OpenSSL on the desktop. No JS cipher fallback. */
+export interface AesKey {
+    encrypt(plaintext: Uint8Array, nonce: Uint8Array, additionalData: Uint8Array): Promise<Uint8Array>;
+    decrypt(ciphertext: Uint8Array, nonce: Uint8Array, additionalData: Uint8Array): Promise<Uint8Array>;
+}
 export interface SecureOptions {
     pairingId: string;
     channelId: string;
     initiator: boolean;
     identity: Identity;
     random: RandomBytes;
+    importAesKey(bytes: Uint8Array): Promise<AesKey>;
     expectedKey?: string;
     send(packet: SecurePacket): void;
     ready(remoteKey: string, safetyCode: string): void | Promise<void>;
@@ -35,6 +41,14 @@ export declare class SecureChannel {
     private readonly options;
     private incoming;
     private outgoing;
+    private records;
+    private bootstrapDone;
+    private sendKey?;
+    private receiveKey?;
+    private sendCount;
+    private receiveCount;
+    private sentBytes;
+    private receivedBytes;
     private remoteCommit?;
     private remoteReveal?;
     private revealSent;
@@ -46,7 +60,6 @@ export declare class SecureChannel {
     private flushTimer?;
     private wire;
     private abort;
-    private serial;
     private readyState;
     constructor(options: SecureOptions);
     get id(): string;
@@ -56,6 +69,9 @@ export declare class SecureChannel {
     receive(packet: SecurePacket): void;
     private flush;
     private handshake;
+    private nonce;
+    private encrypt;
+    private decrypt;
     send(value: unknown): void;
     verified(): void;
     close(error?: Error): void;

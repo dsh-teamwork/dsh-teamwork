@@ -1,4 +1,4 @@
-/** Authenticated Noise transport. Keep the mobile wire copy byte-identical; interop tests exercise both. */
+/** Noise-authenticated native AES-GCM transport. Keep the mobile wire copy byte-identical; interop tests exercise both. */
 import { noise, pureJsCrypto, type NoiseComponents } from '@chainsafe/libp2p-noise';
 import { privateKeyFromRaw, publicKeyFromProtobuf, publicKeyToProtobuf } from '@libp2p/crypto/keys';
 import { peerIdFromPublicKey } from '@libp2p/peer-id';
@@ -9,6 +9,11 @@ import { sha256 } from '@noble/hashes/sha256';
 export const MAX_MESSAGE = 1024 * 1024;
 const MAX_BUFFER = 2 * MAX_MESSAGE;
 const PACKET_BYTES = 384 * 1024;
+const RECORD_PLAINTEXT = PACKET_BYTES - 4 - 16;
+// Reconnect before either key's counter or conservative GCM usage budget is exhausted.
+const MAX_RECORDS = 0xffffffff;
+const MAX_KEY_BYTES = 64 * 1024 * 1024 * 1024;
+const DOMAIN = 'dsh-e2ee-aesgcm';
 const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));
 export function base64(bytes: Uint8Array): string {
   const parts: string[] = [];
@@ -34,7 +39,7 @@ export type SecurePacket = {
   t: 'sealed';
   pairingId: string;
   channelId: string;
-  kind: 'commit' | 'reveal' | 'noise';
+  kind: 'commit' | 'reveal' | 'noise' | 'data';
   data: string;
 };
 export function securePacket(value: unknown): value is SecurePacket {
@@ -47,7 +52,7 @@ export function securePacket(value: unknown): value is SecurePacket {
     f.pairingId.length <= 64 &&
     typeof f.channelId === 'string' &&
     /^[A-Za-z0-9_-]{22}$/.test(f.channelId) &&
-    ['commit', 'reveal', 'noise'].includes(f.kind) &&
+    ['commit', 'reveal', 'noise', 'data'].includes(f.kind) &&
     typeof f.data === 'string' &&
     f.data.length <= 700000
   );
@@ -103,12 +108,18 @@ class Queue {
     }
   }
 }
+/** Implemented by Expo Crypto on mobile and Node/OpenSSL on the desktop. No JS cipher fallback. */
+export interface AesKey {
+  encrypt(plaintext: Uint8Array, nonce: Uint8Array, additionalData: Uint8Array): Promise<Uint8Array>;
+  decrypt(ciphertext: Uint8Array, nonce: Uint8Array, additionalData: Uint8Array): Promise<Uint8Array>;
+}
 export interface SecureOptions {
   pairingId: string;
   channelId: string;
   initiator: boolean;
   identity: Identity;
   random: RandomBytes;
+  importAesKey(bytes: Uint8Array): Promise<AesKey>;
   expectedKey?: string;
   send(packet: SecurePacket): void;
   ready(remoteKey: string, safetyCode: string): void | Promise<void>;
@@ -120,6 +131,14 @@ export interface SecureOptions {
 export class SecureChannel {
   private incoming = new Queue();
   private outgoing = new Queue();
+  private records = new Queue();
+  private bootstrapDone = false;
+  private sendKey?: AesKey;
+  private receiveKey?: AesKey;
+  private sendCount = 0;
+  private receiveCount = 0;
+  private sentBytes = 0;
+  private receivedBytes = 0;
   private remoteCommit?: string;
   private remoteReveal?: { key: string; salt: string };
   private revealSent = false;
@@ -131,7 +150,6 @@ export class SecureChannel {
   private flushTimer?: ReturnType<typeof setTimeout>;
   private wire = new Uint8Array(0);
   private abort = new AbortController();
-  private serial: Promise<void> = Promise.resolve();
   private readyState = false;
   constructor(private readonly options: SecureOptions) {
     this.salt = base64(options.random(32));
@@ -146,7 +164,7 @@ export class SecureChannel {
   }
   private commit(initiator: boolean, key: string, salt: string) {
     return base64(
-      sha256(encode(['dsh-e2ee-1', this.options.pairingId, this.options.channelId, initiator, key, salt])),
+      sha256(encode([DOMAIN, this.options.pairingId, this.options.channelId, initiator, key, salt])),
     );
   }
   private packet(kind: SecurePacket['kind'], data: string) {
@@ -188,7 +206,16 @@ export class SecureChannel {
         void this.handshake().catch((error) => this.close(error));
       } else {
         if (!this.started) throw new Error('handshake_required');
-        this.incoming.push(unbase64(packet.data));
+        const bytes = unbase64(packet.data);
+        if (bytes.length > PACKET_BYTES) throw new Error('message_too_large');
+        if (packet.kind === 'noise') {
+          if (this.bootstrapDone) throw new Error('unexpected_noise');
+          this.incoming.push(bytes);
+        } else if (packet.kind === 'data') {
+          // A fast peer may finish key import before us; bounded records wait for our keys.
+          if (bytes.length < 21) throw new Error('invalid_ciphertext');
+          this.records.push(bytes);
+        } else throw new Error('invalid_ciphertext');
       }
     } catch (error) {
       this.close(error as Error);
@@ -208,7 +235,7 @@ export class SecureChannel {
     const local = { key: identity.publicKey, salt: this.salt };
     const remote = this.remoteReveal!;
     const transcript = encode([
-      'dsh-e2ee-1',
+      DOMAIN,
       this.options.pairingId,
       this.options.channelId,
       ...(initiator ? [local, remote] : [remote, local]),
@@ -253,6 +280,34 @@ export class SecureChannel {
       ? encrypter.secureOutbound(network, settings)
       : encrypter.secureInbound(network, settings));
     if (this.dead) return;
+    // Noise authenticates and protects a fresh, independent 256-bit key for each sending direction.
+    // Business bytes bypass Noise entirely; they are encrypted only by the native AES backend.
+    const rawKey = random(32);
+    const keyMessage = rawKey.slice();
+    const writing = Promise.resolve(secured.conn.sink((async function* () { yield keyMessage; })()));
+    void writing.catch((error) => this.close(error));
+    let remoteKey = new Uint8Array(0);
+    try {
+      const sendKey = await this.options.importAesKey(rawKey);
+      for await (const chunk of secured.conn.source) {
+        remoteKey = join(remoteKey, chunk.subarray());
+        if (remoteKey.length > 32) throw new Error('invalid_aes_key');
+        if (remoteKey.length === 32) break;
+      }
+      if (remoteKey.length !== 32) throw new Error('channel_closed');
+      const receiveKey = await this.options.importAesKey(remoteKey);
+      await writing;
+      this.flush();
+      if (this.dead) return;
+      this.sendKey = sendKey;
+      this.receiveKey = receiveKey;
+    } finally {
+      rawKey.fill(0);
+      keyMessage.fill(0);
+      remoteKey.fill(0);
+    }
+    this.bootstrapDone = true;
+    this.incoming.end();
     const hash = sha256(transcript);
     const digits = String(
       new DataView(hash.buffer, hash.byteOffset, hash.byteLength).getUint32(0) % 100000000,
@@ -260,13 +315,47 @@ export class SecureChannel {
     clearTimeout(this.timer);
     this.timer = setTimeout(() => this.close(new Error('verification_timeout')), 120000);
     this.readyState = true;
-    const pump = secured.conn.sink(this.outgoing.source());
-    void Promise.resolve(pump).catch((error) => this.close(error));
+    const sendAAD = join(hash, new Uint8Array([initiator ? 1 : 0]));
+    const receiveAAD = join(hash, new Uint8Array([initiator ? 0 : 1]));
+    void this.encrypt(sendAAD).catch((error) => this.close(error));
     await this.options.ready(remote.key, `${digits.slice(0, 4)} ${digits.slice(4)}`);
+    await this.decrypt(receiveAAD);
+  }
+  private nonce(counter: number) {
+    if (counter >= MAX_RECORDS) throw new Error('key_exhausted');
+    const nonce = new Uint8Array(12);
+    new DataView(nonce.buffer).setUint32(8, counter);
+    return nonce;
+  }
+  private async encrypt(additionalData: Uint8Array) {
+    for await (const message of this.outgoing.source()) {
+      for (let offset = 0; offset < message.length; offset += RECORD_PLAINTEXT) {
+        if (this.dead) return;
+        const plaintext = message.subarray(offset, offset + RECORD_PLAINTEXT);
+        if (this.sentBytes + plaintext.length > MAX_KEY_BYTES) throw new Error('key_exhausted');
+        const nonce = this.nonce(this.sendCount);
+        // One ordered pump prevents nonce reuse when native calls resolve asynchronously.
+        const ciphertext = await this.sendKey!.encrypt(plaintext, nonce, additionalData);
+        if (this.dead) return;
+        this.sendCount++;
+        this.sentBytes += plaintext.length;
+        this.packet('data', base64(join(nonce.subarray(8), ciphertext)));
+      }
+    }
+  }
+  private async decrypt(additionalData: Uint8Array) {
     let buffer = new Uint8Array(0);
-    for await (const chunk of secured.conn.source) {
+    for await (const record of this.records.source()) {
       if (this.dead) return;
-      buffer = join(buffer, chunk.subarray());
+      const counter = new DataView(record.buffer, record.byteOffset, record.byteLength).getUint32(0);
+      if (counter !== this.receiveCount) throw new Error('invalid_counter');
+      const ciphertext = record.subarray(4);
+      if (this.receivedBytes + ciphertext.length - 16 > MAX_KEY_BYTES) throw new Error('key_exhausted');
+      const plaintext = await this.receiveKey!.decrypt(ciphertext, this.nonce(counter), additionalData);
+      if (this.dead) return;
+      this.receiveCount++;
+      this.receivedBytes += plaintext.length;
+      buffer = join(buffer, plaintext);
       if (buffer.length > MAX_BUFFER) throw new Error('message_too_large');
       while (buffer.length >= 4) {
         const length = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength).getUint32(0);
@@ -276,13 +365,10 @@ export class SecureChannel {
           new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(4, 4 + length)),
         );
         buffer = buffer.slice(4 + length);
-        this.serial = this.serial.then(async () => {
-          if (!this.dead) await this.options.message(value);
-        });
-        await this.serial;
+        await this.options.message(value);
+        if (this.dead) return;
       }
     }
-    if (!this.dead) throw new Error('channel_closed');
   }
   send(value: unknown) {
     if (this.dead || !this.readyState) throw new Error('handshake_required');
@@ -303,6 +389,9 @@ export class SecureChannel {
     clearTimeout(this.flushTimer);
     this.incoming.end();
     this.outgoing.end();
+    this.records.end();
+    this.sendKey = undefined;
+    this.receiveKey = undefined;
     this.wire.fill(0);
     this.wire = new Uint8Array(0);
     this.options.closed(error);

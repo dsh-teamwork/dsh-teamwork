@@ -1,4 +1,5 @@
 /** Local device trust and the only path from relay ciphertext into the DSH bridge. */
+import { importAesKey } from './aes-gcm.js';
 import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
@@ -159,6 +160,7 @@ export class PhoneSecurity {
         channelId: frame.channelId,
         initiator: false,
         identity,
+        importAesKey,
         random: (n) => randomBytes(n),
         expectedKey: trusted?.key,
         send: this.options.send,
