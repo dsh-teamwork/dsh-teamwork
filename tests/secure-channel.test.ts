@@ -108,7 +108,12 @@ describe('authenticated encrypted channel', () => {
   });
   it('rejects a changed commitment before any business traffic', async () => {
     const p = await pair({
-      intercept: (f) => (f.kind === 'reveal' ? { ...f, data: f.data.replace(/"salt":"./, '"salt":"A') } : f),
+      intercept: (f) => {
+        if (f.kind !== 'reveal') return f;
+        const reveal = JSON.parse(f.data);
+        const salt = unbase64(reveal.salt); salt[0] ^= 1;
+        return { ...f, data: JSON.stringify({ ...reveal, salt: base64(salt) }) };
+      },
     });
     try {
       expect(p.errors.length).toBeGreaterThan(0);
@@ -161,4 +166,13 @@ it('closes on empty ciphertext instead of allowing an unbounded zero-byte input 
     expect(p.errors.some(error => error.message === 'channel_overflow')).toBe(true);
     expect(p.messages).toHaveLength(0);
   } finally { p.close(); }
+});
+
+it('derives the RFC 8032 Ed25519 identity from an existing seed and signs with the full key', async () => {
+  const seed = Buffer.from('9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60', 'hex');
+  const identity = await deviceIdentity(base64(seed));
+  expect(Buffer.from(identity.privateKey.publicKey.raw).toString('hex')).toBe('d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a');
+  const message = new Uint8Array(0);
+  const signature = await identity.privateKey.sign(message);
+  expect(await identity.privateKey.publicKey.verify(message, signature)).toBe(true);
 });

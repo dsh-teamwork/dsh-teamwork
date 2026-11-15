@@ -56,6 +56,9 @@ importers:
       '@libp2p/peer-id':
         specifier: 5.0.16
         version: 5.0.16
+      '@noble/curves':
+        specifier: 1.9.7
+        version: 1.9.7
       '@noble/hashes':
         specifier: 1.8.0
         version: 1.8.0
