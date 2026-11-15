@@ -73,6 +73,7 @@ export interface PanelPairingOffer {
 }
 
 export interface PanelState {
+  authRevision: number;
   authenticated: boolean;
   /**
    * Every team the member is in (platform ADR 0013), each with its web console. Teams cached from an earlier
@@ -101,6 +102,15 @@ export interface PanelState {
   plugins: PanelPlugin[];
 }
 
+/** Advisory own-member availability. The gateway remains the admission authority. */
+export interface PanelQuota {
+  remaining: string | null;
+  state: 'known' | 'unlimited' | 'unconfirmed';
+  resetAt: string | null;
+  tokenLimited: boolean;
+  exhausted: boolean;
+}
+
 export interface PanelProfile {
   id: string;
   email: string | null;
@@ -111,6 +121,7 @@ export interface PanelProfile {
 
 /** What the host half implements for the routes. Each throws an `Error` whose message is shown to the member. */
 export interface PanelOps {
+  quota(teamId: string): Promise<PanelQuota>;
   profile(): Promise<PanelProfile>;
   updateProfile(input: { name: string | null; locale: 'en' | 'zh-CN' }): Promise<PanelProfile>;
   state(sessionId: string | undefined): Promise<PanelState>;
@@ -175,6 +186,7 @@ export function panelRoutes(ops: PanelOps): FetchRoute[] {
   return [
     post('state', (body) => ops.state(session(body))),
     post('profile', () => ops.profile()),
+    post('quota', (body) => ops.quota(text(body.teamId, '团队'))),
     post('update-profile', (body) => {
       if (body.name !== null && (typeof body.name !== 'string' || body.name.length > 80)) throw new Error('显示名称不能超过 80 个字符');
       if (body.locale !== 'en' && body.locale !== 'zh-CN') throw new Error('请选择有效的语言');

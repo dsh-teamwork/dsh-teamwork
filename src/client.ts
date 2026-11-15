@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { z } from 'zod';
-import type { PanelProfile } from './panel.js';
+import type { PanelProfile, PanelQuota } from './panel.js';
 const common = { id: z.string().min(1), name: z.string(), version: z.number().int().positive() };
 const route = { provider: z.string().min(1), model: z.string().min(1), contextWindow: z.number().int().positive().max(10000000).optional(), maxTokens: z.number().int().positive().max(10000000).optional() };
 const teamSchema = z.object({ teamId: z.string().min(1), teamName: z.string(), role: z.enum(['admin', 'member']), configs: z.array(z.discriminatedUnion('kind', [
@@ -80,7 +80,7 @@ export class TeamworkClient {
       // Platform tokens are stateless and cannot be revoked server-side; a late one is simply dropped.
       if (epoch !== this.epoch) throw new Error('Login cancelled');
       await this.clear();
-      this.verifier = undefined; this.token = result.token;
+      this.epoch++; this.verifier = undefined; this.token = result.token;
     });
   }
   private async api(path: string, method = 'GET', body?: unknown, token = this.token): Promise<any> {
@@ -116,6 +116,22 @@ export class TeamworkClient {
   platformCredential() { if (!this.token) throw new Error('Sign in to platform first'); return this.token; }
   sessionRevision() { return this.epoch; }
   authenticated() { return !!this.token; }
+  /** Independent of configuration sync: no credentials or other members' budgets leave the host. */
+  async quota(teamId: string): Promise<PanelQuota> {
+    if (!this.token || !this.snapshot?.teams.some(team => team.teamId === teamId)) throw new Error('请先同步并选择有效团队');
+    const epoch = this.epoch, endpoint = this.endpoint, token = this.token;
+    const response = await this.request(`${endpoint}/api/teams/${encodeURIComponent(teamId)}/budgets`, {
+      headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(3000),
+    });
+    if (!response.ok) throw new Error('预算暂不可用');
+    const result = z.object({ summary: z.object({
+      remaining: z.string().regex(/^\d+(?:\.\d{1,9})?$/).nullable(),
+      state: z.enum(['known', 'unlimited', 'unconfirmed']), resetAt: z.string().nullable(),
+      tokenLimited: z.boolean(), exhausted: z.boolean(),
+    }) }).parse(await response.json());
+    if (epoch !== this.epoch || endpoint !== this.endpoint || this.token !== token) throw new Error('登录状态已改变');
+    return result.summary;
+  }
   profile(): Promise<PanelProfile> {
     if (!this.token) return Promise.reject(new Error('请先登录 Teamwork'));
     return this.api('profile');

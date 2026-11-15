@@ -86,7 +86,8 @@ it('requires both local approvals, persists trust, and acknowledges durable remo
     expect((await keys.peer('server|account', 'pair'))?.key).toBe(identity.publicKey);
     expect(await keys.peer('other-account', 'pair')).toBeUndefined();
     expect((await new PhoneKeys(path).identity()).publicKey).toBe((await keys.identity()).publicKey);
-    expect((await stat(path)).mode & 0o777).toBe(0o600);
+    // Windows reports DOS attributes rather than POSIX permission bits.
+    if (process.platform !== 'win32') expect((await stat(path)).mode & 0o777).toBe(0o600);
     phone.send({ t: 'call', pairingId: 'pair', id: 'c', method: 'session/list', body: {} });
     await until(() => forwarded.some((f: any) => f.t === 'call'));
     phone.send({ t: 'revoke' });
