@@ -20,6 +20,18 @@ afterEach(() => {
 });
 
 describe('@dsh-teamwork/ui', () => {
+  it('keeps the split primary action separate from selecting another option', () => {
+    const activated: string[] = [], picked: string[] = [];
+    const { container, unmount } = render(<Select label="Team" value="a" options={[{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }]} onActivate={() => activated.push('a')} onChange={v => picked.push(v)} />);
+    act(() => container.querySelector<HTMLButtonElement>('.twui-select-primary')!.click());
+    expect(activated).toEqual(['a']); expect(container.querySelector('[role="listbox"]')).toBeNull();
+    act(() => container.querySelector<HTMLButtonElement>('.twui-select-trigger')!.click());
+    expect(container.querySelector('[role="listbox"]')).not.toBeNull(); expect(activated).toEqual(['a']);
+    act(() => container.querySelector('[role="option"][data-index="1"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    expect(picked).toEqual(['b']); expect(activated).toEqual(['a']);
+    expect(document.activeElement).toBe(container.querySelector('.twui-select-trigger'));
+    unmount();
+  });
   it('opens at the keyboard edge and recovers when the highlighted option disappears', () => {
     const picked: string[] = [];
     const options = [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }];

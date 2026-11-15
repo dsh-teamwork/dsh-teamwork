@@ -237,8 +237,9 @@ export const css = String.raw`
 .twui-panel { height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--twui-bg); container-type: inline-size; }
 .twui-panel-header, .twui-panel-nav { background: var(--twui-surface); }
 .twui-panel-header { border-bottom: 1px solid var(--twui-border); }
+.twui-panel-header, .twui-panel-nav, .twui-panel-footer { flex: none; }
 .twui-panel-column { max-width: 1008px; margin: 0 auto; padding: 0 24px; }
-.twui-panel-header > .twui-panel-column { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding-top: 16px; padding-bottom: 16px; }
+.twui-panel-header > .twui-panel-column { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding-top: 12px; padding-bottom: 12px; }
 .twui-panel-nav .twui-tabs { border-bottom: 0; }
 .twui-panel-nav { border-bottom: 1px solid var(--twui-border); }
 .twui-panel-body { flex: 1; min-height: 0; overflow-y: auto; }
@@ -252,6 +253,15 @@ export const css = String.raw`
 .twui-select-trigger > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .twui-select-trigger:hover:not(:disabled), .twui-select-trigger[aria-expanded="true"] { background: var(--twui-fill-strong); }
 .twui-select-trigger:disabled { opacity: .5; cursor: not-allowed; }
+.twui-select[data-split] { display: inline-flex; align-items: stretch; border: 1px solid transparent; border-radius: var(--twui-radius-md); background: transparent; }
+.twui-select[data-split]:hover, .twui-select[data-split]:focus-within { border-color: var(--twui-border); background: var(--twui-fill); }
+.twui-select-primary { display: flex; align-items: center; min-width: 0; min-height: 34px; padding: 7px 12px; border: 0; border-radius: calc(var(--twui-radius-md) - 1px) 0 0 calc(var(--twui-radius-md) - 1px); background: transparent; color: var(--twui-fg); font: inherit; cursor: pointer; }
+.twui-select-primary > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.twui-select-primary:hover:not(:disabled) { background: var(--twui-fill-strong); }
+.twui-select-primary:disabled { opacity: .5; cursor: not-allowed; }
+.twui-select[data-split] > .twui-select-trigger { width: 34px; flex: none; justify-content: center; padding: 0; border: 0; border-left: 1px solid transparent; border-radius: 0 calc(var(--twui-radius-md) - 1px) calc(var(--twui-radius-md) - 1px) 0; background: transparent; }
+.twui-select[data-split]:hover > .twui-select-trigger, .twui-select[data-split]:focus-within > .twui-select-trigger { border-left-color: var(--twui-border); }
+.twui-select[data-split] > .twui-select-trigger:hover:not(:disabled), .twui-select[data-split] > .twui-select-trigger[aria-expanded="true"] { background: var(--twui-fill-strong); }
 .twui-select-menu { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; min-width: 100%; width: max-content; max-width: min(300px, 80cqw); max-height: min(288px, 45vh); overflow-y: auto; padding: 5px; border: 1px solid var(--twui-border-strong); border-radius: var(--twui-radius-md); background: var(--twui-surface); color: var(--twui-fg); box-shadow: 0 8px 28px color-mix(in srgb, var(--twui-fg) 15%, transparent); }
 .twui-select-menu[data-side="top"] { top: auto; bottom: calc(100% + 6px); }
 .twui-select-option { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 9px 10px; border-radius: var(--twui-radius-sm); cursor: pointer; overflow-wrap: anywhere; }
@@ -263,19 +273,21 @@ export const css = String.raw`
 
 /* Screen composition */
 .twui-brand-lockup { display: flex; align-items: center; gap: 12px; }
-.twui-brand-lockup h1 { font-size: 17px; font-weight: 600; letter-spacing: -.02em; }
+.twui-brand-lockup { min-width: 0; }
+.twui-brand-home { display: inline-flex; flex: none; padding: 0; background: transparent; border: 0; border-radius: var(--twui-radius-sm); cursor: pointer; }
 .twui-header-actions { margin-left: auto; gap: 4px; }
-.twui-header-actions .twui-badge { background: transparent; font-size: 12px; }
 .twui-header-actions .twui-btn[aria-current="page"] { color: var(--twui-fg); background: var(--twui-fill); }
-.twui-action-divider { height: 18px; border-left: 1px solid var(--twui-border); margin: 0 8px; }
-.twui-page-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin-top: 6px; }
-.twui-page-heading h2, .twui-page-title { font-size: 22px; font-weight: 600; letter-spacing: -.025em; }
+.twui-panel-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 16px; min-height: 32px; padding: 2px 12px; border-top: 1px solid var(--twui-border); background: var(--twui-surface); color: var(--twui-fg-muted); font-size: 11px; }
+.twui-footer-identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.twui-footer-name { font-weight: 500; }
+.twui-footer-service { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.twui-footer-actions { margin-left: auto; gap: 4px; }
+.twui-footer-actions .twui-badge { background: transparent; font-size: 11px; height: 20px; padding: 0 4px; }
+.twui-footer-actions .twui-btn { font-size: 11px; height: 24px; padding-inline: 6px; }
+.twui-page-title { font-size: 22px; font-weight: 600; letter-spacing: -.025em; }
 .twui-team-scope { gap: 4px; color: var(--twui-fg-muted); min-width: 0; }
 .twui-team-scope .twui-select { max-width: min(280px, 60cqw); }
-.twui-session-context { display: flex; align-items: center; gap: 12px; padding: 14px 16px; margin-top: 10px; background: var(--twui-fill); border-radius: var(--twui-radius-md); }
-.twui-session-context > svg { color: var(--twui-accent); }
-.twui-session-context strong { font-weight: 500; }
-.twui-resource-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; justify-content: space-between; margin-top: 12px; }
+.twui-resource-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; justify-content: space-between; }
 .twui-resource-toolbar .twui-input { flex: 0 1 240px; }
 .twui-resource-toolbar .twui-tabs { border: 0; gap: 4px; }
 .twui-resource-toolbar .twui-tab { padding: 7px 14px; margin: 0; border: 0; border-radius: var(--twui-radius-sm); }
@@ -300,11 +312,13 @@ export const css = String.raw`
 @container (max-width: 380px) {
   .twui-header-actions { gap: 0; }
   .twui-header-actions .twui-btn { padding-inline: 7px; font-size: 12px; }
-  .twui-sync-status { flex-basis: 100%; display: flex; justify-content: flex-end; }
-  .twui-action-divider { margin-inline: 4px; }
+  .twui-brand-lockup { gap: 8px; }
+  .twui-team-scope .twui-btn { padding-inline: 6px; }
+  .twui-team-scope .twui-select { max-width: 42cqw; }
 }
 @media (pointer: coarse) {
-  .twui-select-trigger, .twui-select-option, .twui-btn { min-height: 44px; height: auto; }
+  .twui-select-trigger, .twui-select-primary, .twui-select-option, .twui-btn { min-height: 44px; height: auto; }
+  .twui-select[data-split] > .twui-select-trigger { width: 44px; }
   .twui-input { min-height: 44px; font-size: 16px; }
 }
 `;

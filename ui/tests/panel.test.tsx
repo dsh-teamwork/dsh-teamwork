@@ -91,7 +91,7 @@ test.each([0, 1, 2])('completes first sign-in and lands correctly with %i teams'
     expect(document.querySelector('a')?.href).toBe('https://example.com/plugin');
     await input('#teamwork-code', 'code'); await click('完成授权');
     if (!count) expect(document.body.textContent).toContain('接下来加入团队');
-    else if (count === 1) expect(document.querySelector('.twui-select-trigger')?.textContent).toContain('Alpha');
+    else if (count === 1) expect(document.querySelector('.twui-select-primary')?.textContent).toContain('Alpha');
     else expect(document.body.textContent).toContain('先从哪个团队开始');
   } finally { open.mockRestore(); }
 });
@@ -120,7 +120,7 @@ test('switches teams and survives a removed membership without changing the phon
   vi.mocked(api.state).mockResolvedValue({ ...state, teams: state.teams.slice(0, 1), presets: state.presets.slice(0, 1) });
   await act(async () => { await vi.advanceTimersByTimeAsync(5001); });
   expect(document.body.textContent).toContain('手机连接的是这台电脑');
-  await click('返回团队资源'); expect(document.querySelector('.twui-select-trigger')!.textContent).toContain('全部团队');
+  await click('返回团队资源'); expect(document.querySelector('.twui-select-primary')!.textContent).toContain('全部团队');
   expect(api.use).not.toHaveBeenCalled(); expect(api.decidePhone).not.toHaveBeenCalled();
 });
 
@@ -181,7 +181,10 @@ test('chooses a team, filters its resources without changing sessions, and edits
   await act(async () => document.querySelector('article button')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
   expect(document.body.textContent).toContain('Preset a'); expect(document.body.textContent).not.toContain('Preset b');
   expect(api.use).not.toHaveBeenCalled(); expect(host.uiWorkspace.startSession).not.toHaveBeenCalled();
-  expect(document.querySelectorAll('header button')).toHaveLength(3);
+  expect(document.querySelector('header .twui-select')).not.toBeNull();
+  expect(document.querySelector('header')!.textContent).not.toContain('刷新');
+  expect(document.querySelector('footer')!.textContent).toContain('Teamwork');
+  expect(document.querySelector('footer button')!.textContent).toBe('刷新');
   await click('我的账号');
   expect(document.querySelector('select')).toBeNull();
   await act(async () => document.querySelector<HTMLButtonElement>('#teamwork-locale')!.click());

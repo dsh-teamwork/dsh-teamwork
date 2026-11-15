@@ -195,7 +195,7 @@ export function TeamworkPanel({ host: dsh }: { host: Host }) {
   const tabs = [{ id: 'presets' as const, label: '预设', count: presets.length }, { id: 'models' as const, label: '模型', count: models.length }, { id: 'plugins' as const, label: '插件', count: plugins.length }];
   const choosing = page === 'choose' && state.teams.length > 1;
   return (
-    <Panel label="Teamwork" header={<Header state={state} run={run} page={page} navigate={navigate} />}>
+    <Panel label="Teamwork" header={<Header state={state} page={page} team={team} selectTeam={selectTeam} navigate={navigate} />} footer={<Footer state={state} run={run} />}>
       {loadError && <Banner tone="danger" title="状态没有刷新" action={<Button size="sm" icon="refresh" onClick={() => void refresh()}>重试</Button>}>{loadError}</Banner>}
       {state.sync.lastError && (
         <Banner tone="warning" title="同步失败，正在使用上次同步的配置" action={<Button size="sm" icon="refresh" onClick={() => run(() => api.sync(), '团队配置已同步')}>重试</Button>}>
@@ -204,15 +204,7 @@ export function TeamworkPanel({ host: dsh }: { host: Host }) {
       )}
       {page !== 'resources' && !choosing && <div><Button variant="ghost" size="sm" onClick={() => navigate('resources')}>返回团队资源</Button></div>}
       {choosing ? <TeamChooser state={state} select={selectTeam} /> : (page === 'resources' || page === 'choose') && <>
-        <div className="twui-page-heading">
-          <h2>团队资源</h2>
-          {!!state.teams.length && <div className="twui-row twui-team-scope"><Button variant="ghost" onClick={() => navigate('teams')}>我的团队</Button><Icon name="chevronRight" size={14} />
-            <Select label="选择团队" value={team} onChange={selectTeam} options={[{ value: 'all', label: '全部团队' }, ...state.teams.map(t => ({ value: t.id, label: t.name, description: t.role === 'admin' ? '管理员' : '成员' }))]} />
-          </div>}
-        </div>
-        <p className="twui-muted">使用团队共享的预设、模型和插件，开始你的工作。</p>
         {!state.teams.length ? <EmptyState icon="layers" title="账号已连接，接下来加入团队" action={<div className="twui-row"><Button trailingIcon="external" onClick={() => window.open(`${state.server}/teams`, '_blank', 'noopener')}>加入或创建团队</Button><Button icon="refresh" onClick={() => run(() => api.sync(), '团队列表已刷新')}>我已加入，刷新团队</Button></div>}>在网页中接受邀请或创建团队，完成后回来刷新。</EmptyState> : <>
-          <SessionStrip state={state} />
           <div className="twui-resource-toolbar"><Tabs<Tab> label="资源类型" items={tabs} value={tab} onChange={setTab} /><Input aria-label="搜索团队资源" placeholder="搜索名称或用途" value={query} onChange={e => setQuery(e.target.value)} /></div>
           <div className="twui-resource-list" key={`${team}:${tab}`}>
             {tab === 'presets' && presets.filter(matches).map(p => <PresetItem key={p.id} preset={p} state={state} dsh={dsh} run={run} onInstall={() => setTab('plugins')} />)}
@@ -465,44 +457,29 @@ function ServerSetting({ state, run }: { state: PanelState; run: Run }) {
 
 /* ── Signed in ───────────────────────────────────────────────────────────── */
 
-function Header({ state, run, page, navigate }: { state: PanelState; run: Run; page: Page; navigate(page: Page): void }) {
-  const [busy, setBusy] = useState(false);
+function Header({ state, page, team, selectTeam, navigate }: { state: PanelState; page: Page; team: string; selectTeam(id: string): void; navigate(page: Page): void }) {
   const pending = state.phones.filter(p => p.status === 'pending').length;
   return <>
-    <div className="twui-brand-lockup"><BrandMark size={36} title="DSH Teamwork" /><div className="twui-stack" style={{ gap: 2 }}><h1>Teamwork</h1><span className="twui-subtle">{state.server === state.defaultServer ? '官方服务' : host(state.server)} · 本机 DSH</span></div></div>
+    <div className="twui-brand-lockup"><button type="button" className="twui-brand-home" aria-label="返回团队资源" onClick={() => navigate('resources')}><BrandMark size={32} title="DSH Teamwork" /></button>
+      <div className="twui-row twui-team-scope"><Button variant="ghost" onClick={() => navigate('teams')}>我的团队</Button>
+        {!!state.teams.length && <><Icon name="chevronRight" size={14} /><Select label="选择团队" value={team} onActivate={() => navigate('resources')} onChange={selectTeam} options={[{ value: 'all', label: '全部团队' }, ...state.teams.map(t => ({ value: t.id, label: t.name, description: t.role === 'admin' ? '管理员' : '成员' }))]} /></>}
+      </div>
+    </div>
     <div className="twui-row twui-header-actions">
-      <span className="twui-sync-status" role="status"><Badge tone={state.sync.lastError ? 'warning' : 'success'} dot>{state.sync.running ? '正在同步…' : state.sync.lastError ? '同步失败' : synced(state.sync.lastSuccess)}</Badge></span>
-      <Button variant="ghost" icon="refresh" busy={busy || state.sync.running} onClick={async () => { setBusy(true); await run(() => api.sync(), '团队配置已同步'); setBusy(false); }}>刷新</Button>
-      <span className="twui-action-divider" aria-hidden="true" />
       <Button variant="ghost" icon="smartphone" aria-current={page === 'devices' ? 'page' : undefined} onClick={() => navigate('devices')}>手机连接{pending ? ` · ${pending}` : ''}</Button>
       <Button variant="ghost" icon="settings" aria-current={page === 'profile' ? 'page' : undefined} onClick={() => navigate('profile')}>我的账号</Button>
     </div>
   </>;
 }
 
-function SessionStrip({ state }: { state: PanelState }) {
-  const s = state.session;
-  if (!s) return <div className="twui-session-context"><Icon name="layers" size={18} /><div><strong>从一个预设开始</strong><p className="twui-subtle">选择适合的工作方式，新建会话时会准备好模型与工具。</p></div></div>;
-  // A team selection names a model config, or a preset that carries its own model.
-  const teamModel = (id: string) => state.models.find((m) => m.id === id)?.name ?? state.presets.find((p) => p.id === id)?.model ?? id;
-  const model = s.model ? (s.model.team ? teamModel(s.model.model) : `${s.model.provider}/${s.model.model}`) : '未选择';
-  return (
-    <div className="twui-card" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 20px', padding: '12px 16px', boxShadow: 'none', background: 'var(--twui-fill)' }}>
-      <span className="twui-row" style={{ gap: 6, fontWeight: 600 }}><Icon name="session" size={15} />当前会话</span>
-      <Meta label="模型" value={model} />
-      <Meta label="预设" value={s.preset ? `${s.preset.name} · v${s.preset.version}` : '无团队预设'} />
-      <span style={{ marginLeft: 'auto' }}><Badge tone={s.started ? 'neutral' : 'accent'} dot>{s.started ? '已开始对话' : '尚未开始对话'}</Badge></span>
+function Footer({ state, run }: { state: PanelState; run: Run }) {
+  const [busy, setBusy] = useState(false);
+  return <>
+    <div className="twui-footer-identity"><span className="twui-footer-name">Teamwork</span><span className="twui-footer-service" title={state.server}>{state.server === state.defaultServer ? '官方服务' : host(state.server)} · 本机 DSH</span></div>
+    <div className="twui-row twui-footer-actions"><span role="status"><Badge tone={state.sync.lastError ? 'warning' : 'success'} dot>{state.sync.running ? '正在同步…' : state.sync.lastError ? '同步失败' : synced(state.sync.lastSuccess)}</Badge></span>
+      <Button variant="ghost" size="sm" icon="refresh" busy={busy || state.sync.running} onClick={async () => { setBusy(true); await run(() => api.sync(), '团队配置已同步'); setBusy(false); }}>刷新</Button>
     </div>
-  );
-}
-
-function Meta({ label, value }: { label: string; value: string }) {
-  return (
-    <span className="twui-row" style={{ gap: 6, minWidth: 0 }}>
-      <span className="twui-subtle">{label}</span>
-      <span style={{ fontWeight: 500, overflowWrap: 'anywhere' }}>{value}</span>
-    </span>
-  );
+  </>;
 }
 
 function PresetItem({ preset, state, dsh, run, onInstall }: { preset: PanelPreset; state: PanelState; dsh: Host; run: Run; onInstall(): void }) {

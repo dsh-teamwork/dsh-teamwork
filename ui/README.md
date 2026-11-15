@@ -31,7 +31,7 @@ Nothing is published yet: the plugin's browser bundle compiles it in.
 
 | Component | Use it for |
 | --- | --- |
-| `Panel` | A full-height screen: header, navigation and a scrolling body in one centred column. It is the theme root; `centered` places a first screen in the middle. |
+| `Panel` | A full-height screen: header, navigation and a scrolling body in one centred column, plus an optional edge-to-edge footer outside the scroll area. It is the theme root; `centered` places a first screen in the middle. |
 | `BrandMark` | The DSH Teamwork mark on its plate, copied from the platform's `docs/brand/icon.svg`. Never drawn without the plate or recoloured. |
 | `Icon` | The stroke icons the screens use (Lucide's paths), in `currentColor`. |
 | `Card`, `Banner` | A bordered surface; a block message with a tone, a title and one action. |
@@ -43,7 +43,7 @@ Nothing is published yet: the plugin's browser bundle compiles it in.
 | `Badge` | A state or a label; `tone` and an optional `dot`. |
 | `Tabs` | A row of tabs; the caller owns the selection. |
 | `Field`, `Input` | A labelled input with a hint or an error under it. |
-| `Select` | A themed button/listbox dropdown, with keyboard selection, disabled options, outside dismissal and focus restoration. No native select popup. |
+| `Select` | A themed button/listbox dropdown, with keyboard selection, disabled options, outside dismissal and focus restoration. `onActivate` makes the selected label a separate primary action beside the popup arrow. No native select popup. |
 | `Monogram`, `Spinner`, `Skeleton`, `Notice`, `DefinitionList`, `Toast` | What their names say. |
 
 Utility classes for layout inside a screen: `twui-row` (a wrapping row with

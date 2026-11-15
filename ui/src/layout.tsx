@@ -9,9 +9,11 @@ import { UIRoot } from './root.js';
  * `UIRoot`, so a screen needs nothing around it. `centered` places the body's
  * content in the middle of the screen, for a first screen such as sign-in.
  */
-export function Panel({ header, nav, children, label, centered = false }: {
+export function Panel({ header, nav, footer, children, label, centered = false }: {
   header?: ReactNode;
   nav?: ReactNode;
+  /** Status chrome below the scrolling body, pinned to the panel's bottom edge. */
+  footer?: ReactNode;
   children: ReactNode;
   /** Accessible name of the region. */
   label: string;
@@ -24,6 +26,7 @@ export function Panel({ header, nav, children, label, centered = false }: {
       <div className="twui-panel-body">
         <div className="twui-panel-column twui-panel-content">{children}</div>
       </div>
+      {footer && <footer className="twui-panel-footer">{footer}</footer>}
     </UIRoot>
   );
 }

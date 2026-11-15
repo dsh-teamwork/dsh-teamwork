@@ -9,12 +9,14 @@ export interface SelectOption {
 }
 
 /** A button/listbox select with native keyboard conventions and no native popup. */
-export function Select({ id, label, value, options, onChange, disabled = false }: {
+export function Select({ id, label, value, options, onChange, onActivate, disabled = false }: {
   id?: string;
   label: string;
   value: string;
   options: readonly SelectOption[];
   onChange(value: string): void;
+  /** Splits the selected label into a primary action and a separate popup toggle. */
+  onActivate?(): void;
   disabled?: boolean;
 }) {
   const generated = useId();
@@ -62,12 +64,13 @@ export function Select({ id, label, value, options, onChange, disabled = false }
     const next = selected >= 0 && !options[selected].disabled ? selected : options.findIndex(o => !o.disabled);
     if (next < 0) close(true); else setActive(next);
   }, [options, selected, active, open]);
-  return <div className="twui-select" ref={root} onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) close(); }}>
+  return <div className="twui-select" data-split={!!onActivate || undefined} role={onActivate ? 'group' : undefined} aria-label={onActivate ? label : undefined} ref={root} onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) close(); }}>
+    {onActivate && <button type="button" className="twui-select-primary" disabled={disabled || selected < 0 || options[selected]?.disabled} onClick={() => { close(); onActivate(); }}><span>{options[selected]?.label ?? label}</span></button>}
     <button ref={trigger} id={id} type="button" className="twui-select-trigger" aria-label={`${label}：${options[selected]?.label ?? ''}`}
       aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? listId : undefined} disabled={disabled}
       onClick={() => open ? close(true) : show()}
       onKeyDown={e => { if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) { e.preventDefault(); show(e.key === 'Home' ? 'first' : e.key === 'End' ? 'last' : undefined); } }}>
-      <span>{options[selected]?.label ?? label}</span><Icon name="chevronDown" size={14} />
+      {!onActivate && <span>{options[selected]?.label ?? label}</span>}<Icon name="chevronDown" size={14} />
     </button>
     {open && <div ref={list} id={listId} role="listbox" aria-label={label} tabIndex={-1} className="twui-select-menu" data-side={side} style={{ maxHeight: height }}
       aria-activedescendant={`${listId}-${active}`} onKeyDown={e => {
