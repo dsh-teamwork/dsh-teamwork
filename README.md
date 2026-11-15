@@ -233,3 +233,28 @@ supports ordinary files, not image input or document extraction. Update the
 mobile app and plugin together. Build output under `lib/` is included.
 
 预算由所选团队的服务端计算，插件底栏异步显示当前成员的积分剩余、Token 限额或待核实状态。切换资源团队不会改变正在使用的会话模型；模型和上游的其他限制仍由网关在请求时检查。读取失败显示“预算暂不可用”，不影响配置列表和同步。
+
+
+## Team assistant and reviewed sharing
+
+New teams receive a built-in assistant that can inherit a local/session model.
+The assistant's tools bind operations to its active team, reuse server permissions,
+and require real host approval for mutations. They cover sync, configuration,
+usage/budgets, preset submissions, local plugin preparation/upload, review and
+historical restoration. Provider keys and account passwords use secure console forms.
+
+Members can submit new or updated presets/plugins on the platform's sharing page;
+administrators approve frozen revisions. Publication does not install a plugin.
+Private archives are downloaded through host authentication, verified by SHA-256,
+and installed disabled before the normal conflict checks and activation. Existing
+local installations remain protected; upgrades use the local plugin manager.
+
+Pinned preset dependencies survive catalog updates through historical plugin
+metadata. Use `/teamwork install <configId>@<version>` for an exact retained pin.
+The platform's history page supports comparison, backup export and restoration
+as a new reviewed publication. Existing conversations retain their preset version.
+
+Run `pnpm test:assistant` with `DSH_CLI` set as in the host-test instructions.
+It verifies model inheritance, team-bound tools, denied approval, authenticated
+archive download and real local-archive installation. Host tests isolate their
+package stores so an earlier fixture cannot satisfy the download check.

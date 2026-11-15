@@ -7,6 +7,7 @@ import { spawn, execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 const presetsOnly = process.argv.includes('--presets');
+const assistantOnly = process.argv.includes('--assistant');
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const cli = process.env.DSH_CLI;
 if (!cli) throw new Error('Set DSH_CLI to the installed @deepseek-ai/dsh CLI entry (lib/bin.js).');
@@ -47,15 +48,17 @@ const snapshot = { teamId: 'host-smoke', teamName: 'Host smoke', role: 'member',
   { id: 'override', kind: 'plugin', name: 'Override fixture', version: 1, data: { package: '@teamwork-test/override', version: '1.0.0', description: 'Must remain disabled' } },
 ] };
 const expectedSnapshot = join(work, 'expected.json');
+const localArchive = join(work, 'fixture.tgz');
+await writeFile(localArchive, packages.get('fixture').tarball);
 await writeFile(expectedSnapshot, JSON.stringify(snapshot));
 await writeFile(cache, 'invalid-cache-json');
 const patch = join(work, 'patch.yml');
-await writeFile(patch, `- id: plugin-manager\n  config:\n    registry: ${registryUrl}\n    fallbackRegistries: []\n- insert:\n    - id: dsh-teamwork\n      name: ${JSON.stringify(join(repo, 'lib/index.js'))}\n      config:\n        apiEndpoint: http://localhost:3000\n        cachePath: ${JSON.stringify(cache)}\n    - id: teamwork-test\n      name: ${JSON.stringify(join(repo, presetsOnly ? 'tests/host/presets.mjs' : 'tests/host/validate.mjs'))}\n`);
+await writeFile(patch, `- id: plugin-manager\n  config:\n    registry: ${registryUrl}\n    fallbackRegistries: []\n- insert:\n    - id: dsh-teamwork\n      name: ${JSON.stringify(join(repo, 'lib/index.js'))}\n      config:\n        apiEndpoint: http://localhost:3000\n        cachePath: ${JSON.stringify(cache)}\n    - id: teamwork-test\n      name: ${JSON.stringify(join(repo, assistantOnly ? 'tests/host/assistant.mjs' : presetsOnly ? 'tests/host/presets.mjs' : 'tests/host/validate.mjs'))}\n`);
 // Every cache and store the host writes stays under `work`. pnpm puts its store under
 // $PNPM_HOME before $XDG_DATA_HOME, and CI sets PNPM_HOME and caches that store, so the
 // store directory is named explicitly; otherwise a fixture left there by an earlier run
 // is reused and the tarball is never downloaded.
-const env = { ...process.env, DSH_HOME: home, XDG_DATA_HOME: join(work, 'data'), XDG_CACHE_HOME: join(work, 'cache'), npm_config_ignore_workspace_root_check: 'true', npm_config_cache: join(work, 'npm-cache'), npm_config_store_dir: join(work, 'pnpm-store'), TEAMWORK_TEST_CACHE: cache, TEAMWORK_TEST_SNAPSHOT: expectedSnapshot, TEAMWORK_TEST_RESULT: result, TEAMWORK_TEST_CWD: work };
+const env = { ...process.env, DSH_HOME: home, PNPM_HOME: join(work,'pnpm-home'), XDG_DATA_HOME: join(work, 'data'), XDG_CACHE_HOME: join(work, 'cache'), npm_config_ignore_workspace_root_check: 'true', npm_config_cache: join(work, 'npm-cache'), npm_config_store_dir: join(work, 'pnpm-store'), TEAMWORK_TEST_ARCHIVE: localArchive, TEAMWORK_TEST_CACHE: cache, TEAMWORK_TEST_SNAPSHOT: expectedSnapshot, TEAMWORK_TEST_RESULT: result, TEAMWORK_TEST_CWD: work };
 const child = spawn(process.execPath, [resolve(cli), 'web', '--patch', patch, '--host', '127.0.0.1', '--port', '0', '--no-open'], { env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
 let logs = ''; child.stdout.on('data', d => { logs += d; }); child.stderr.on('data', d => { logs += d; });
 let success = false;
@@ -65,7 +68,7 @@ try {
     try {
       const report = JSON.parse(await readFile(result, 'utf8'));
       if (!report.passed) throw new Error(report.error);
-      if (!presetsOnly && !downloads) throw new Error('Package manager did not download the fixture tarball');
+      if (!presetsOnly && !assistantOnly && !downloads) throw new Error('Package manager did not download the fixture tarball');
       console.log(JSON.stringify({ ...report, tarballDownloads: downloads }, null, 2)); success = true; break;
     } catch (error) { if (error.code !== 'ENOENT') throw error; }
     if (child.exitCode !== null) throw new Error(`DSH exited: ${child.exitCode}`);

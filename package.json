@@ -1,6 +1,6 @@
 {
   "name": "@dsh-teamwork/dsh-teamwork",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Team collaboration plugin for DeepSeek Harness",
   "icon": "icon.svg",
   "license": "Apache-2.0",
@@ -29,7 +29,8 @@
     "test": "vitest run && pnpm --filter @dsh-teamwork/ui test",
     "cli": "tsx src/cli.ts",
     "test:host": "node tests/host/run.mjs",
-    "test:presets": "node tests/host/run.mjs --presets"
+    "test:presets": "node tests/host/run.mjs --presets",
+    "test:assistant": "node tests/host/run.mjs --assistant"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.1.0",

@@ -9,6 +9,18 @@ export declare const snapshotSchema: z.ZodObject<{
             admin: "admin";
             member: "member";
         }>;
+        pluginVersions: z.ZodOptional<z.ZodArray<z.ZodObject<{
+            configId: z.ZodString;
+            name: z.ZodString;
+            data: z.ZodObject<{
+                artifactId: z.ZodOptional<z.ZodString>;
+                sha256: z.ZodOptional<z.ZodString>;
+                package: z.ZodString;
+                version: z.ZodString;
+                providesTools: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                description: z.ZodDefault<z.ZodString>;
+            }, z.core.$strip>;
+        }, z.core.$strip>>>;
         configs: z.ZodArray<z.ZodDiscriminatedUnion<[z.ZodObject<{
             kind: z.ZodLiteral<"model">;
             data: z.ZodObject<{
@@ -17,12 +29,14 @@ export declare const snapshotSchema: z.ZodObject<{
                 contextWindow: z.ZodOptional<z.ZodNumber>;
                 maxTokens: z.ZodOptional<z.ZodNumber>;
             }, z.core.$strip>;
+            builtin: z.ZodOptional<z.ZodLiteral<"team-assistant">>;
             id: z.ZodString;
             name: z.ZodString;
             version: z.ZodNumber;
         }, z.core.$strip>, z.ZodObject<{
             kind: z.ZodLiteral<"preset">;
             data: z.ZodObject<{
+                inheritModel: z.ZodOptional<z.ZodBoolean>;
                 provider: z.ZodOptional<z.ZodString>;
                 model: z.ZodOptional<z.ZodString>;
                 modelConfigId: z.ZodOptional<z.ZodString>;
@@ -39,17 +53,21 @@ export declare const snapshotSchema: z.ZodObject<{
                 contextWindow: z.ZodOptional<z.ZodNumber>;
                 maxTokens: z.ZodOptional<z.ZodNumber>;
             }, z.core.$strip>;
+            builtin: z.ZodOptional<z.ZodLiteral<"team-assistant">>;
             id: z.ZodString;
             name: z.ZodString;
             version: z.ZodNumber;
         }, z.core.$strip>, z.ZodObject<{
             kind: z.ZodLiteral<"plugin">;
             data: z.ZodObject<{
+                artifactId: z.ZodOptional<z.ZodString>;
+                sha256: z.ZodOptional<z.ZodString>;
                 package: z.ZodString;
                 version: z.ZodString;
                 providesTools: z.ZodOptional<z.ZodArray<z.ZodString>>;
                 description: z.ZodDefault<z.ZodString>;
             }, z.core.$strip>;
+            builtin: z.ZodOptional<z.ZodLiteral<"team-assistant">>;
             id: z.ZodString;
             name: z.ZodString;
             version: z.ZodNumber;
@@ -72,10 +90,12 @@ export declare const findConfig: (snapshot: Snapshot | undefined, id: string) =>
     id: string;
     name: string;
     version: number;
+    builtin?: "team-assistant" | undefined;
 } | {
     kind: "preset";
     data: {
         systemPrompt: string;
+        inheritModel?: boolean | undefined;
         provider?: string | undefined;
         model?: string | undefined;
         modelConfigId?: string | undefined;
@@ -94,17 +114,21 @@ export declare const findConfig: (snapshot: Snapshot | undefined, id: string) =>
     id: string;
     name: string;
     version: number;
+    builtin?: "team-assistant" | undefined;
 } | {
     kind: "plugin";
     data: {
         package: string;
         version: string;
         description: string;
+        artifactId?: string | undefined;
+        sha256?: string | undefined;
         providesTools?: string[] | undefined;
     };
     id: string;
     name: string;
     version: number;
+    builtin?: "team-assistant" | undefined;
 } | undefined;
 /** The team a configuration belongs to. */
 export declare const teamOf: (snapshot: Snapshot | undefined, configId: string) => {
@@ -122,10 +146,12 @@ export declare const teamOf: (snapshot: Snapshot | undefined, configId: string) 
         id: string;
         name: string;
         version: number;
+        builtin?: "team-assistant" | undefined;
     } | {
         kind: "preset";
         data: {
             systemPrompt: string;
+            inheritModel?: boolean | undefined;
             provider?: string | undefined;
             model?: string | undefined;
             modelConfigId?: string | undefined;
@@ -144,18 +170,34 @@ export declare const teamOf: (snapshot: Snapshot | undefined, configId: string) 
         id: string;
         name: string;
         version: number;
+        builtin?: "team-assistant" | undefined;
     } | {
         kind: "plugin";
         data: {
             package: string;
             version: string;
             description: string;
+            artifactId?: string | undefined;
+            sha256?: string | undefined;
             providesTools?: string[] | undefined;
         };
         id: string;
         name: string;
         version: number;
+        builtin?: "team-assistant" | undefined;
     })[];
+    pluginVersions?: {
+        configId: string;
+        name: string;
+        data: {
+            package: string;
+            version: string;
+            description: string;
+            artifactId?: string | undefined;
+            sha256?: string | undefined;
+            providesTools?: string[] | undefined;
+        };
+    }[] | undefined;
 } | undefined;
 /**
  * A server address as the plugin stores and calls it: https anywhere, plain http only on
@@ -185,6 +227,23 @@ export declare class TeamworkClient {
     /** Takes the code alone or the whole `/teamwork authorize <code>` line the sign-in page shows, so the panel accepts what was copied. */
     completeLogin(pasted: string): Promise<void>;
     private api;
+    downloadArtifact(teamId: string, id: string, digest: string): Promise<string>;
+    submitPlugin(teamId: string, bytes: Buffer, sha256: string, input: {
+        name: string;
+        note: string;
+        configId?: string;
+        baseVersion: number;
+    }, signal: AbortSignal): Promise<unknown>;
+    assistantChange(teamId: string, action: string, input: Record<string, unknown>, signal: AbortSignal): Promise<unknown>;
+    reviewPreview(teamId: string, id: string, signal: AbortSignal): Promise<{
+        revision: number;
+        proposal: unknown;
+        configId: string;
+        baseVersion: number;
+    }>;
+    exportUsage(teamId: string, filters: Record<string, string>, signal: AbortSignal): Promise<string>;
+    /** Narrow team operations; credentials never enter model-visible results. */
+    assistantRead(teamId: string, action: 'configs' | 'usage' | 'budgets' | 'members' | 'submissions' | 'history' | 'providers', signal: AbortSignal, filters?: Record<string, string>): Promise<any>;
     sync(): Promise<{
         teams: {
             teamId: string;
@@ -201,10 +260,12 @@ export declare class TeamworkClient {
                 id: string;
                 name: string;
                 version: number;
+                builtin?: "team-assistant" | undefined;
             } | {
                 kind: "preset";
                 data: {
                     systemPrompt: string;
+                    inheritModel?: boolean | undefined;
                     provider?: string | undefined;
                     model?: string | undefined;
                     modelConfigId?: string | undefined;
@@ -223,18 +284,34 @@ export declare class TeamworkClient {
                 id: string;
                 name: string;
                 version: number;
+                builtin?: "team-assistant" | undefined;
             } | {
                 kind: "plugin";
                 data: {
                     package: string;
                     version: string;
                     description: string;
+                    artifactId?: string | undefined;
+                    sha256?: string | undefined;
                     providesTools?: string[] | undefined;
                 };
                 id: string;
                 name: string;
                 version: number;
+                builtin?: "team-assistant" | undefined;
             })[];
+            pluginVersions?: {
+                configId: string;
+                name: string;
+                data: {
+                    package: string;
+                    version: string;
+                    description: string;
+                    artifactId?: string | undefined;
+                    sha256?: string | undefined;
+                    providesTools?: string[] | undefined;
+                };
+            }[] | undefined;
         }[];
     }>;
     private syncOnce;
@@ -254,10 +331,12 @@ export declare class TeamworkClient {
                 id: string;
                 name: string;
                 version: number;
+                builtin?: "team-assistant" | undefined;
             } | {
                 kind: "preset";
                 data: {
                     systemPrompt: string;
+                    inheritModel?: boolean | undefined;
                     provider?: string | undefined;
                     model?: string | undefined;
                     modelConfigId?: string | undefined;
@@ -276,18 +355,34 @@ export declare class TeamworkClient {
                 id: string;
                 name: string;
                 version: number;
+                builtin?: "team-assistant" | undefined;
             } | {
                 kind: "plugin";
                 data: {
                     package: string;
                     version: string;
                     description: string;
+                    artifactId?: string | undefined;
+                    sha256?: string | undefined;
                     providesTools?: string[] | undefined;
                 };
                 id: string;
                 name: string;
                 version: number;
+                builtin?: "team-assistant" | undefined;
             })[];
+            pluginVersions?: {
+                configId: string;
+                name: string;
+                data: {
+                    package: string;
+                    version: string;
+                    description: string;
+                    artifactId?: string | undefined;
+                    sha256?: string | undefined;
+                    providesTools?: string[] | undefined;
+                };
+            }[] | undefined;
         }[];
     } | undefined>;
     platformCredential(): string;
@@ -316,10 +411,12 @@ export declare class TeamworkClient {
                 id: string;
                 name: string;
                 version: number;
+                builtin?: "team-assistant" | undefined;
             } | {
                 kind: "preset";
                 data: {
                     systemPrompt: string;
+                    inheritModel?: boolean | undefined;
                     provider?: string | undefined;
                     model?: string | undefined;
                     modelConfigId?: string | undefined;
@@ -338,18 +435,34 @@ export declare class TeamworkClient {
                 id: string;
                 name: string;
                 version: number;
+                builtin?: "team-assistant" | undefined;
             } | {
                 kind: "plugin";
                 data: {
                     package: string;
                     version: string;
                     description: string;
+                    artifactId?: string | undefined;
+                    sha256?: string | undefined;
                     providesTools?: string[] | undefined;
                 };
                 id: string;
                 name: string;
                 version: number;
+                builtin?: "team-assistant" | undefined;
             })[];
+            pluginVersions?: {
+                configId: string;
+                name: string;
+                data: {
+                    package: string;
+                    version: string;
+                    description: string;
+                    artifactId?: string | undefined;
+                    sha256?: string | undefined;
+                    providesTools?: string[] | undefined;
+                };
+            }[] | undefined;
         }[];
     } | undefined;
     clear(): Promise<void>;
@@ -369,9 +482,14 @@ export declare class TeamOverlay {
     apply(snapshot?: Snapshot): Promise<void>;
     private reconcile;
 }
+export declare function pinnedPlugin(snapshot: Snapshot | undefined, id: string, version: string): Extract<TeamConfig, {
+    kind: 'plugin';
+}> | undefined;
+export declare const inheritsModel: (config: TeamConfig) => boolean;
 /** References resolve within the configuration's own team only; never across teams, never to local models. */
 export declare function modelData(snapshot: Snapshot, config: TeamConfig): {
     systemPrompt: string;
+    inheritModel?: boolean | undefined;
     provider?: string | undefined;
     model?: string | undefined;
     modelConfigId?: string | undefined;
