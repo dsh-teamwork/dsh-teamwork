@@ -1,3 +1,4 @@
+import { PhoneKeys, PhoneSecurity } from './phone-security.js';
 import { Context } from '@deepseek-ai/cordis';
 import z from '@deepseek-ai/schemastery';
 import type {} from '@deepseek-ai/dsh-agent';
@@ -147,7 +148,7 @@ export async function apply(ctx: Context, config: Config) {
   let launchUrl: (() => string) | undefined;
   const bridge = new Bridge({
     launchUrl: () => launchUrl?.(),
-    send: (frame) => relay.send(frame),
+    send: (frame) => security.send(frame),
     log: (message, error) => ctx.logger.warn('%s：%s', message, (error as Error | undefined)?.message ?? ''),
     session: {
       async configuration(sessionId) {
@@ -175,6 +176,12 @@ export async function apply(ctx: Context, config: Config) {
           return { selected: agent.model.current() };
         } catch (error) { if (error instanceof PhoneSessionError) throw error; throw new PhoneSessionError('model_unavailable'); }
       },
+      accepted(sessionId, requestId) {
+        const agent = sessionAgent(sessionId);
+        if (!agent) return false;
+        const matches = (source: unknown) => typeof source === 'object' && source !== null && 'kind' in source && source.kind === 'user' && 'rpcId' in source && source.rpcId === requestId;
+        return [...agent.inbox.nextTurn, ...agent.inbox.nextStep].some(message => matches(message.source)) || agent.session.snapshotEvents().some(event => event.type === 'user/message' && matches(event.data.source));
+      },
       async check(sessionId) {
         const agent = sessionAgent(sessionId);
         if (!agent) throw new PhoneSessionError('not_found');
@@ -183,6 +190,23 @@ export async function apply(ctx: Context, config: Config) {
       },
     },
   });
+  let keyScope: { revision: number; value: Promise<string> } | undefined;
+  const security = new PhoneSecurity({
+    keys: new PhoneKeys(config.cachePath.replace(/\.json$/, '') + '.phone-keys.json'),
+    scope: () => {
+      const revision = client.sessionRevision();
+      if (!keyScope || keyScope.revision !== revision) {
+        const value = client.profile().then(profile => `${client.endpoint}|${profile.id}`);
+        keyScope = { revision, value };
+        void value.catch(() => { if (keyScope?.value === value) keyScope = undefined; });
+      }
+      return keyScope.value;
+    },
+    send: frame => relay.send(frame), forward: frame => bridge.handle(frame),
+    confirm: async id => { await relay.request({ t: 'decide', pairingId: id, accept: true }); },
+    changed: () => {},
+    error: error => ctx.logger.warn('phone security: %s', error.message),
+  });
   const relay: RelayLink = new RelayLink({
     endpoint: () => client.endpoint,
     token: () => client.authenticated() ? client.platformCredential() : undefined,
@@ -190,10 +214,10 @@ export async function apply(ctx: Context, config: Config) {
     onStatus: (status) => {
       ctx.logger.debug('relay: %s', status);
       if (status === 'connected') void readPhones();
-      else { phones = []; bridge.dropAll(); }
+      else { phones = []; security.reset(); bridge.dropAll(); }
     },
     onEvent: () => void readPhones(),
-    onForward: (frame) => bridge.handle(frame),
+    onForward: (frame) => void security.handle(frame),
   });
   const readPhones = async () => {
     try { phones = pairingSchema.array().parse(await relay.request({ t: 'pairings' })); }
@@ -208,7 +232,7 @@ export async function apply(ctx: Context, config: Config) {
   // tell the relay which session, and hand on to the answerers untouched. Prepended, so it is told even when one claims the request.
   const reportWaiting = (kind: 'question' | 'approval') => function (this: unknown, request: { agent?: { id?: unknown } } | undefined, next: () => unknown) {
     const agent = request?.agent ?? (this as { id?: unknown } | undefined);
-    if (agent?.id !== undefined) relay.send({ t: 'waiting', sessionId: String(agent.id), kind });
+    if (agent?.id !== undefined) relay.send({ t: 'waiting' });
     return next();
   };
   const listen = ctx.on.bind(ctx) as unknown as (name: string, listener: (...args: any[]) => unknown, prepend: boolean) => () => boolean;
@@ -325,7 +349,7 @@ export async function apply(ctx: Context, config: Config) {
         defaultServer: serverAddress(config.apiEndpoint),
         sync: { auto: status.autoSync, running: status.syncing, lastSuccess: status.lastSuccess, lastError: status.lastError },
         relay: relay.status,
-        phones,
+        phones: await Promise.all(phones.map(async phone => ({ ...phone, ...await security.details(phone.id) }))),
         session: agent ? {
           id: String(agent.id),
           model: selection ? { provider: selection.provider, model: selection.model, team: selection.provider === platformProvider } : null,
@@ -355,14 +379,18 @@ export async function apply(ctx: Context, config: Config) {
     },
     async pairPhone() {
       const offer = offerSchema.parse(await relay.request({ t: 'offer' }).catch(phoneError));
-      const link = `dshteamwork://pair?${new URLSearchParams({ server: client.endpoint, code: offer.code })}`;
+      security.offerCode(offer.expiresAt);
+      const key = await security.publicKey();
+      const link = `dshteamwork://pair?${new URLSearchParams({ server: client.endpoint, code: offer.code, key })}`;
       return { ...offer, link };
     },
     async decidePhone(id, accept) {
-      await relay.request({ t: 'decide', pairingId: id, accept }).catch(phoneError);
+      if (accept) await security.approve(id);
+      else { await security.revoke(id); await relay.request({ t: 'decide', pairingId: id, accept: false }).catch(phoneError); }
       await readPhones();
     },
     async revokePhone(id) {
+      await security.revoke(id);
       await relay.request({ t: 'revoke', pairingId: id }).catch(phoneError);
       await readPhones();
     },

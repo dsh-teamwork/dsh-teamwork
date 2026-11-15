@@ -54,6 +54,8 @@ export interface BridgeOptions {
 export declare class Bridge {
     private readonly options;
     private links;
+    private uploads;
+    private promptCalls;
     constructor(options: BridgeOptions);
     handle(frame: Forwarded): void;
     /** The relay connection ended: every phone is gone with it. */

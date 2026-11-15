@@ -135,7 +135,7 @@ test('locks pairing generation and lets the member hide a still-valid code', asy
 });
 
 test('retries rejecting a request, then confirms a new request and revokes the resulting pairing', async () => {
-  const pending = { id: 'phone', deviceName: 'Test phone', status: 'pending' as const, createdAt: new Date().toISOString(), lastUsedAt: null };
+  const pending = { id: 'phone', deviceName: 'Test phone', safetyCode: '1234 5678', phoneConfirmed: true, status: 'pending' as const, createdAt: new Date().toISOString(), lastUsedAt: null };
   let current: PanelState = { ...state, phones: [pending] };
   vi.mocked(api.state).mockImplementation(async () => current);
   vi.mocked(api.decidePhone).mockRejectedValueOnce(new Error('Relay offline')).mockImplementation(async (id, accept) => {
@@ -147,7 +147,7 @@ test('retries rejecting a request, then confirms a new request and revokes the r
   await click('拒绝'); expect(document.body.textContent).toContain('等待你确认');
   await click('拒绝'); expect(document.body.textContent).not.toContain('等待你确认');
   current = { ...current, phones: [pending] };
-  await click('刷新'); await click('确认配对');
+  await click('刷新'); await click('安全码一致，确认配对');
   expect(document.body.textContent).not.toContain('等待你确认');
   await click('解除配对'); await act(async () => document.querySelector<HTMLButtonElement>('.twui-confirm button')!.click());
   expect(document.body.textContent).toContain('尚无已配对手机');

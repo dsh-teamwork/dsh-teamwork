@@ -59,6 +59,9 @@ export interface PanelPhone {
   status: 'pending' | 'confirmed';
   createdAt: string;
   lastUsedAt: string | null;
+  safetyCode?: string;
+  phoneConfirmed?: boolean;
+  verified?: boolean;
 }
 
 /** A single-use pairing code, and the link the app's QR scanner reads. */

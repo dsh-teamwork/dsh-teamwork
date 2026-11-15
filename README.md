@@ -174,3 +174,51 @@ The relay envelope is unchanged. Rebuild the plugin and mobile app together for
 these settings. This grants no new team permissions and exposes no credentials;
 phones remain paired to the same account's own DSH, across teams. The desktop
 pairing confirmation states this scope explicitly.
+
+## Verified phone encryption
+
+The phone and desktop authenticate each other with pinned Ed25519 device
+identities over libp2p Noise XX. A six-letter, single-use code locates the
+computer; initial pairing requires comparing the eight-digit safety code on
+both screens, confirming on the phone, then approving on the desktop. A QR link
+also pins the desktop public key. Later connections use fresh handshakes and
+saved keys. Missing or changed keys require pairing again, with no plaintext
+fallback. Existing plaintext pairings must be replaced.
+
+`src/secure-channel.ts` owns the wire and has an identical mobile copy checked
+by integration tests. `src/phone-security.ts` gates every bridge request on a
+locally saved device roster. The identity seed and account/server-scoped peers
+are atomically saved in `<cache>.phone-keys.json` with restrictive permissions.
+Desktop revocation closes the channel and saves trust removal before calling
+the relay. Phone revocation requires an encrypted desktop acknowledgement; an
+offline desktop must reconnect before it completes.
+
+The relay can see public keys, account/device metadata, timing and sizes, but
+cannot read encrypted methods, conversation content, tool data or uploads.
+Generic notifications omit session ids and question types. Local DSH storage
+and the hosted team-model gateway remain separate boundaries: model context
+still passes through that gateway. Update relay, plugin and mobile together.
+
+## Phone file attachments
+
+Phones query upload limits through `teamwork/configuration`, then use four
+allow-listed calls: `teamwork/uploadStart`, `teamwork/uploadChunk`,
+`teamwork/uploadFinish` and `teamwork/uploadCancel`. Intake passes native
+session admission. Files can be staged while the agent is busy or the model
+is unavailable; readiness is enforced on a new prompt, not on file transfer.
+Phones transfer selected files immediately and submit completed receipts only
+when the member presses Send. Transfer ids and completed receipts are bound to
+the pairing and exact session, and chunks stream with backpressure
+to DSH's authenticated binary upload service. The relay envelope is unchanged.
+
+The initial budgets are five files per message, 20 MiB per file, 50 MiB total,
+256 KiB raw chunks, one active transfer per pairing and two per host. Transfers
+expire after 60 seconds idle or five minutes total; completed plugin receipts
+expire after ten minutes. Detach, revocation and cancellation release transfer
+state. The plugin does not delete DSH's stored objects or workspace files.
+
+Prompts use native file receipts and stable request ids. An already-accepted
+request may reach native deduplication before the busy/readiness check; new
+work still passes all checks and validates its receipt metadata. This slice
+supports ordinary files, not image input or document extraction. Update the
+mobile app and plugin together. Build output under `lib/` is included.

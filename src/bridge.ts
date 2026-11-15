@@ -14,11 +14,13 @@
  */
 import { z } from 'zod';
 import { PhoneSessionError, type PhoneSessionOps } from './phone-session.js';
+import { PhoneUploads, uploadLimits, uploadSchemas } from './phone-uploads.js';
 
 /** Unary methods a phone may call. A test holds this list. */
 export const ALLOWED_CALLS: ReadonlySet<string> = new Set([
   'session/list', 'session/create', 'session/prompt', 'session/state', 'session/page', 'session/cancel',
   'session/modelCatalog', 'teamwork/configuration', 'teamwork/selectModel',
+  'teamwork/uploadStart', 'teamwork/uploadChunk', 'teamwork/uploadFinish', 'teamwork/uploadCancel',
   'userQuestions/answer',
   '$events/result',
 ]);
@@ -70,6 +72,8 @@ interface Link {
 
 export class Bridge {
   private links = new Map<string, Link>();
+  private uploads = new PhoneUploads();
+  private promptCalls = new Map<string, Promise<{ status: number; body: unknown }>>();
 
   constructor(private readonly options: BridgeOptions) {}
 
@@ -94,11 +98,23 @@ export class Bridge {
     const link = this.links.get(pairingId);
     if (!link) return;
     this.links.delete(pairingId);
+    this.uploads.drop(pairingId);
     link.mux?.close(1000, 'phone left');
   }
 
   private async call(frame: z.infer<typeof callSchema>) {
-    const answer = (status: number, body: unknown) => this.options.send({ t: 'result', pairingId: frame.pairingId, id: frame.id, status, body });
+    const output = (status: number, body: unknown) => this.options.send({ t: 'result', pairingId: frame.pairingId, id: frame.id, status, body });
+    const candidate = (frame.body as { args?: { request?: unknown } } | null)?.args?.request;
+    const identity = frame.method === 'session/prompt' ? z.object({ sessionId: z.string().min(1).max(256), requestId: z.string().min(1).max(256) }).safeParse(candidate) : null;
+    const key = identity?.success ? JSON.stringify([frame.pairingId, identity.data.sessionId, identity.data.requestId]) : null;
+    const existing = key ? this.promptCalls.get(key) : undefined;
+    if (existing) { const result = await existing; return output(result.status, result.body); }
+    let finish: ((result: { status: number; body: unknown }) => void) | undefined;
+    if (key) this.promptCalls.set(key, new Promise(resolve => { finish = resolve; }));
+    const answer = (status: number, body: unknown) => {
+      if (key) { finish?.({ status, body }); this.promptCalls.delete(key); }
+      return output(status, body);
+    };
     if (!ALLOWED_CALLS.has(frame.method)) return answer(403, { error: 'method_not_allowed' });
     const origin = this.origin();
     if (!origin) return answer(503, { error: 'no_web_server' });
@@ -118,6 +134,36 @@ export class Bridge {
     try {
       const operations = this.options.session;
       const request = (frame.body as { args?: { request?: unknown } } | null)?.args?.request;
+      if (Object.hasOwn(uploadSchemas, frame.method)) {
+        if (!operations) return answer(503, { error: 'configuration_unsupported' });
+        const input = uploadSchemas[frame.method as keyof typeof uploadSchemas].safeParse(request);
+        if (!input.success) throw new PhoneSessionError('invalid_upload');
+        const data = input.data;
+        let value: unknown;
+        if ('name' in data) {
+          const admission = await post('session/state', { args: { request: { sessionId: data.sessionId } } });
+          const body = await admission.json() as { result?: { ok?: boolean } };
+          if (!admission.ok || !body.result?.ok) return answer(admission.status, body);
+          const cookie = await this.cookie(link, origin);
+          if (this.links.get(frame.pairingId) !== link) throw new PhoneSessionError('not_found');
+          value = this.uploads.start(frame.pairingId, data, async (stream, signal) => {
+            const query = new URLSearchParams({ sessionId: data.sessionId, name: data.name });
+            const response = await (this.options.request ?? fetch)(`${origin}/api/session/uploadFileBinary?${query}`, {
+              method: 'POST', headers: { cookie, 'content-type': 'application/octet-stream' },
+              body: stream as unknown as BodyInit, signal, redirect: 'manual', ...{ duplex: 'half' },
+            });
+            const result = await response.json() as { ok?: boolean; value?: unknown };
+            if (!response.ok || !result.ok) throw new PhoneSessionError('upload_failed');
+            return result.value;
+          });
+        } else if (frame.method === 'teamwork/uploadChunk') {
+          const chunk = data as z.infer<typeof uploadSchemas['teamwork/uploadChunk']>;
+          value = await this.uploads.chunk(frame.pairingId, chunk.sessionId, chunk.uploadId, chunk.offset, chunk.data);
+        }
+        else if (frame.method === 'teamwork/uploadFinish') value = await this.uploads.finish(frame.pairingId, data.sessionId, data.uploadId);
+        else { this.uploads.cancel(frame.pairingId, data.sessionId, data.uploadId); value = {}; }
+        return answer(200, { result: { ok: true, value } });
+      }
       if (frame.method.startsWith('teamwork/')) {
         if (!operations) return answer(503, { error: 'configuration_unsupported' });
         const schema = frame.method === 'teamwork/configuration'
@@ -133,10 +179,12 @@ export class Bridge {
         }
         if (this.links.get(frame.pairingId) !== link) throw new PhoneSessionError('not_found');
         const value = frame.method === 'teamwork/configuration'
-          ? await operations.configuration(input.data.sessionId)
+          ? { ...await operations.configuration(input.data.sessionId) as object, uploads: uploadLimits }
           : await operations.selectModel(input.data as Parameters<PhoneSessionOps['selectModel']>[0]);
         return answer(200, { result: { ok: true, value } });
       }
+      let uploaded: string[] = [];
+      let promptSession: string | undefined;
       if (frame.method === 'session/prompt' && operations) {
         const input = z.object({ sessionId: z.string().min(1) }).safeParse(request);
         if (!input.success) throw new PhoneSessionError('invalid_request');
@@ -144,10 +192,18 @@ export class Bridge {
         const body = await admission.json() as { result?: { ok?: boolean } };
         if (!admission.ok || !body.result?.ok) return answer(admission.status, body);
         if (this.links.get(frame.pairingId) !== link) throw new PhoneSessionError('not_found');
-        await operations.check(input.data.sessionId);
+        promptSession = input.data.sessionId;
+        const prompt = request as { requestId?: string; content?: unknown };
+        if (!prompt.requestId || !operations.accepted(promptSession, prompt.requestId)) {
+          await operations.check(promptSession);
+          if (Array.isArray(prompt.content)) uploaded = this.uploads.validate(frame.pairingId, promptSession, prompt.content);
+        }
       }
       const response = await post();
       const text = await response.text();
+      if (promptSession && response.ok && (parseJson(text) as { result?: { ok?: boolean } } | null)?.result?.ok) {
+        for (const id of uploaded) this.uploads.cancel(frame.pairingId, promptSession, id);
+      }
       answer(response.status, text ? parseJson(text) : null);
     } catch (error) {
       if (error instanceof PhoneSessionError) return answer(200, { result: { ok: false, error: { code: `teamwork/${error.code}` } } });

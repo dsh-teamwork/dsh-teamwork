@@ -15,7 +15,9 @@ import { createRequire } from 'node:module';
 import { hostname } from 'node:os';
 import { dirname } from 'node:path';
 import { z } from 'zod';
-import { forwardedSchema, type Forwarded } from './bridge.js';
+import { securePacket, type SecurePacket } from './secure-channel.js';
+const endSchema = z.object({ t: z.enum(['detach', 'revoked']), pairingId: z.string().min(1).max(64) });
+export type RoutedFrame = SecurePacket | z.infer<typeof endSchema>;
 import type { RelayStatus } from './panel.js';
 
 export type { RelayStatus };
@@ -67,7 +69,7 @@ export interface RelayLinkOptions {
   onStatus?: (status: RelayStatus) => void;
   onEvent?: (event: RelayEvent) => void;
   /** A phone's frame for this computer, or the news that its phone left or lost its pairing (`src/bridge.ts`). */
-  onForward?: (frame: Forwarded) => void;
+  onForward?: (frame: RoutedFrame) => void;
   /** Longest wait between reconnection attempts. */
   maxBackoffMs?: number;
   /** How long to wait before asking a server without a relay again. */
@@ -202,8 +204,9 @@ export class RelayLink {
         clearTimeout(pending.timer);
         return reply.data.error ? pending.reject(new RelayError(reply.data.error)) : pending.resolve(reply.data.value);
       }
-      const forwarded = forwardedSchema.safeParse(frame);
-      if (forwarded.success) this.options.onForward?.(forwarded.data);
+      if (securePacket(frame)) this.options.onForward?.(frame);
+      const ended = endSchema.safeParse(frame);
+      if (ended.success) this.options.onForward?.(ended.data);
       const pushed = eventSchema.safeParse(frame);
       if (pushed.success) this.options.onEvent?.(pushed.data as RelayEvent);
     });
@@ -242,6 +245,7 @@ function dshVersion() {
 }
 
 function parseJson(text: string): unknown {
+  if (text.length > 1024 * 1024) return null;
   try {
     return JSON.parse(text);
   } catch {
