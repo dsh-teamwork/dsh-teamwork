@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ALLOWED_CALLS, ALLOWED_STREAMS, Bridge } from '../src/bridge';
+import { PhoneSessionError, type PhoneSessionOps } from '../src/phone-session';
 
 /** A loopback mux the test drives by hand. */
 class FakeSocket {
@@ -17,7 +18,7 @@ class FakeSocket {
 
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
-function bridge(options: { web?: boolean; expire?: boolean } = {}) {
+function bridge(options: { web?: boolean; expire?: boolean; session?: PhoneSessionOps; denied?: boolean } = {}) {
   FakeSocket.made = [];
   const sent: any[] = [];
   const asked: Array<{ url: string; init?: RequestInit }> = [];
@@ -26,6 +27,7 @@ function bridge(options: { web?: boolean; expire?: boolean } = {}) {
   const request = (async (url: string, init?: RequestInit) => {
     asked.push({ url, init });
     if (url.includes('/connect?')) return new Response(null, { status: 302, headers: { 'set-cookie': `dsh=peer-${++minted}; Path=/; HttpOnly` } });
+    if (options.denied) return new Response(JSON.stringify({ result: { ok: false, error: { code: 'session/not-found' } } }));
     if (expireNext) { expireNext = false; return new Response('', { status: 401 }); }
     return new Response(JSON.stringify({ type: 'client-response', result: { ok: true, value: 'v' } }), { status: 200 });
   }) as typeof fetch;
@@ -34,6 +36,7 @@ function bridge(options: { web?: boolean; expire?: boolean } = {}) {
     send: (frame) => sent.push(frame),
     request,
     WebSocket: FakeSocket as unknown as typeof WebSocket,
+    session: options.session,
   });
   return { b, sent, asked };
 }
@@ -42,9 +45,42 @@ describe('the phone bridge', () => {
   it('holds the allow-list', () => {
     expect([...ALLOWED_CALLS].sort()).toEqual([
       '$events/result', 'session/cancel', 'session/create', 'session/list', 'session/modelCatalog', 'session/page',
-      'session/prompt', 'session/selectModel', 'session/state', 'userQuestions/answer',
+      'session/prompt', 'session/state', 'teamwork/configuration', 'teamwork/selectModel', 'userQuestions/answer',
     ]);
     expect([...ALLOWED_STREAMS].sort()).toEqual(['$events', 'session/follow']);
+  });
+
+  it('changes a model through the session-only handler, never the default-saving native endpoint', async () => {
+    const selected: unknown[] = [];
+    const session: PhoneSessionOps = { configuration: async () => ({}), check: async () => {}, selectModel: async request => { selected.push(request); return { selected: request }; } };
+    const { b, sent, asked } = bridge({ session });
+    b.handle({ t: 'call', pairingId: 'p', id: 'c', method: 'teamwork/selectModel', body: { args: { request: { sessionId: 's1', provider: 'local', model: 'coder' } } } });
+    for (let i=0;i<6;i++) await tick();
+    expect(selected).toEqual([{ sessionId: 's1', provider: 'local', model: 'coder' }]);
+    expect(asked.filter(call => call.url.includes('/api/')).map(call => call.url)).toEqual(['http://127.0.0.1:3080/api/session/state']);
+    expect(sent.at(-1)).toMatchObject({ status: 200, body: { result: { ok: true } } });
+    b.handle({ t: 'call', pairingId: 'p', id: 'raw', method: 'session/selectModel', body: {} });
+    await tick();
+    expect(sent.at(-1)).toMatchObject({ status: 403, body: { error: 'method_not_allowed' } });
+  });
+
+  it('checks desktop admission before invoking session configuration operations', async () => {
+    let called=false;
+    const session: PhoneSessionOps = { configuration: async () => { called=true; return {}; }, selectModel: async () => { called=true; return {}; }, check: async () => { called=true; } };
+    const { b, sent } = bridge({ session, denied: true });
+    b.handle({ t: 'call', pairingId: 'p', id: 'c', method: 'teamwork/configuration', body: { args: { request: { sessionId: 'hidden' } } } });
+    for (let i=0;i<6;i++) await tick();
+    expect(called).toBe(false);
+    expect(sent.at(-1)).toMatchObject({ body: { result: { ok: false, error: { code: 'session/not-found' } } } });
+  });
+
+  it('returns a preflight refusal without submitting the prompt', async () => {
+    const session: PhoneSessionOps = { configuration: async () => ({}), selectModel: async () => ({}), check: async () => { throw new PhoneSessionError('missing_tools'); } };
+    const { b, sent, asked } = bridge({ session });
+    b.handle({ t: 'call', pairingId: 'p', id: 'c', method: 'session/prompt', body: { args: { request: { sessionId: 's1' } } } });
+    for (let i=0;i<6;i++) await tick();
+    expect(asked.some(call => call.url.endsWith('/session/prompt'))).toBe(false);
+    expect(sent.at(-1)).toMatchObject({ body: { result: { ok: false, error: { code: 'teamwork/missing_tools' } } } });
   });
 
   it('refuses a method off the list without touching DSH', async () => {

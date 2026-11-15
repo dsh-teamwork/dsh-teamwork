@@ -535,13 +535,13 @@ function Phones({ state, run }: { state: PanelState; run: Run }) {
           ? <PairingCode offer={offer} onDone={() => setOffer(undefined)} />
           : <EmptyState icon="smartphone" title="在手机上操作这台电脑的 DSH"
               action={<Button icon="plus" onClick={() => run(async () => setOffer(await api.pairPhone()))}>配对新手机</Button>}>
-              用 DSH Teamwork App 扫描这里显示的二维码，再在这台电脑上确认，手机就能查看会话、发送消息和处理审批。
+              用同一账号登录 DSH Teamwork App，扫描配对码并在此确认。手机将连接本台 DSH，可查看和操作它开放的会话，范围跨团队；不会增加团队权限，任一端都可解除。
             </EmptyState>}
       </Card>
       {pending.map((phone) => (
         <Item key={phone.id} icon="smartphone" title={phone.deviceName} subtitle={`${shortTime(phone.createdAt)} 申请配对`}
           tags={<Badge tone="warning" dot>等待你确认</Badge>}
-          description="确认后，这台手机可以查看这台电脑上的会话、发送消息、回答 Agent 的提问和处理审批。不是你本人的手机请拒绝。"
+          description="确认后，此手机可查看和操作本台 DSH 向手机开放的会话，范围跨团队，不限于某个团队。配对不会增加团队权限，任一端都可解除。仅确认你本人同一账号的手机。"
           actions={<>
             <Button size="sm" variant="ghost" onClick={() => run(() => api.decidePhone(phone.id, false), '已拒绝')}>拒绝</Button>
             <Button size="sm" onClick={() => run(() => api.decidePhone(phone.id, true), `${phone.deviceName} 已配对`)}>确认配对</Button>

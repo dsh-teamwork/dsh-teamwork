@@ -33,7 +33,7 @@ export declare class PresetStamps {
 export declare function presetStampPath(cachePath: string): string;
 export declare function sameRevision(stamp: PresetStamp, current: PresetContext): boolean;
 export declare function toolReport(preset: Pick<PresetContext, 'requiredTools' | 'optionalTools'>, lookup: (name: string) => 'available' | 'conditional' | 'missing' | 'unknown'): {
-    state: "unknown" | "available" | "conditional" | "missing";
+    state: "missing" | "unknown" | "available" | "conditional";
     name: string;
     required: boolean;
 }[];

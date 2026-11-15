@@ -13,11 +13,12 @@
  *   stream that pairing opened. Each pairing has its own loopback mux.
  */
 import { z } from 'zod';
+import { PhoneSessionError, type PhoneSessionOps } from './phone-session.js';
 
 /** Unary methods a phone may call. A test holds this list. */
 export const ALLOWED_CALLS: ReadonlySet<string> = new Set([
   'session/list', 'session/create', 'session/prompt', 'session/state', 'session/page', 'session/cancel',
-  'session/selectModel', 'session/modelCatalog',
+  'session/modelCatalog', 'teamwork/configuration', 'teamwork/selectModel',
   'userQuestions/answer',
   '$events/result',
 ]);
@@ -53,6 +54,8 @@ export interface BridgeOptions {
   request?: typeof fetch;
   WebSocket?: typeof globalThis.WebSocket;
   log?: (message: string, error?: unknown) => void;
+  /** Only these session operations supplement DSH's native calls. */
+  session?: PhoneSessionOps;
 }
 
 interface Link {
@@ -100,19 +103,54 @@ export class Bridge {
     const origin = this.origin();
     if (!origin) return answer(503, { error: 'no_web_server' });
     const link = this.link(frame.pairingId);
-    const post = async () => (this.options.request ?? fetch)(`${origin}/api/${frame.method}`, {
+    const send = async (method: string, body: unknown) => (this.options.request ?? fetch)(`${origin}/api/${method}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', cookie: await this.cookie(link, origin) },
-      body: JSON.stringify({ type: 'client-request', rpcId: frame.id, method: frame.method, payload: frame.body }),
+      body: JSON.stringify({ type: 'client-request', rpcId: frame.id, method, payload: body }),
       redirect: 'manual',
     });
+    const post = async (method = frame.method, body = frame.body) => {
+      let response = await send(method, body);
+      // Admission checks and forwarded calls renew a stale identity once.
+      if (response.status === 401) { link.cookie = undefined; response = await send(method, body); }
+      return response;
+    };
     try {
-      let response = await post();
-      // DSH restarted since this identity was minted: mint another once.
-      if (response.status === 401) { link.cookie = undefined; response = await post(); }
+      const operations = this.options.session;
+      const request = (frame.body as { args?: { request?: unknown } } | null)?.args?.request;
+      if (frame.method.startsWith('teamwork/')) {
+        if (!operations) return answer(503, { error: 'configuration_unsupported' });
+        const schema = frame.method === 'teamwork/configuration'
+          ? z.object({ sessionId: z.string().min(1).max(256).optional() }).strict()
+          : z.object({ sessionId: z.string().min(1).max(256), provider: z.string().min(1), model: z.string().min(1), reasoningEffort: z.string().optional() }).strict();
+        const input = schema.safeParse(request);
+        if (!input.success) throw new PhoneSessionError('invalid_request');
+        await this.cookie(link, origin);
+        if (input.data.sessionId) {
+          const admission = await post('session/state', { args: { request: { sessionId: input.data.sessionId } } });
+          const body = await admission.json() as { result?: { ok?: boolean } };
+          if (!admission.ok || !body.result?.ok) return answer(admission.status, body);
+        }
+        if (this.links.get(frame.pairingId) !== link) throw new PhoneSessionError('not_found');
+        const value = frame.method === 'teamwork/configuration'
+          ? await operations.configuration(input.data.sessionId)
+          : await operations.selectModel(input.data as Parameters<PhoneSessionOps['selectModel']>[0]);
+        return answer(200, { result: { ok: true, value } });
+      }
+      if (frame.method === 'session/prompt' && operations) {
+        const input = z.object({ sessionId: z.string().min(1) }).safeParse(request);
+        if (!input.success) throw new PhoneSessionError('invalid_request');
+        const admission = await post('session/state', { args: { request: { sessionId: input.data.sessionId } } });
+        const body = await admission.json() as { result?: { ok?: boolean } };
+        if (!admission.ok || !body.result?.ok) return answer(admission.status, body);
+        if (this.links.get(frame.pairingId) !== link) throw new PhoneSessionError('not_found');
+        await operations.check(input.data.sessionId);
+      }
+      const response = await post();
       const text = await response.text();
       answer(response.status, text ? parseJson(text) : null);
     } catch (error) {
+      if (error instanceof PhoneSessionError) return answer(200, { result: { ok: false, error: { code: `teamwork/${error.code}` } } });
       link.cookie = undefined;
       this.options.log?.('手机的请求无法到达 DSH', error);
       answer(502, { error: 'dsh_unreachable' });

@@ -13,6 +13,7 @@
  *   stream that pairing opened. Each pairing has its own loopback mux.
  */
 import { z } from 'zod';
+import { type PhoneSessionOps } from './phone-session.js';
 /** Unary methods a phone may call. A test holds this list. */
 export declare const ALLOWED_CALLS: ReadonlySet<string>;
 /** Streams a phone may open on the mux. A test holds this list. */
@@ -47,6 +48,8 @@ export interface BridgeOptions {
     request?: typeof fetch;
     WebSocket?: typeof globalThis.WebSocket;
     log?: (message: string, error?: unknown) => void;
+    /** Only these session operations supplement DSH's native calls. */
+    session?: PhoneSessionOps;
 }
 export declare class Bridge {
     private readonly options;
