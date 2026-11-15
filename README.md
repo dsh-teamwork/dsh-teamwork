@@ -180,8 +180,11 @@ pairing confirmation states this scope explicitly.
 Phones query upload limits through `teamwork/configuration`, then use four
 allow-listed calls: `teamwork/uploadStart`, `teamwork/uploadChunk`,
 `teamwork/uploadFinish` and `teamwork/uploadCancel`. Intake passes native
-session admission and desktop readiness. Transfer ids and completed receipts
-are bound to the pairing and exact session, and chunks stream with backpressure
+session admission. Files can be staged while the agent is busy or the model
+is unavailable; readiness is enforced on a new prompt, not on file transfer.
+Phones transfer selected files immediately and submit completed receipts only
+when the member presses Send. Transfer ids and completed receipts are bound to
+the pairing and exact session, and chunks stream with backpressure
 to DSH's authenticated binary upload service. The relay envelope is unchanged.
 
 The initial budgets are five files per message, 20 MiB per file, 50 MiB total,

@@ -144,7 +144,6 @@ export class Bridge {
           const admission = await post('session/state', { args: { request: { sessionId: data.sessionId } } });
           const body = await admission.json() as { result?: { ok?: boolean } };
           if (!admission.ok || !body.result?.ok) return answer(admission.status, body);
-          await operations.check(data.sessionId);
           const cookie = await this.cookie(link, origin);
           if (this.links.get(frame.pairingId) !== link) throw new PhoneSessionError('not_found');
           value = this.uploads.start(frame.pairingId, data, async (stream, signal) => {
