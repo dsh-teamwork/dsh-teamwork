@@ -185,6 +185,15 @@ also pins the desktop public key. Later connections use fresh handshakes and
 saved keys. Missing or changed keys require pairing again, with no plaintext
 fallback. Existing plaintext pairings must be replaced.
 
+After authentication, each endpoint sends a fresh independent AES-256 sending
+key inside Noise. Messages and uploads then bypass Noise and use native
+AES-256-GCM: Node/OpenSSL on desktop and Expo Crypto on mobile. Each opaque
+`data` record authenticates its channel, sending direction and monotonic counter;
+replay, reordering, cipher failure or exhausted key budgets close the channel.
+The small Noise handshake remains JS; application payloads have no JS cipher
+fallback. Upgrade relay and both clients together. Saved verified device keys
+remain valid across this transport change.
+
 `src/secure-channel.ts` owns the wire and has an identical mobile copy checked
 by integration tests. `src/phone-security.ts` gates every bridge request on a
 locally saved device roster. The identity seed and account/server-scoped peers

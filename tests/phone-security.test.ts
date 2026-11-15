@@ -1,3 +1,4 @@
+import { importAesKey } from '../src/aes-gcm.js';
 import { randomBytes } from 'node:crypto';
 import { mkdtemp, readFile, stat, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -41,6 +42,11 @@ it('requires both local approvals, persists trust, and acknowledges durable remo
   });
   const createPhone = () =>
     new SecureChannel({
+      // A desktop may send its verification record while Expo is still importing native keys.
+      importAesKey: async bytes => {
+        await new Promise(resolve => setTimeout(resolve, 5));
+        return importAesKey(bytes);
+      },
       pairingId: 'pair',
       channelId: newChannelId((n) => randomBytes(n)),
       identity,
