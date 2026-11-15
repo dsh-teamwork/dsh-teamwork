@@ -152,3 +152,21 @@ DSH_CLI=/tmp/dsh-test-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js pnpm test
 ## 许可证
 
 Apache License 2.0（`LICENSE`）。名称“DSH Teamwork”和鲸鱼标志不随代码授权（`NOTICE`），派生项目需使用自己的名称和标志。
+
+## Phone session configuration
+
+Paired phones may choose an existing session folder and a registered native
+preset when creating a session. The bridge provides two narrowly scoped calls:
+`teamwork/configuration` reports the desktop's preset roster, team versions,
+dependency states and current session configuration; `teamwork/selectModel`
+changes a catalog model and optional advertised reasoning effort on an idle
+session. Native `session/selectModel` is no longer allowed for phones because
+it also saves the desktop default. Session-specific operations first pass the
+native admission check under the pairing's identity. Before forwarding a prompt,
+the bridge uses the same team, preset-version, plugin and tool readiness checks
+as local actions, returning a bounded `teamwork/` error code on refusal.
+
+The relay envelope is unchanged. Rebuild the plugin and mobile app together for
+these settings. This grants no new team permissions and exposes no credentials;
+phones remain paired to the same account's own DSH, across teams. The desktop
+pairing confirmation states this scope explicitly.

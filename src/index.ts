@@ -17,6 +17,8 @@ import { pluginState, stateText, type PluginState } from './plugin-status.js';
 import { panelRoutes, type FetchRoute, type PanelOps, type PanelPreset } from './panel.js';
 import { platformAdapter, platformProvider } from './platform-models.js';
 import { Bridge } from './bridge.js';
+import { PhoneSessionError, phonePresets } from './phone-session.js';
+import { ReasoningEffortId } from '@deepseek-ai/dsh-llm';
 import { listenForCode, type LoginCallback } from './login-callback.js';
 import { offerSchema, pairingSchema, RelayError, RelayLink, relayClientIdPath } from './relay.js';
 import type { PanelPhone } from './panel.js';
@@ -72,7 +74,7 @@ export async function apply(ctx: Context, config: Config) {
   };
   const checkPlugins = async (preset: PresetContext) => {
     const missing = (await plugins(preset)).filter(p=>p.state!=='ready');
-    if (missing.length) throw new Error(missing.map(p=>p.text).join('\n'));
+    if (missing.length) throw new PhoneSessionError('missing_plugins', missing.map(p=>p.text).join('\n'));
   };
   // A stamp that fails to save is retaken on the session's next request; the session itself is unaffected.
   const keep = (write: Promise<void>) => { write.catch(error => ctx.logger.warn('团队预设版本记录保存失败：%s', (error as Error).message)); };
@@ -111,20 +113,20 @@ export async function apply(ctx: Context, config: Config) {
   const configSync = new ConfigSync(client, overlay, config.autoSync ?? true, config.syncIntervalMs ?? 60000);
   const readiness = async (agent:Agent, fresh=false) => {
     const selection=agent.model.current();
-    if(!selection) throw new Error('尚未选择模型，请先选择本地模型或 /teamwork use <id>。');
+    if(!selection) throw new PhoneSessionError('model_unavailable', '尚未选择模型，请先选择本地模型或 /teamwork use <id>。');
     if(selection.provider===platformProvider) {
-      if(!client.authenticated()) throw new Error('团队模型未登录或会话已失效，请 /teamwork login。');
-      if(fresh) { try {await configSync.sync();} catch {throw new Error('无法验证当前团队权限，请检查连接和 /teamwork status，必要时重新登录。');} }
+      if(!client.authenticated()) throw new PhoneSessionError('not_authenticated', '团队模型未登录或会话已失效，请 /teamwork login。');
+      if(fresh) { try {await configSync.sync();} catch {throw new PhoneSessionError('unavailable', '无法验证当前团队权限，请检查连接和 /teamwork status，必要时重新登录。');} }
       const snapshot=client.current(), item=findConfig(snapshot, selection.model);
-      if(!snapshot || !item || !modelData(snapshot,item)) throw new Error('当前团队模型已删除或引用失效，请选择可用模型；预设变更请新建会话。');
+      if(!snapshot || !item || !modelData(snapshot,item)) throw new PhoneSessionError('model_unavailable', '当前团队模型已删除或引用失效，请选择可用模型；预设变更请新建会话。');
     }
     const preset=activePreset(agent);
     if(preset) {
       const saved=stamps.get(String(agent.id));
-      if(saved && !sameRevision(saved,preset)) throw new Error('恢复会话的预设版本不一致，请 /teamwork new <预设ID>。');
+      if(saved && !sameRevision(saved,preset)) throw new PhoneSessionError('preset_changed', '恢复会话的预设版本不一致，请 /teamwork new <预设ID>。');
       if(preset.pluginDependencies?.length) await checkPlugins(preset);
       const missing=requirements(agent,preset).filter(t=>t.required && ['missing','unknown'].includes(t.state));
-      if(missing.length) throw new Error(`缺少必需工具：${missing.map(t=>t.name).join(', ')}；运行 /teamwork info 查看安装指引。`);
+      if(missing.length) throw new PhoneSessionError('missing_tools', `缺少必需工具：${missing.map(t=>t.name).join(', ')}；运行 /teamwork info 查看安装指引。`);
     }
   };
   const actions=new TaskActions(agent=>readiness(agent,true),agent=>{
@@ -142,6 +144,39 @@ export async function apply(ctx: Context, config: Config) {
     launchUrl: () => launchUrl?.(),
     send: (frame) => relay.send(frame),
     log: (message, error) => ctx.logger.warn('%s：%s', message, (error as Error | undefined)?.message ?? ''),
+    session: {
+      async configuration(sessionId) {
+        const agent = sessionAgent(sessionId);
+        if (sessionId && !agent) throw new PhoneSessionError('busy');
+        const state = await panel.state(sessionId);
+        const roster = await ctx.agentPresets.remoteExportList();
+        return { presets: phonePresets(state, [...roster.presets]), current: agent ? {
+          sessionId: String(agent.id), cwd: agent.session.header.cwd,
+          agentPreset: ctx.agentPresets.presetForSession(agent.session), model: agent.model.current() ?? null,
+          started: state.session?.started ?? false, running: agent.status !== 'idle',
+        } : null };
+      },
+      async selectModel(request) {
+        const agent = sessionAgent(request.sessionId);
+        if (!agent) throw new PhoneSessionError('not_found');
+        if (agent.status !== 'idle' || agent.inbox.nextTurn.length || agent.inbox.nextStep.length) throw new PhoneSessionError('busy');
+        const selection = { provider: request.provider, model: request.model, ...(request.reasoningEffort ? { reasoningEffort: ReasoningEffortId(request.reasoningEffort) } : {}) };
+        try {
+          const model = (await ctx.llm.listModels(selection.provider)).find(model => model.id === selection.model);
+          if (!model) throw new Error('Unavailable model');
+          await ctx.llm.resolveCallConfig(selection);
+          if (agent.status !== 'idle' || agent.inbox.nextTurn.length || agent.inbox.nextStep.length) throw new PhoneSessionError('busy');
+          agent.model.select(selection);
+          return { selected: agent.model.current() };
+        } catch (error) { if (error instanceof PhoneSessionError) throw error; throw new PhoneSessionError('model_unavailable'); }
+      },
+      async check(sessionId) {
+        const agent = sessionAgent(sessionId);
+        if (!agent) throw new PhoneSessionError('not_found');
+        if (agent.status !== 'idle' || agent.inbox.nextTurn.length || agent.inbox.nextStep.length) throw new PhoneSessionError('busy');
+        await readiness(agent, true);
+      },
+    },
   });
   const relay: RelayLink = new RelayLink({
     endpoint: () => client.endpoint,
