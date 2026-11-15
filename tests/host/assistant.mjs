@@ -1,3 +1,4 @@
+import { reportResult } from './result.mjs';
 // Real-host feasibility checks for inherited models, approval and private archives.
 import assert from 'node:assert/strict';
 import { readFile, writeFile, rm } from 'node:fs/promises';
@@ -257,9 +258,7 @@ export function apply(ctx) {
         ),
         'Installed package survives source deletion',
       );
-      await writeFile(
-        process.env.TEAMWORK_TEST_RESULT,
-        JSON.stringify({
+      await reportResult({
           passed: true,
           checks: [
             'inherited local model',
@@ -272,13 +271,9 @@ export function apply(ctx) {
             'local archive installation disabled',
             'installed package survives source deletion',
           ],
-        }),
-      );
+        });
     } catch (error) {
-      await writeFile(
-        process.env.TEAMWORK_TEST_RESULT,
-        JSON.stringify({ passed: false, error: String(error), stack: error.stack }),
-      );
+      await reportResult({ passed: false, error: String(error), stack: error.stack });
     } finally {
       if (server) {
         server.closeAllConnections();
