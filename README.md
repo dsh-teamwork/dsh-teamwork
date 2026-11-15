@@ -175,6 +175,30 @@ these settings. This grants no new team permissions and exposes no credentials;
 phones remain paired to the same account's own DSH, across teams. The desktop
 pairing confirmation states this scope explicitly.
 
+## Verified phone encryption
+
+The phone and desktop authenticate each other with pinned Ed25519 device
+identities over libp2p Noise XX. A six-letter, single-use code locates the
+computer; initial pairing requires comparing the eight-digit safety code on
+both screens, confirming on the phone, then approving on the desktop. A QR link
+also pins the desktop public key. Later connections use fresh handshakes and
+saved keys. Missing or changed keys require pairing again, with no plaintext
+fallback. Existing plaintext pairings must be replaced.
+
+`src/secure-channel.ts` owns the wire and has an identical mobile copy checked
+by integration tests. `src/phone-security.ts` gates every bridge request on a
+locally saved device roster. The identity seed and account/server-scoped peers
+are atomically saved in `<cache>.phone-keys.json` with restrictive permissions.
+Desktop revocation closes the channel and saves trust removal before calling
+the relay. Phone revocation requires an encrypted desktop acknowledgement; an
+offline desktop must reconnect before it completes.
+
+The relay can see public keys, account/device metadata, timing and sizes, but
+cannot read encrypted methods, conversation content, tool data or uploads.
+Generic notifications omit session ids and question types. Local DSH storage
+and the hosted team-model gateway remain separate boundaries: model context
+still passes through that gateway. Update relay, plugin and mobile together.
+
 ## Phone file attachments
 
 Phones query upload limits through `teamwork/configuration`, then use four

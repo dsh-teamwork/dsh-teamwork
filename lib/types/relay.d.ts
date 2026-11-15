@@ -1,5 +1,13 @@
 import { z } from 'zod';
-import { type Forwarded } from './bridge.js';
+import { type SecurePacket } from './secure-channel.js';
+declare const endSchema: z.ZodObject<{
+    t: z.ZodEnum<{
+        detach: "detach";
+        revoked: "revoked";
+    }>;
+    pairingId: z.ZodString;
+}, z.core.$strip>;
+export type RoutedFrame = SecurePacket | z.infer<typeof endSchema>;
 import type { RelayStatus } from './panel.js';
 export type { RelayStatus };
 /** The relay's close codes this side acts on; any other close reconnects. */
@@ -63,7 +71,7 @@ export interface RelayLinkOptions {
     onStatus?: (status: RelayStatus) => void;
     onEvent?: (event: RelayEvent) => void;
     /** A phone's frame for this computer, or the news that its phone left or lost its pairing (`src/bridge.ts`). */
-    onForward?: (frame: Forwarded) => void;
+    onForward?: (frame: RoutedFrame) => void;
     /** Longest wait between reconnection attempts. */
     maxBackoffMs?: number;
     /** How long to wait before asking a server without a relay again. */

@@ -685,10 +685,10 @@ function Phones({ state, run }: { state: PanelState; run: Run }) {
       {pending.map((phone) => (
         <Item key={phone.id} icon="smartphone" title={phone.deviceName} subtitle={`${shortTime(phone.createdAt)} 申请配对`}
           tags={<Badge tone="warning" dot>等待你确认</Badge>}
-          description="确认后，手机可查看本机 DSH 可访问的个人与各团队会话，发送消息、回答 Agent 提问和处理审批。目前不能只授权一个团队；配对不会增加团队权限，任一端都可解除。手机与电脑须登录同一账号。"
+          description={`${phone.safetyCode ? `安全码：${phone.safetyCode}。请核对手机上的安全码一致，并在手机上确认。` : '等待手机完成加密握手，暂时无法确认。'} 确认后，手机可查看本机 DSH 可访问的个人与各团队会话，发送消息、回答 Agent 提问和处理审批。目前不能只授权一个团队；配对不会增加团队权限，任一端都可解除。手机与电脑须登录同一账号。`}
           actions={<>
             <Button size="sm" variant="ghost" busy={busy === `reject:${phone.id}`} disabled={!!busy} onClick={() => void perform(`reject:${phone.id}`, () => api.decidePhone(phone.id, false), '已拒绝')}>拒绝</Button>
-            <Button size="sm" busy={busy === `accept:${phone.id}`} disabled={!!busy} onClick={() => void perform(`accept:${phone.id}`, () => api.decidePhone(phone.id, true), `${phone.deviceName} 已配对`)}>确认配对</Button>
+            <Button size="sm" busy={busy === `accept:${phone.id}`} disabled={!!busy || !phone.safetyCode || !phone.phoneConfirmed} onClick={() => void perform(`accept:${phone.id}`, () => api.decidePhone(phone.id, true), `${phone.deviceName} 已配对`)}>安全码一致，确认配对</Button>
           </>} />
       ))}
       <h3 style={{ fontSize: 15, fontWeight: 500 }}>已配对手机</h3>
@@ -696,7 +696,7 @@ function Phones({ state, run }: { state: PanelState; run: Run }) {
       {paired.map((phone) => (
         <Item key={phone.id} icon="smartphone" title={phone.deviceName}
           subtitle={phone.lastUsedAt ? `最近使用 ${shortTime(phone.lastUsedAt)}` : `配对于 ${shortTime(phone.createdAt)}`}
-          tags={<Badge tone="success" dot>已配对</Badge>}
+          tags={<Badge tone={phone.verified ? "success" : "warning"} dot>{phone.verified ? "已验证加密设备" : "需要重新配对"}</Badge>}
           actions={<Button size="sm" variant="ghost" disabled={!!busy} onClick={() => setRevoking(phone)}>解除配对</Button>} />
       ))}
       {revoking && (
@@ -721,7 +721,7 @@ function PairingCode({ offer, onDone, onExpire }: { offer: PanelPairingOffer; on
       <div style={{ display: 'grid', gap: 8, minWidth: 200, flex: '1 1 200px' }}>
         <h2 style={{ fontSize: 15, fontWeight: 650 }}>用 DSH Teamwork App 扫码</h2>
         <span className="twui-subtle">也可以在 App 里手动输入配对码：</span>
-        <span className="twui-mono" style={{ fontSize: 20, letterSpacing: '0.12em' }}>{offer.code.slice(0, 4)} {offer.code.slice(4)}</span>
+        <span className="twui-mono" style={{ fontSize: 20, letterSpacing: '0.12em' }}>{offer.code.slice(0, 3)} {offer.code.slice(3)}</span>
         <span className="twui-subtle">{Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')} 后失效，只能使用一次。扫码后请回到这里确认。</span>
         <span className="twui-subtle">收起后，配对码在到期前仍然有效；手机提交后需在本机确认。</span>
         <div><Button size="sm" variant="ghost" onClick={onDone}>收起配对码</Button></div>
