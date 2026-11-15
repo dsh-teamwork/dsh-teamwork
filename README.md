@@ -231,3 +231,5 @@ request may reach native deduplication before the busy/readiness check; new
 work still passes all checks and validates its receipt metadata. This slice
 supports ordinary files, not image input or document extraction. Update the
 mobile app and plugin together. Build output under `lib/` is included.
+
+预算由所选团队的服务端计算，插件底栏异步显示当前成员的积分剩余、Token 限额或待核实状态。切换资源团队不会改变正在使用的会话模型；模型和上游的其他限制仍由网关在请求时检查。读取失败显示“预算暂不可用”，不影响配置列表和同步。

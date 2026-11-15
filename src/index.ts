@@ -321,6 +321,7 @@ export async function apply(ctx: Context, config: Config) {
   };
   const sessionAgent = (sessionId: string | undefined) => sessionId ? ctx.agents.get(sessionId as SessionId) : undefined;
   const panel: PanelOps = {
+    quota: teamId => client.quota(teamId),
     profile: () => client.profile(),
     updateProfile: (input) => client.updateProfile(input),
     async state(sessionId) {
@@ -343,6 +344,7 @@ export async function apply(ctx: Context, config: Config) {
       }
       const selection = agent?.model.current(), active = agent && activePreset(agent), boundary = agent && ctx.agents.turnBoundaryOf(agent.session);
       return {
+        authRevision: client.sessionRevision(),
         authenticated: status.authenticated,
         teams: (snapshot?.teams ?? []).map(team => ({ id: team.teamId, name: team.teamName, role: team.role, consoleUrl: `${client.endpoint}/teams/${team.teamId}` })),
         server: client.endpoint,

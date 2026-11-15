@@ -195,7 +195,7 @@ export function TeamworkPanel({ host: dsh }: { host: Host }) {
   const tabs = [{ id: 'presets' as const, label: '预设', count: presets.length }, { id: 'models' as const, label: '模型', count: models.length }, { id: 'plugins' as const, label: '插件', count: plugins.length }];
   const choosing = page === 'choose' && state.teams.length > 1;
   return (
-    <Panel label="Teamwork" header={<Header state={state} page={page} team={team} selectTeam={selectTeam} navigate={navigate} />} footer={<Footer state={state} run={run} />}>
+    <Panel label="Teamwork" header={<Header state={state} page={page} team={team} selectTeam={selectTeam} navigate={navigate} />} footer={<Footer state={state} team={team} run={run} />}>
       {loadError && <Banner tone="danger" title="状态没有刷新" action={<Button size="sm" icon="refresh" onClick={() => void refresh()}>重试</Button>}>{loadError}</Banner>}
       {state.sync.lastError && (
         <Banner tone="warning" title="同步失败，正在使用上次同步的配置" action={<Button size="sm" icon="refresh" onClick={() => run(() => api.sync(), '团队配置已同步')}>重试</Button>}>
@@ -472,11 +472,33 @@ function Header({ state, page, team, selectTeam, navigate }: { state: PanelState
   </>;
 }
 
-function Footer({ state, run }: { state: PanelState; run: Run }) {
+/** Resource-filter context only: changing this team never changes a running conversation. */
+function Quota({ team }: { team: string }) {
+  const [label, setLabel] = useState('预算加载中…');
+  useEffect(() => {
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const load = async () => {
+      let next = '预算暂不可用';
+      try {
+        const q = await api.quota(team);
+        next = q.exhausted ? '预算已用尽' : q.state === 'unconfirmed' ? '预算待核实'
+          : q.state === 'known' && q.remaining !== null ? `预算剩余 ${q.remaining} 积分`
+          : q.tokenLimited ? '已设 Token 上限' : '未设预算上限';
+      } catch { /* Availability is advisory; failed reads never imply unlimited use. */ }
+      if (active) { setLabel(next); timer = setTimeout(load, 30000); }
+    };
+    void load();
+    return () => { active = false; clearTimeout(timer); };
+  }, [team]);
+  return <span className="twui-footer-service" role="status" title="所选团队中我的预算；模型或上游仍可能有其他限制。切换资源团队不改变当前会话。">{label}</span>;
+}
+
+function Footer({ state, team, run }: { state: PanelState; team: string; run: Run }) {
   const [busy, setBusy] = useState(false);
   return <>
     <div className="twui-footer-identity"><span className="twui-footer-name">Teamwork</span><span className="twui-footer-service" title={state.server}>{state.server === state.defaultServer ? '官方服务' : host(state.server)} · 本机 DSH</span></div>
-    <div className="twui-row twui-footer-actions"><span role="status"><Badge tone={state.sync.lastError ? 'warning' : 'success'} dot>{state.sync.running ? '正在同步…' : state.sync.lastError ? '同步失败' : synced(state.sync.lastSuccess)}</Badge></span>
+    <div className="twui-row twui-footer-actions">{state.authenticated && state.teams.some(t => t.id === team) && <Quota key={`${state.server}:${state.authRevision}:${team}`} team={team} />}<span role="status"><Badge tone={state.sync.lastError ? 'warning' : 'success'} dot>{state.sync.running ? '正在同步…' : state.sync.lastError ? '同步失败' : synced(state.sync.lastSuccess)}</Badge></span>
       <Button variant="ghost" size="sm" icon="refresh" busy={busy || state.sync.running} onClick={async () => { setBusy(true); await run(() => api.sync(), '团队配置已同步'); setBusy(false); }}>刷新</Button>
     </div>
   </>;

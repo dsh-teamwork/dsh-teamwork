@@ -80,3 +80,32 @@ test('late login completion cannot reauthenticate after logout', async () => {
     expect(calls).toEqual(['/api/auth/plugin/token']);
   } finally { await rm(dir, { recursive: true }); }
 });
+
+test('quota reads retain only own summary, fail closed and discard an old account response', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'teamwork-quota-'));
+  let reply = Response.json({ summary: { remaining: '9.85', state: 'known', resetAt: null, tokenLimited: true, exhausted: false }, policies: [{ subjectId: 'other' }] });
+  let finish: ((response: Response) => void) | undefined;
+  const calls: Array<[string, RequestInit | undefined]> = [];
+  const request: typeof fetch = async (input, init) => {
+    const url = String(input); calls.push([url, init]);
+    if (url.endsWith('/auth/plugin/token')) return Response.json({ token: 'secret' });
+    if (url.endsWith('/configs')) return Response.json(snapshot);
+    return finish === undefined ? reply : new Promise<Response>(resolve => { finish = resolve; });
+  };
+  const client = new TeamworkClient('https://example.com', join(dir, 'cache.json'), request);
+  try {
+    client.beginLogin(); await client.completeLogin('code'); await client.sync();
+    await expect(client.quota('other')).rejects.toThrow();
+    const own = await client.quota('team1');
+    expect(own).toEqual({ remaining: '9.85', state: 'known', resetAt: null, tokenLimited: true, exhausted: false });
+    expect(JSON.stringify(own)).not.toContain('secret'); expect(JSON.stringify(own)).not.toContain('subjectId');
+    expect(calls.at(-1)?.[1]?.headers).toEqual({ Authorization: 'Bearer secret' });
+    reply = new Response('', { status: 404 }); await expect(client.quota('team1')).rejects.toThrow();
+    reply = Response.json({ summary: {} }); await expect(client.quota('team1')).rejects.toThrow();
+    finish = () => {};
+    const pending = client.quota('team1');
+    await client.setEndpoint('https://other.example.com');
+    finish(Response.json({ summary: own })); await expect(pending).rejects.toThrow('登录状态已改变');
+    expect(client.current()).toBeUndefined();
+  } finally { await rm(dir, { recursive: true }); }
+});

@@ -7,11 +7,11 @@ import { api } from '../../src/web/api.js';
 import type { PanelState } from '../../src/panel.js';
 import type { Host } from '../../src/web/host.js';
 
-vi.mock('../../src/web/api.js', () => ({ api: { state: vi.fn(), profile: vi.fn(), updateProfile: vi.fn(), sync: vi.fn(), use: vi.fn(), login: vi.fn(), authorize: vi.fn(), pairPhone: vi.fn(), decidePhone: vi.fn(), revokePhone: vi.fn() } }));
+vi.mock('../../src/web/api.js', () => ({ api: { quota: vi.fn().mockRejectedValue(new Error("Unavailable")), state: vi.fn(), profile: vi.fn(), updateProfile: vi.fn(), sync: vi.fn(), use: vi.fn(), login: vi.fn(), authorize: vi.fn(), pairPhone: vi.fn(), decidePhone: vi.fn(), revokePhone: vi.fn() } }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const profile = { id: 'user', name: 'Ada', email: 'ada@example.com', image: null, locale: 'zh-CN' as const };
 const state: PanelState = {
-  authenticated: true, server: 'https://example.com', defaultServer: 'https://example.com',
+  authRevision: 0, authenticated: true, server: 'https://example.com', defaultServer: 'https://example.com',
   sync: { auto: true, running: false }, relay: 'connected', phones: [], session: null,
   teams: [{ id: 'a', name: 'Alpha', role: 'admin', consoleUrl: 'https://example.com/teams/a' }, { id: 'b', name: 'Beta', role: 'member', consoleUrl: 'https://example.com/teams/b' }],
   presets: ['a', 'b'].map(id => ({ id: `preset-${id}`, teamId: id, teamName: id, name: `Preset ${id}`, version: 1, description: 'Review', model: 'Model', modelAvailable: true, tools: [], plugins: [] })),
@@ -204,4 +204,19 @@ test('never overlaps state polling while a slow request is pending', async () =>
   await mount();
   await act(async () => { await vi.advanceTimersByTimeAsync(20000); });
   expect(api.state).toHaveBeenCalledTimes(1);
+});
+
+test('switching resource teams discards a late quota and does not block resource rendering', async () => {
+  let finish!: (value: Awaited<ReturnType<typeof api.quota>>) => void;
+  vi.mocked(api.quota).mockImplementation(id => id === 'a' ? new Promise(resolve => { finish = resolve; }) : Promise.resolve({ remaining: '2', state: 'known', resetAt: null, tokenLimited: false, exhausted: false }));
+  await mount(); await click('查看全部团队资源');
+  const select = async (index: number) => {
+    await act(async () => document.querySelector<HTMLButtonElement>('.twui-select-trigger')!.click());
+    await act(async () => document.querySelector(`[role="option"][data-index="${index}"]`)!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  };
+  await select(1); expect(document.body.textContent).toContain('Preset a');
+  await select(2); expect(document.body.textContent).toContain('预算剩余 2 积分');
+  await act(async () => finish({ remaining: '999', state: 'known', resetAt: null, tokenLimited: false, exhausted: false }));
+  expect(document.body.textContent).not.toContain('999');
+  expect(api.use).not.toHaveBeenCalled();
 });
