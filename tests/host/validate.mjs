@@ -1,3 +1,4 @@
+import { reportResult } from './result.mjs';
 import { readFile, writeFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -72,8 +73,8 @@ export function apply(ctx) {
    for (const preset of originalRoster.filter(p => !p.id.startsWith('team:host-smoke:'))) assert(remaining.some(p => p.id === preset.id), `Lost local preset ${preset.id}`);
    assert((await ctx.pluginManager.listBundles()).some(b => b.name === '@teamwork-test/fixture'), 'Logout must not uninstall a user-approved plugin');
    await releaseLocal();
-   await writeFile(process.env.TEAMWORK_TEST_RESULT, JSON.stringify({ passed: true, checks: ['corrupt cache startup recovery', 'real DSH load', 'loopback sign-in listener', 'preset registration', 'session model selection', 'literal additive team prompt', 'install confirmation', 'stale version confirmation rejected', 'package installation', 'duplicate install protection', 'configuration-overriding bundle blocked before activation', 'preset update', 'local preset preservation', 'logout cleanup', 'installed plugin preserved after logout'] }));
-  } catch (error) { await writeFile(process.env.TEAMWORK_TEST_RESULT, JSON.stringify({ passed: false, error: String(error), stack: error.stack })); }
+   await reportResult({ passed: true, checks: ['corrupt cache startup recovery', 'real DSH load', 'loopback sign-in listener', 'preset registration', 'session model selection', 'literal additive team prompt', 'install confirmation', 'stale version confirmation rejected', 'package installation', 'duplicate install protection', 'configuration-overriding bundle blocked before activation', 'preset update', 'local preset preservation', 'logout cleanup', 'installed plugin preserved after logout'] });
+  } catch (error) { await reportResult({ passed: false, error: String(error), stack: error.stack }); }
  }, 3000);
  ctx.effect(() => () => clearTimeout(timer));
 }

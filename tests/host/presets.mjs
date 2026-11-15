@@ -1,3 +1,4 @@
+import { reportResult } from './result.mjs';
 import {readFile, writeFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 export const inject = ['dshTeamwork','agents','agentPresets','commands'];
@@ -42,8 +43,8 @@ export function apply(ctx) {
       assert.match((await execute('/teamwork retry')).result.text,/retry confirm/);
       assert.equal((await execute('/teamwork retry confirm')).result.kind,'error');
       const cancelled=await execute('/teamwork cancel');assert.equal(cancelled.result.kind,'success');assert.match(cancelled.result.text,/不执行回滚/);
-      await writeFile(process.env.TEAMWORK_TEST_RESULT,JSON.stringify({passed:true,checks:['native scoped preset details','optional tool warning','existing generation preserved','update availability shown','blank session updates','started session locked','new session uses latest preset','required tool blocks selection without mutation','session tool inventory','missing plugin installation guidance','required plugin blocks selection','stale dependency version rejected','session overview and login readiness','unauthenticated continuation blocked','durable cancellation outcome and explicit retry','native cancellation command']}));
-    } catch(error) {await writeFile(process.env.TEAMWORK_TEST_RESULT,JSON.stringify({passed:false,error:String(error),stack:error.stack}));}
+      await reportResult({passed:true,checks:['native scoped preset details','optional tool warning','existing generation preserved','update availability shown','blank session updates','started session locked','new session uses latest preset','required tool blocks selection without mutation','session tool inventory','missing plugin installation guidance','required plugin blocks selection','stale dependency version rejected','session overview and login readiness','unauthenticated continuation blocked','durable cancellation outcome and explicit retry','native cancellation command']});
+    } catch(error) {await reportResult({passed:false,error:String(error),stack:error.stack});}
   },3000);
   ctx.effect(()=>()=>clearTimeout(timer));
 }
