@@ -6,6 +6,8 @@ export interface PresetContext {
     name: string;
     version: number;
     modelConfigId?: string;
+    inheritModel?: boolean;
+    builtin?: string;
     description: string;
     instructions: string;
     outputDescription: string;

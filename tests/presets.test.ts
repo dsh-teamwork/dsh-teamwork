@@ -4,6 +4,7 @@ import { assertBlank, sameRevision, toolReport, PresetStamps, presetStampPath } 
 import { mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pinnedPlugin } from '../src/client.js';
 import type { PresetContext } from '../src/preset-context.js';
 const preset: PresetContext = {teamId:'t',id:'p',name:'Review',version:1,description:'Review code',instructions:'Provide a diff',outputDescription:'List issues',systemPrompt:'Literal {{text}}',requiredTools:['Read'],optionalTools:['Shell']};
 test('native session rules reject started and running conversations, allow blank ones', () => {
@@ -49,4 +50,11 @@ test('preset stamps live in a file of the plugin, survive a restart, and never i
   await writeFile(path, 'not json');
   const third = new PresetStamps(path); await third.load();
   expect(third.get('s1')).toBeNull();
+});
+
+test('a preset pin resolves its approved historical plugin rather than the live catalog',()=>{
+ const snapshot=snapshotSchema.parse({teams:[{teamId:'t',teamName:'T',role:'member',configs:[{id:'p',kind:'plugin',name:'Tool',version:2,data:{package:'tool',version:'2.0.0'}}],pluginVersions:[{configId:'p',name:'Tool',data:{package:'tool',version:'1.0.0'}}]}]});
+ expect(pinnedPlugin(snapshot,'p','1.0.0')?.data.version).toBe('1.0.0');
+ expect(pinnedPlugin(snapshot,'p','2.0.0')?.data.version).toBe('2.0.0');
+ expect(pinnedPlugin(snapshot,'p','3.0.0')).toBeUndefined();
 });
