@@ -175,6 +175,12 @@ export async function apply(ctx: Context, config: Config) {
           return { selected: agent.model.current() };
         } catch (error) { if (error instanceof PhoneSessionError) throw error; throw new PhoneSessionError('model_unavailable'); }
       },
+      accepted(sessionId, requestId) {
+        const agent = sessionAgent(sessionId);
+        if (!agent) return false;
+        const matches = (source: unknown) => typeof source === 'object' && source !== null && 'kind' in source && source.kind === 'user' && 'rpcId' in source && source.rpcId === requestId;
+        return [...agent.inbox.nextTurn, ...agent.inbox.nextStep].some(message => matches(message.source)) || agent.session.snapshotEvents().some(event => event.type === 'user/message' && matches(event.data.source));
+      },
       async check(sessionId) {
         const agent = sessionAgent(sessionId);
         if (!agent) throw new PhoneSessionError('not_found');

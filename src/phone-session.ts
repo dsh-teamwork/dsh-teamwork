@@ -1,7 +1,7 @@
 /** The paired phone's session configuration, with no credentials or desktop-default mutation. */
 import type { PanelState } from './panel.js';
 
-export type PhoneFailure = 'busy' | 'not_found' | 'not_authenticated' | 'missing_tools' | 'missing_plugins' | 'preset_changed' | 'model_unavailable' | 'invalid_request' | 'unavailable';
+export type PhoneFailure = 'busy' | 'not_found' | 'not_authenticated' | 'missing_tools' | 'missing_plugins' | 'preset_changed' | 'model_unavailable' | 'invalid_request' | 'unavailable' | 'file_name' | 'file_type' | 'file_too_large' | 'invalid_upload' | 'upload_expired' | 'upload_failed';
 export class PhoneSessionError extends Error {
   constructor(readonly code: PhoneFailure, message: string = code) { super(message); }
 }
@@ -10,6 +10,7 @@ export interface PhoneSessionOps {
   configuration(sessionId?: string): Promise<unknown>;
   selectModel(request: PhoneModel & { sessionId: string }): Promise<unknown>;
   check(sessionId: string): Promise<void>;
+  accepted(sessionId: string, requestId: string): boolean;
 }
 
 /** Native preset ids remain the create API's ids; team metadata only enriches their presentation. */

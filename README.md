@@ -174,3 +174,24 @@ The relay envelope is unchanged. Rebuild the plugin and mobile app together for
 these settings. This grants no new team permissions and exposes no credentials;
 phones remain paired to the same account's own DSH, across teams. The desktop
 pairing confirmation states this scope explicitly.
+
+## Phone file attachments
+
+Phones query upload limits through `teamwork/configuration`, then use four
+allow-listed calls: `teamwork/uploadStart`, `teamwork/uploadChunk`,
+`teamwork/uploadFinish` and `teamwork/uploadCancel`. Intake passes native
+session admission and desktop readiness. Transfer ids and completed receipts
+are bound to the pairing and exact session, and chunks stream with backpressure
+to DSH's authenticated binary upload service. The relay envelope is unchanged.
+
+The initial budgets are five files per message, 20 MiB per file, 50 MiB total,
+256 KiB raw chunks, one active transfer per pairing and two per host. Transfers
+expire after 60 seconds idle or five minutes total; completed plugin receipts
+expire after ten minutes. Detach, revocation and cancellation release transfer
+state. The plugin does not delete DSH's stored objects or workspace files.
+
+Prompts use native file receipts and stable request ids. An already-accepted
+request may reach native deduplication before the busy/readiness check; new
+work still passes all checks and validates its receipt metadata. This slice
+supports ordinary files, not image input or document extraction. Update the
+mobile app and plugin together. Build output under `lib/` is included.

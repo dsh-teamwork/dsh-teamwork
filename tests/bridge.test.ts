@@ -18,7 +18,7 @@ class FakeSocket {
 
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
-function bridge(options: { web?: boolean; expire?: boolean; session?: PhoneSessionOps; denied?: boolean } = {}) {
+function bridge(options: { web?: boolean; expire?: boolean; session?: PhoneSessionOps; denied?: boolean; waitPrompt?: Promise<void> } = {}) {
   FakeSocket.made = [];
   const sent: any[] = [];
   const asked: Array<{ url: string; init?: RequestInit }> = [];
@@ -27,6 +27,7 @@ function bridge(options: { web?: boolean; expire?: boolean; session?: PhoneSessi
   const request = (async (url: string, init?: RequestInit) => {
     asked.push({ url, init });
     if (url.includes('/connect?')) return new Response(null, { status: 302, headers: { 'set-cookie': `dsh=peer-${++minted}; Path=/; HttpOnly` } });
+    if (url.endsWith('/session/prompt') && options.waitPrompt) await options.waitPrompt;
     if (options.denied) return new Response(JSON.stringify({ result: { ok: false, error: { code: 'session/not-found' } } }));
     if (expireNext) { expireNext = false; return new Response('', { status: 401 }); }
     return new Response(JSON.stringify({ type: 'client-response', result: { ok: true, value: 'v' } }), { status: 200 });
@@ -45,14 +46,14 @@ describe('the phone bridge', () => {
   it('holds the allow-list', () => {
     expect([...ALLOWED_CALLS].sort()).toEqual([
       '$events/result', 'session/cancel', 'session/create', 'session/list', 'session/modelCatalog', 'session/page',
-      'session/prompt', 'session/state', 'teamwork/configuration', 'teamwork/selectModel', 'userQuestions/answer',
+      'session/prompt', 'session/state', 'teamwork/configuration', 'teamwork/selectModel', 'teamwork/uploadCancel', 'teamwork/uploadChunk', 'teamwork/uploadFinish', 'teamwork/uploadStart', 'userQuestions/answer',
     ]);
     expect([...ALLOWED_STREAMS].sort()).toEqual(['$events', 'session/follow']);
   });
 
   it('changes a model through the session-only handler, never the default-saving native endpoint', async () => {
     const selected: unknown[] = [];
-    const session: PhoneSessionOps = { configuration: async () => ({}), check: async () => {}, selectModel: async request => { selected.push(request); return { selected: request }; } };
+    const session: PhoneSessionOps = { accepted: () => false, configuration: async () => ({}), check: async () => {}, selectModel: async request => { selected.push(request); return { selected: request }; } };
     const { b, sent, asked } = bridge({ session });
     b.handle({ t: 'call', pairingId: 'p', id: 'c', method: 'teamwork/selectModel', body: { args: { request: { sessionId: 's1', provider: 'local', model: 'coder' } } } });
     for (let i=0;i<6;i++) await tick();
@@ -66,7 +67,7 @@ describe('the phone bridge', () => {
 
   it('checks desktop admission before invoking session configuration operations', async () => {
     let called=false;
-    const session: PhoneSessionOps = { configuration: async () => { called=true; return {}; }, selectModel: async () => { called=true; return {}; }, check: async () => { called=true; } };
+    const session: PhoneSessionOps = { accepted: () => false, configuration: async () => { called=true; return {}; }, selectModel: async () => { called=true; return {}; }, check: async () => { called=true; } };
     const { b, sent } = bridge({ session, denied: true });
     b.handle({ t: 'call', pairingId: 'p', id: 'c', method: 'teamwork/configuration', body: { args: { request: { sessionId: 'hidden' } } } });
     for (let i=0;i<6;i++) await tick();
@@ -74,8 +75,33 @@ describe('the phone bridge', () => {
     expect(sent.at(-1)).toMatchObject({ body: { result: { ok: false, error: { code: 'session/not-found' } } } });
   });
 
+  it('lets the native idempotent path confirm an accepted request before busy and receipt checks', async () => {
+    let checked = false;
+    const session: PhoneSessionOps = { accepted: (_id, requestId) => requestId === 'already-accepted', configuration: async () => ({}), selectModel: async () => ({}), check: async () => { checked = true; throw new PhoneSessionError('busy'); } };
+    const { b, sent, asked } = bridge({ session });
+    b.handle({ t: 'call', pairingId: 'p', id: 'retry', method: 'session/prompt', body: { args: { request: { sessionId: 's1', requestId: 'already-accepted', content: [{ type: 'file', receiptId: 'retired' }] } } } });
+    for (let i = 0; i < 6; i++) await tick();
+    expect(checked).toBe(false);
+    expect(asked.some(call => call.url.endsWith('/session/prompt'))).toBe(true);
+    expect(sent.at(-1)).toMatchObject({ status: 200, body: { result: { ok: true } } });
+  });
+
+  it('coalesces a still-in-flight prompt retry before native admission can race', async () => {
+    let release!: () => void;
+    const waitPrompt = new Promise<void>(resolve => { release = resolve; });
+    const session: PhoneSessionOps = { accepted: () => false, configuration: async () => ({}), selectModel: async () => ({}), check: async () => {} };
+    const { b, sent, asked } = bridge({ session, waitPrompt });
+    const body = { args: { request: { sessionId: 's1', requestId: 'one-task', content: [{ type: 'text', text: 'one task' }] } } };
+    b.handle({ t: 'call', pairingId: 'p', id: 'first', method: 'session/prompt', body });
+    b.handle({ t: 'call', pairingId: 'p', id: 'retry', method: 'session/prompt', body });
+    for (let i = 0; i < 6; i++) await tick();
+    expect(asked.filter(call => call.url.endsWith('/session/prompt'))).toHaveLength(1);
+    release(); for (let i = 0; i < 6; i++) await tick();
+    expect(sent.filter(frame => ['first', 'retry'].includes(frame.id))).toHaveLength(2);
+  });
+
   it('returns a preflight refusal without submitting the prompt', async () => {
-    const session: PhoneSessionOps = { configuration: async () => ({}), selectModel: async () => ({}), check: async () => { throw new PhoneSessionError('missing_tools'); } };
+    const session: PhoneSessionOps = { accepted: () => false, configuration: async () => ({}), selectModel: async () => ({}), check: async () => { throw new PhoneSessionError('missing_tools'); } };
     const { b, sent, asked } = bridge({ session });
     b.handle({ t: 'call', pairingId: 'p', id: 'c', method: 'session/prompt', body: { args: { request: { sessionId: 's1' } } } });
     for (let i=0;i<6;i++) await tick();
