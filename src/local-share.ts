@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { resolve, relative, join, basename } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
+import { npmCommand } from './npm-command.js';
 const exec = promisify(execFile);
 export interface PreparedPlugin {
   path: string;
@@ -28,10 +29,11 @@ export async function preparePlugin(
     throw Error('Choose a directory inside this session workspace');
   const directory = await mkdtemp(join(tmpdir(), 'teamwork-share-'));
   try {
+    const command = npmCommand(['pack', '--ignore-scripts', '--json', '--pack-destination', directory]);
     const { stdout } = await exec(
-      'npm',
-      ['pack', '--ignore-scripts', '--json', '--pack-destination', directory],
-      { cwd: root, signal, maxBuffer: 4 * 1024 * 1024 },
+      command.file,
+      command.args,
+      { cwd: root, signal, maxBuffer: 4 * 1024 * 1024, windowsHide: true },
     );
     const [result] = JSON.parse(stdout) as {
       name: string;

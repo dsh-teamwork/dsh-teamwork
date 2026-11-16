@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { preparePlugin } from '../src/local-share.js';
 
 test('packs exact files without running lifecycle scripts and rejects credentials before upload', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'sharing-test-'));
+  const root = await mkdtemp(join(tmpdir(), 'sharing test & shell-'));
   let prepared;
   try {
     await writeFile(
