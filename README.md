@@ -1,6 +1,6 @@
 # DSH Teamwork MVP
 
-团队模型、预设和插件目录作为独立增量配置加入 DSH，不覆盖本地用户配置。适配 DSH `0.2.2-rc.1` / Cordis `4.1.0`。
+团队模型、预设和插件目录作为独立增量配置加入 DSH，不覆盖本地用户配置。适配 DSH `0.2.2-rc.1`、`0.2.2-rc.2` / Cordis `4.1.0`。
 
 ## 开发
 
@@ -85,9 +85,11 @@ DSH web 和桌面端的左侧栏有 Teamwork 入口，打开后是主区域的 T
 ## 真实宿主集成测试
 
 ```sh
-npm install --prefix /tmp/dsh-test-runtime --no-package-lock @deepseek-ai/dsh@0.2.2-rc.1
+npm install --prefix /tmp/dsh-test-runtime --no-package-lock @deepseek-ai/dsh@0.2.2-rc.2
 DSH_CLI=/tmp/dsh-test-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js pnpm test:host
 ```
+
+CI 在 `0.2.2-rc.1` 和 `0.2.2-rc.2` 两个真实运行时上执行。测试先把当前插件打包，经 DSH CLI 安装到独立临时 profile，不添加版本豁免，然后启动宿主验证。DSH 服务依赖声明为 peer，由运行时提供，避免加载不同版本的服务实现。
 
 测试启动独立临时 profile 和本地 npm registry，创建并打包两个固定版本 fixture，提供 SHA-512 integrity，经真实 DSH 包管理器下载和加载。测试不会发布包，也不修改现有 DSH profile。成功后清理临时目录；失败时报告诊断目录。宿主日志可能含本地浏览器令牌，请勿公开上传完整日志。
 

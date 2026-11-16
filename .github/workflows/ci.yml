@@ -8,6 +8,10 @@ on:
 
 jobs:
   build:
+    strategy:
+      fail-fast: false
+      matrix:
+        dsh: [0.2.2-rc.1, 0.2.2-rc.2]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,6 +27,6 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - name: Install real DSH host
-        run: npm install --prefix "$RUNNER_TEMP/dsh-runtime" --no-package-lock @deepseek-ai/dsh@0.2.2-rc.1
+        run: npm install --prefix "$RUNNER_TEMP/dsh-runtime" --no-package-lock @deepseek-ai/dsh@${{ matrix.dsh }}
       - name: Host integration and package installation
         run: DSH_CLI="$RUNNER_TEMP/dsh-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js" pnpm test:host && DSH_CLI="$RUNNER_TEMP/dsh-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js" pnpm test:presets && DSH_CLI="$RUNNER_TEMP/dsh-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js" pnpm test:assistant
