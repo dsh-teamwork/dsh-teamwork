@@ -3,7 +3,8 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn, execFile, execFileSync } from 'node:child_process';
+import { promisify } from 'node:util';
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 const presetsOnly = process.argv.includes('--presets');
@@ -12,6 +13,8 @@ const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const cli = process.env.DSH_CLI;
 if (!cli) throw new Error('Set DSH_CLI to the installed @deepseek-ai/dsh CLI entry (lib/bin.js).');
 const work = await mkdtemp(join(tmpdir(), 'teamwork-host-'));
+const packed = JSON.parse(execFileSync('npm', ['pack', '--json', '--ignore-scripts', '--pack-destination', work, '--cache', join(work, 'npm-cache')], { cwd: repo, encoding: 'utf8' }));
+const pluginArchive = join(work, packed[0].filename);
 const packages = new Map();
 for (const [shortName, patch, service] of [
   ['fixture', "- insert:\n    - id: teamwork-fixture\n      name: '@teamwork-test/fixture'\n", 'teamworkFixture'],
@@ -27,11 +30,21 @@ for (const [shortName, patch, service] of [
   packages.set(shortName, { manifest, tarball, integrity: 'sha512-' + createHash('sha512').update(tarball).digest('base64'), shasum: createHash('sha1').update(tarball).digest('hex') });
 }
 let downloads = 0;
-const registry = createServer((req, res) => {
+const registry = createServer(async (req, res) => {
   const path = decodeURIComponent(req.url ?? '');
   const shortName = path.endsWith('.tgz') ? path.slice(1, -4) : path.split('/').at(-1);
   const entry = packages.get(shortName);
-  if (!entry) { res.writeHead(404); res.end('{}'); return; }
+  if (!entry) {
+    // The installed Teamwork tarball has real dependencies. Keep fixture names
+    // local while resolving those public packages through the normal registry.
+    if (path.startsWith('/@teamwork-test/')) { res.writeHead(404); res.end('{}'); return; }
+    try {
+      const upstream = await fetch(`https://registry.npmjs.org${req.url}`, { signal: AbortSignal.timeout(30000) });
+      res.writeHead(upstream.status, { 'Content-Type': upstream.headers.get('content-type') ?? 'application/json' });
+      res.end(Buffer.from(await upstream.arrayBuffer()));
+    } catch { res.writeHead(502); res.end('{}'); }
+    return;
+  }
   if (path.endsWith('.tgz')) { downloads++; res.writeHead(200, { 'Content-Type': 'application/octet-stream' }); res.end(entry.tarball); return; }
   const port = registry.address().port;
   const version = { ...entry.manifest, dist: { tarball: `http://127.0.0.1:${port}/${shortName}.tgz`, integrity: entry.integrity, shasum: entry.shasum } };
@@ -53,31 +66,37 @@ await writeFile(localArchive, packages.get('fixture').tarball);
 await writeFile(expectedSnapshot, JSON.stringify(snapshot));
 await writeFile(cache, 'invalid-cache-json');
 const patch = join(work, 'patch.yml');
-await writeFile(patch, `- id: plugin-manager\n  config:\n    registry: ${registryUrl}\n    fallbackRegistries: []\n- insert:\n    - id: dsh-teamwork\n      name: ${JSON.stringify(join(repo, 'lib/index.js'))}\n      config:\n        apiEndpoint: http://localhost:3000\n        cachePath: ${JSON.stringify(cache)}\n    - id: teamwork-test\n      name: ${JSON.stringify(join(repo, assistantOnly ? 'tests/host/assistant.mjs' : presetsOnly ? 'tests/host/presets.mjs' : 'tests/host/validate.mjs'))}\n`);
+await writeFile(patch, `- id: plugin-manager\n  config:\n    registry: ${registryUrl}\n    fallbackRegistries: []\n- id: dsh-teamwork\n  config:\n    apiEndpoint: http://localhost:3000\n    cachePath: ${JSON.stringify(cache)}\n- insert:\n    - id: teamwork-test\n      name: ${JSON.stringify(join(repo, assistantOnly ? 'tests/host/assistant.mjs' : presetsOnly ? 'tests/host/presets.mjs' : 'tests/host/validate.mjs'))}\n`);
 // Every cache and store the host writes stays under `work`. pnpm puts its store under
 // $PNPM_HOME before $XDG_DATA_HOME, and CI sets PNPM_HOME and caches that store, so the
 // store directory is named explicitly; otherwise a fixture left there by an earlier run
 // is reused and the tarball is never downloaded.
 const env = { ...process.env, DSH_HOME: home, PNPM_HOME: join(work,'pnpm-home'), XDG_DATA_HOME: join(work, 'data'), XDG_CACHE_HOME: join(work, 'cache'), npm_config_ignore_workspace_root_check: 'true', npm_config_cache: join(work, 'npm-cache'), npm_config_store_dir: join(work, 'pnpm-store'), TEAMWORK_TEST_ARCHIVE: localArchive, TEAMWORK_TEST_CACHE: cache, TEAMWORK_TEST_SNAPSHOT: expectedSnapshot, TEAMWORK_TEST_RESULT: result, TEAMWORK_TEST_CWD: work };
-const child = spawn(process.execPath, [resolve(cli), 'web', '--patch', patch, '--host', '127.0.0.1', '--port', '0', '--no-open'], { env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
-let logs = ''; child.stdout.on('data', d => { logs += d; }); child.stderr.on('data', d => { logs += d; });
+let child, logs = '';
 let success = false;
 try {
+  // Exercise the shipped manifest and normal installation gate, with no exemptions.
+  const installed = await promisify(execFile)(process.execPath, [resolve(cli), 'plugin', '--profile', 'web', 'add', pluginArchive], { env, cwd: work, timeout: 180000, maxBuffer: 4 * 1024 * 1024 });
+  logs += installed.stdout + installed.stderr;
+  const profileManifest = JSON.parse(await readFile(join(home, 'profiles/web/package.json'), 'utf8'));
+  if (!profileManifest.dependencies?.['@dsh-teamwork/dsh-teamwork']) throw new Error('CLI did not install the packaged Teamwork plugin');
+  child = spawn(process.execPath, [resolve(cli), 'web', '--patch', patch, '--host', '127.0.0.1', '--port', '0', '--no-open'], { env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+  child.stdout.on('data', d => { logs += d; }); child.stderr.on('data', d => { logs += d; });
   const deadline = Date.now() + 180000;
   while (Date.now() < deadline) {
     try {
       const report = JSON.parse(await readFile(result, 'utf8'));
       if (!report.passed) throw new Error(report.error);
       if (!presetsOnly && !assistantOnly && !downloads) throw new Error('Package manager did not download the fixture tarball');
-      console.log(JSON.stringify({ ...report, tarballDownloads: downloads }, null, 2)); success = true; break;
+      console.log(JSON.stringify({ ...report, pluginInstalled: true, tarballDownloads: downloads }, null, 2)); success = true; break;
     } catch (error) { if (error.code !== 'ENOENT') throw error; }
     if (child.exitCode !== null) throw new Error(`DSH exited: ${child.exitCode}`);
     await new Promise(resolve => setTimeout(resolve, 500));
   }
   if (!success) throw new Error('Host verification timed out');
 } finally {
-  try { process.kill(-child.pid, 'SIGTERM'); } catch {}
-  if (child.exitCode === null && child.signalCode === null) {
+  try { if (child) process.kill(-child.pid, 'SIGTERM'); } catch {}
+  if (child && child.exitCode === null && child.signalCode === null) {
     await Promise.race([new Promise(resolve => child.once('exit', resolve)), new Promise(resolve => { const timer = setTimeout(resolve, 5000); timer.unref(); })]);
     if (child.exitCode === null && child.signalCode === null) { try { process.kill(-child.pid, 'SIGKILL'); } catch {} }
   }
