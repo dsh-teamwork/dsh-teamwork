@@ -65,7 +65,8 @@ export function Field({ label, hint, error, htmlFor, children }: {
   );
 }
 
-export type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'accent';
+/** `brand` is the team's navy; `signal` is a neutral badge whose dot is amber: something waits on the reader. */
+export type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'accent' | 'brand' | 'signal';
 
 export function Badge({ tone = 'neutral', dot = false, outline = false, title, children }: {
   tone?: Tone;

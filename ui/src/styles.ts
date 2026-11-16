@@ -9,6 +9,11 @@
  *
  *   .twui { --twui-accent: var(--brand); --twui-border: var(--border); }
  *
+ * The fallbacks are DSH Teamwork's own neutral black and white (platform
+ * docs/design.md, "Colour"). Two colours are the team edition's and never come
+ * from the host: `--twui-brand` (navy) marks what belongs to the team, and
+ * `--twui-signal` (amber) marks what needs attention, as a dot only.
+ *
  * Spacing is a 4 px unit. Class names carry the `twui-` prefix so they never
  * meet a host's own.
  */
@@ -18,22 +23,25 @@ export const css = String.raw`
 .twui {
   --twui-font: var(--dsw-font-family, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif);
   --twui-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
-  --twui-fg: var(--dsw-alias-label-primary, #1b2033);
-  --twui-fg-muted: var(--dsw-alias-label-secondary, #565c73);
-  --twui-fg-subtle: var(--dsw-alias-label-tertiary, #868ba0);
-  --twui-bg: var(--dsw-alias-bg-base, #fbfaf8);
+  --twui-fg: var(--dsw-alias-label-primary, #0a0a0b);
+  --twui-fg-muted: var(--dsw-alias-label-secondary, #5c5c66);
+  --twui-fg-subtle: var(--dsw-alias-label-tertiary, #8e8e98);
+  --twui-bg: var(--dsw-alias-bg-base, #ffffff);
   --twui-surface: var(--dsw-alias-bg-layer-1, #ffffff);
-  --twui-surface-muted: var(--dsw-alias-bg-layer-2, #f4f3f0);
-  --twui-hover: var(--dsw-alias-interactive-bg-hover, rgba(27, 32, 51, 0.06));
-  --twui-border: var(--dsw-alias-border-l2, #e7e5e0);
-  --twui-border-strong: var(--dsw-alias-border-l3, #d5d3cd);
+  --twui-surface-muted: var(--dsw-alias-bg-layer-2, #f7f7f8);
+  --twui-hover: var(--dsw-alias-interactive-bg-hover, rgba(10, 10, 11, 0.05));
+  --twui-border: var(--dsw-alias-border-l2, #e8e8ea);
+  --twui-border-strong: var(--dsw-alias-border-l3, #d9d9de);
   --twui-accent: var(--dsw-alias-state-business-primary, #1e2f6d);
-  --twui-primary: var(--dsw-alias-button-primary-fill, #1b2033);
+  --twui-primary: var(--dsw-alias-button-primary-fill, #0a0a0b);
   --twui-primary-fg: var(--dsw-alias-label-primary-inverted, #ffffff);
-  --twui-success: var(--dsw-alias-state-success-primary, #1f8a4c);
-  --twui-warning: var(--dsw-alias-state-warn-primary, #a8650a);
-  --twui-danger: var(--dsw-alias-state-error-primary, #c9372c);
-  --twui-focus: var(--dsw-focus-ring-color, #6a7bd1);
+  --twui-success: var(--dsw-alias-state-success-primary, #15803d);
+  --twui-warning: var(--dsw-alias-state-warn-primary, #a16207);
+  --twui-danger: var(--dsw-alias-state-error-primary, #c2261d);
+  --twui-brand: #1e2f6d;
+  --twui-brand-fg: #ffffff;
+  --twui-signal: #e8a33d;
+  --twui-focus: var(--dsw-focus-ring-color, #3b4f9a);
   --twui-radius-sm: var(--dsw-radius-sm, 6px);
   --twui-radius-md: var(--dsw-radius-md, 8px);
   --twui-radius-lg: var(--dsw-radius-lg, 12px);
@@ -49,21 +57,23 @@ export const css = String.raw`
 }
 @media (prefers-color-scheme: dark) {
   .twui {
-    --twui-fg: var(--dsw-alias-label-primary, #eceef5);
-    --twui-fg-muted: var(--dsw-alias-label-secondary, #b0b5c8);
-    --twui-fg-subtle: var(--dsw-alias-label-tertiary, #82889f);
-    --twui-bg: var(--dsw-alias-bg-base, #131726);
-    --twui-surface: var(--dsw-alias-bg-layer-1, #1a1f33);
-    --twui-surface-muted: var(--dsw-alias-bg-layer-2, #222842);
+    --twui-fg: var(--dsw-alias-label-primary, #f4f4f5);
+    --twui-fg-muted: var(--dsw-alias-label-secondary, #a1a1aa);
+    --twui-fg-subtle: var(--dsw-alias-label-tertiary, #71717a);
+    --twui-bg: var(--dsw-alias-bg-base, #0b0b0c);
+    --twui-surface: var(--dsw-alias-bg-layer-1, #141416);
+    --twui-surface-muted: var(--dsw-alias-bg-layer-2, #1d1d20);
     --twui-hover: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.07));
     --twui-border: var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.09));
     --twui-border-strong: var(--dsw-alias-border-l3, rgba(255, 255, 255, 0.15));
     --twui-accent: var(--dsw-alias-state-business-primary, #a9b6ef);
-    --twui-primary: var(--dsw-alias-button-primary-fill, #eceef5);
-    --twui-primary-fg: var(--dsw-alias-label-primary-inverted, #131726);
-    --twui-success: var(--dsw-alias-state-success-primary, #4cc27f);
-    --twui-warning: var(--dsw-alias-state-warn-primary, #e6a640);
-    --twui-danger: var(--dsw-alias-state-error-primary, #ff7b6e);
+    --twui-primary: var(--dsw-alias-button-primary-fill, #f4f4f5);
+    --twui-primary-fg: var(--dsw-alias-label-primary-inverted, #0b0b0c);
+    --twui-success: var(--dsw-alias-state-success-primary, #6ee7a0);
+    --twui-warning: var(--dsw-alias-state-warn-primary, #f0b44c);
+    --twui-danger: var(--dsw-alias-state-error-primary, #f87171);
+    --twui-brand: #3b4f9a;
+    --twui-signal: #f0b44c;
     --twui-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   }
 }
@@ -110,6 +120,11 @@ export const css = String.raw`
 .twui-badge[data-tone="warning"] { color: var(--twui-warning); background: color-mix(in srgb, var(--twui-warning) 12%, transparent); }
 .twui-badge[data-tone="danger"] { color: var(--twui-danger); background: color-mix(in srgb, var(--twui-danger) 10%, transparent); }
 .twui-badge[data-tone="accent"] { color: var(--twui-accent); background: color-mix(in srgb, var(--twui-accent) 10%, transparent); }
+.twui-badge[data-tone="brand"] { color: var(--twui-brand-fg); background: var(--twui-brand); font-weight: 600; }
+.twui-badge[data-tone="signal"] { color: var(--twui-fg); }
+.twui-badge[data-tone="signal"] .twui-badge-dot { background: var(--twui-signal); }
+/* A lone attention dot beside a label (a button, a status line). */
+.twui-signal-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--twui-signal); flex: none; }
 .twui-badge-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
 .twui-badge[data-outline] { background: transparent; border: 1px solid var(--twui-border-strong); }
 
@@ -281,6 +296,7 @@ export const css = String.raw`
 .twui-footer-identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .twui-footer-name { font-weight: 500; }
 .twui-footer-service { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.twui-footer-service .twui-signal-dot { display: inline-block; margin-right: 6px; vertical-align: 1px; }
 .twui-footer-actions { margin-left: auto; gap: 4px; }
 .twui-footer-actions .twui-badge { background: transparent; font-size: 11px; height: 20px; padding: 0 4px; }
 .twui-footer-actions .twui-btn { font-size: 11px; height: 24px; padding-inline: 6px; }
@@ -294,7 +310,7 @@ export const css = String.raw`
 .twui-resource-toolbar .twui-tab[aria-selected="true"] { background: var(--twui-fill); }
 .twui-resource-list .twui-item { border: 0; border-bottom: 1px solid var(--twui-border); border-radius: 0; box-shadow: none; background: transparent; }
 .twui-resource-list .twui-item-main { padding: 24px 2px; align-items: center; }
-.twui-resource-list .twui-tile { width: 42px; height: 42px; color: var(--twui-accent); align-self: start; }
+.twui-resource-list .twui-tile { width: 42px; height: 42px; color: var(--twui-fg-muted); align-self: start; }
 .twui-resource-list .twui-item-subtitle { font: inherit; font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--twui-fill); color: var(--twui-fg-muted); }
 .twui-resource-list .twui-item-tags { margin-top: 8px; }
 .twui-resource-list .twui-item-title { font-size: 15px; font-weight: 500; }
