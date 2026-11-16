@@ -28,8 +28,8 @@ Nothing is published yet: the plugin's browser bundle compiles it in.
   The full list is at the top of `src/styles.ts`. The fallbacks are DSH
   Teamwork's neutral black and white. `--twui-brand` (navy, the team's own)
   and `--twui-signal` (amber, something waits on the reader) never come from
-  the host: a `brand` badge marks an admin or the team edition, and a `signal`
-  dot sits beside what needs attention.
+  the host: a `brand` badge marks an admin or the team edition, and a
+  `twui-signal-dot` sits beside what needs attention.
 
 ## Components
 
@@ -44,7 +44,7 @@ Nothing is published yet: the plugin's browser bundle compiles it in.
 | `Confirm` | An inline confirmation for an action with consequences, in place of a modal. |
 | `EmptyState` | What an empty list means and, when there is one, what to do about it. |
 | `Button` | `primary`, `secondary`, `ghost`, `danger`; sizes `sm`, `md`, `lg`; a leading or trailing `Icon`; `busy` shows a spinner and blocks a second click. |
-| `Badge` | A state or a label; `tone` (including `brand` and `signal`) and an optional `dot`. |
+| `Badge` | A state or a label; `tone` (including `brand`) and an optional `dot`. |
 | `Tabs` | A row of tabs; the caller owns the selection. |
 | `Field`, `Input` | A labelled input with a hint or an error under it. |
 | `Select` | A themed button/listbox dropdown, with keyboard selection, disabled options, outside dismissal and focus restoration. `onActivate` makes the selected label a separate primary action beside the popup arrow. No native select popup. |
