@@ -1,7 +1,7 @@
 {
   "name": "@dsh-teamwork/dsh-teamwork",
-  "version": "0.8.3",
-  "description": "Team collaboration plugin for DeepSeek Harness",
+  "version": "0.8.4",
+  "description": "Shared team models, agent presets, and approved plugins for DeepSeek Harness",
   "icon": "icon.svg",
   "license": "Apache-2.0",
   "repository": {
@@ -19,7 +19,11 @@
     "icon.svg",
     "cordis.patch.yml",
     "LICENSE",
-    "NOTICE"
+    "NOTICE",
+    "README.zh-CN.md",
+    "docs",
+    "assets/readme",
+    "screenshots.json"
   ],
   "scripts": {
     "build": "tsc && node scripts/build-web.mjs",
@@ -96,5 +100,20 @@
     },
     "./client": "./lib/web/client.js",
     "./package.json": "./package.json"
-  }
+  },
+  "homepage": "https://www.dshteamwork.com",
+  "bugs": {
+    "url": "https://github.com/dsh-teamwork/dsh-teamwork/issues"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh-plugin",
+    "teamwork",
+    "collaboration",
+    "team-configuration",
+    "agent-presets",
+    "plugin-sharing",
+    "usage",
+    "budgets"
+  ]
 }
