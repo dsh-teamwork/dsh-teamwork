@@ -71,7 +71,10 @@ await writeFile(patch, `- id: plugin-manager\n  config:\n    registry: ${registr
 // $PNPM_HOME before $XDG_DATA_HOME, and CI sets PNPM_HOME and caches that store, so the
 // store directory is named explicitly; otherwise a fixture left there by an earlier run
 // is reused and the tarball is never downloaded.
-const env = { ...process.env, DSH_HOME: home, PNPM_HOME: join(work,'pnpm-home'), XDG_DATA_HOME: join(work, 'data'), XDG_CACHE_HOME: join(work, 'cache'), npm_config_ignore_workspace_root_check: 'true', npm_config_cache: join(work, 'npm-cache'), npm_config_store_dir: join(work, 'pnpm-store'), TEAMWORK_TEST_ARCHIVE: localArchive, TEAMWORK_TEST_CACHE: cache, TEAMWORK_TEST_SNAPSHOT: expectedSnapshot, TEAMWORK_TEST_RESULT: result, TEAMWORK_TEST_CWD: work };
+// The plugin speaks the account's language, and the system's before it knows the account
+// (src/messages.ts). These suites assert the host's Chinese text, so the host runs in Chinese
+// whatever the runner's own language is.
+const env = { ...process.env, LANG: 'zh_CN.UTF-8', LC_ALL: 'zh_CN.UTF-8', DSH_HOME: home, PNPM_HOME: join(work,'pnpm-home'), XDG_DATA_HOME: join(work, 'data'), XDG_CACHE_HOME: join(work, 'cache'), npm_config_ignore_workspace_root_check: 'true', npm_config_cache: join(work, 'npm-cache'), npm_config_store_dir: join(work, 'pnpm-store'), TEAMWORK_TEST_ARCHIVE: localArchive, TEAMWORK_TEST_CACHE: cache, TEAMWORK_TEST_SNAPSHOT: expectedSnapshot, TEAMWORK_TEST_RESULT: result, TEAMWORK_TEST_CWD: work };
 let child, logs = '';
 let success = false;
 try {
