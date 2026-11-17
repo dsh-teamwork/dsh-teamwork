@@ -59,3 +59,10 @@ test('a step names only the first line of what it works on, and nothing for argu
   expect(stepTarget(JSON.stringify({content:'file body'}))).toBe('');
   expect(stepTarget('not json')).toBe('');
 });
+
+test('leaves the task empty for a message without text, so the phone titles it in its own language',()=>{
+  const image={type:'user/message',data:{source:{kind:'user'},content:[{type:'image'}]}} as never;
+  expect(taskProjection.apply(taskProjection.init(),image).task).toBe('');
+  const text={type:'user/message',data:{source:{kind:'user'},content:[{type:'text',text:'Fix the build'}]}} as never;
+  expect(taskProjection.apply(taskProjection.init(),text).task).toBe('Fix the build');
+});

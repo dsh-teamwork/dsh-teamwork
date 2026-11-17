@@ -10,7 +10,8 @@ export const taskProjection = {
   apply:(state,event)=>{
     if(event.type==='user/message' && event.data.source.kind==='user') {
       const text=event.data.content.filter(b=>b.type==='text').map(b=>b.text).join('\n');
-      return {...state,task:text.slice(0,240) || 'non-text task (see the session history)'};
+      // Empty for a message with no text: the phone app titles such a session in its own language.
+      return {...state,task:text.slice(0,240)};
     }
     if(event.type==='turn/start') return {...state,turn:event.data.turn,outcome:'running',failureCode:null};
     if(event.type==='turn/end') return {...state,outcome:event.data.reason.kind,failureCode:event.data.reason.kind==='error' ? event.data.reason.error.code ?? 'UNKNOWN' : null};
