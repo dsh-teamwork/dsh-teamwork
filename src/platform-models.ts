@@ -21,7 +21,7 @@ export function platformAdapter(client: TeamworkClient) {
         if (data?.contextWindow === undefined) return [];
         return [{
           id: c.id, name: c.name, provider: platformProvider, api: 'openai-completions' as const, baseUrl,
-          reasoning: false, input: ['text' as const], contextWindow: data.contextWindow, maxTokens: data.maxTokens ?? Math.min(4096, data.contextWindow),
+          reasoning: false, input: 'vision' in data && data.vision ? ['text' as const, 'image' as const] : ['text' as const], contextWindow: data.contextWindow, maxTokens: data.maxTokens ?? Math.min(4096, data.contextWindow),
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         }];
       });

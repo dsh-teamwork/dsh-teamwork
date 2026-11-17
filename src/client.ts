@@ -9,7 +9,7 @@ const common = { builtin: z.literal('team-assistant').optional(), id: z.string()
 const route = { provider: z.string().min(1), model: z.string().min(1), contextWindow: z.number().int().positive().max(10000000).optional(), maxTokens: z.number().int().positive().max(10000000).optional() };
 const pluginDataSchema = z.object({ artifactId: z.string().regex(/^[A-Za-z0-9_-]{1,32}$/).optional(), sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(), package: z.string().regex(/^(?:@[a-z0-9-]+\/)?[a-z0-9][a-z0-9._-]*$/), version: z.string().regex(/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/), providesTools: z.array(z.string().min(1)).optional(), description: z.string().default('') });
 const teamSchema = z.object({ teamId: z.string().min(1), teamName: z.string(), role: z.enum(['admin', 'member']), pluginVersions:z.array(z.object({configId:z.string(),name:z.string(),data:pluginDataSchema})).optional(), configs: z.array(z.discriminatedUnion('kind', [
-  z.object({ ...common, kind: z.literal('model'), data: z.object(route) }),
+  z.object({ ...common, kind: z.literal('model'), data: z.object({ ...route, vision: z.boolean().optional() }) }),
   z.object({ ...common, kind: z.literal('preset'), data: z.object({
     ...route, inheritModel: z.boolean().optional(), provider: route.provider.optional(), model: route.model.optional(), modelConfigId: z.string().min(1).optional(),
     description: z.string().optional(), instructions: z.string().optional(), outputDescription: z.string().optional(),
