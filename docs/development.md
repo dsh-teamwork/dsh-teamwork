@@ -159,6 +159,17 @@ roster instead of a safety code. The relay's `members` list prunes the roster.
 after `session/create` and `session/list`: a member reaches only sessions they
 started, sees only their events, and answers only questions they were shown.
 
+`src/pin-lock.ts` is the PIN lock, on a shared DSH and on a personal computer
+alike (`<cache>.pins.json`, mode 0600): one four-digit PIN per member (`owner`
+on a personal computer), kept as scrypt, and a failure count that survives a
+restart. Once a channel is authorized, `PhoneSecurity` tells the phone
+`pinRequired` (with `set` when the member has none yet), answers `unlock` and
+`setPin` with `unlocked`, `pinWrong`, `pinLocked` or `pinInvalid`, and refuses
+every call (`teamwork/locked`) and stream until unlocked, and again after
+fifteen minutes with nothing sent. Five wrong PINs lock the member on every
+device until `/teamwork share unlock <email>` or `/teamwork pin reset` clears
+it. Signing out, entering or leaving shared mode clears every PIN.
+
 ## Phone transport
 
 The hosted relay is optional and discovered through `GET /api/relay`. The host

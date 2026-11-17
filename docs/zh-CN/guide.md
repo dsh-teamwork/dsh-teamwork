@@ -60,6 +60,8 @@
 | `/teamwork share status` | 查看共享 DSH 的名称、团队和 token 状态。 |
 | `/teamwork share invite <email>` | 生成一次性邀请链接（一天内有效），让名单中的一位成员把设备配对到这台共享 DSH。 |
 | `/teamwork share members` | 查看可访问这台共享 DSH 的成员及其设备。 |
+| `/teamwork share unlock <email>` | 清除某个成员在这台共享 DSH 上的 PIN 和锁定，对方下次连接时重新设置。 |
+| `/teamwork pin reset` | 清除你自己手机在这台计算机上的 PIN 和锁定，再从手机设置新的。 |
 | `/teamwork status` | 查看登录、同步和最近错误。 |
 | `/teamwork sync` | 刷新团队资源。 |
 | `/teamwork list` | 列出配置 ID。 |

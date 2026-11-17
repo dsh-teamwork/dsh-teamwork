@@ -6,6 +6,7 @@ import { dirname } from 'node:path';
 import { z } from 'zod';
 import { SecureChannel, base64, deviceIdentity, type Identity, type SecurePacket } from './secure-channel.js';
 import { forwardedSchema, type Forwarded } from './bridge.js';
+import { IDLE_MS, PIN, type PinStore } from './pin-lock.js';
 
 const fileSchema = z.object({
   seed: z.string(),
@@ -99,6 +100,9 @@ interface Link {
   pending: boolean;
   /** A shared DSH's joining member (src/shared-roster.ts): the invite in the channel stands in for the safety code. */
   joining?: string;
+  /** Whether the member gave their PIN on this channel (src/pin-lock.ts), and when it last carried their work. */
+  unlocked?: boolean;
+  lastActive?: number;
 }
 export class PhoneSecurity {
   private links = new Map<string, Link>();
@@ -121,6 +125,13 @@ export class PhoneSecurity {
        */
       joining?(pairingId: string): string | undefined;
       admit?(input: { pairingId: string; userId: string; inviteId: string; secret: string; name: string }): Promise<boolean>;
+      /**
+       * The PIN lock: every member's PINs, and whose PIN a pairing answers to (its member on a shared DSH, `owner` on a
+       * personal computer). Without them no channel is locked.
+       */
+      pins?: PinStore;
+      pinMember?(pairingId: string): Promise<string | undefined>;
+      now?(): number;
     },
   ) {}
   offerCode(expiresAt: string) {
@@ -193,6 +204,7 @@ export class PhoneSecurity {
             link.authorized = true;
             channel.verified();
             channel.send({ t: 'secureReady' });
+            void this.askPin(frame.pairingId, link);
           } else if (!link.joining) channel.send({ t: 'verify', code });
           this.options.changed();
         },
@@ -223,6 +235,7 @@ export class PhoneSecurity {
             link.pending = false;
             channel.verified();
             channel.send({ t: 'pairAccepted' });
+            void this.askPin(frame.pairingId, link);
             this.options.changed();
             return;
           }
@@ -242,6 +255,7 @@ export class PhoneSecurity {
             timer.unref?.();
             return;
           }
+          if (body?.t === 'unlock' || body?.t === 'setPin') return this.pinMessage(frame.pairingId, link, body);
           const inner = forwardedSchema.safeParse(value);
           if (
             !inner.success ||
@@ -249,6 +263,7 @@ export class PhoneSecurity {
             !['call', 'mux'].includes(inner.data.t)
           )
             throw new Error('invalid_secure_message');
+          if (!(await this.open(frame.pairingId, link))) return this.refuseLocked(link, inner.data);
           this.options.forward(inner.data);
         },
         closed: (error) => {
@@ -301,6 +316,7 @@ export class PhoneSecurity {
     link.pending = false;
     link.channel.verified();
     link.channel.send({ t: 'pairAccepted' });
+    void this.askPin(id, link);
     this.offer = undefined;
     this.options.changed();
   }
@@ -326,6 +342,56 @@ export class PhoneSecurity {
       this.links.get(id)?.channel.close();
     }
   }
+  private now() { return this.options.now?.() ?? Date.now(); }
+
+  /** Whether a channel may carry the member's work now: unlocked, and not idle past the limit. */
+  private async open(pairingId: string, link: Link) {
+    if (!this.options.pins) return true;
+    if (link.unlocked && this.now() - (link.lastActive ?? 0) <= IDLE_MS) { link.lastActive = this.now(); return true; }
+    if (link.unlocked) { link.unlocked = false; await this.askPin(pairingId, link); }
+    return false;
+  }
+
+  /** Tells the phone a PIN is needed: to set one, to enter it, or that the member is locked out. */
+  private async askPin(pairingId: string, link: Link) {
+    const { pins } = this.options;
+    if (!pins) return;
+    try {
+      const member = await this.options.pinMember?.(pairingId);
+      if (!member) return;
+      link.channel.send(await pins.locked(member) ? { t: 'pinLocked' } : { t: 'pinRequired', set: !(await pins.has(member)) });
+    } catch (error) { this.options.error(error as Error); }
+  }
+
+  /** `unlock` with the PIN, or `setPin`: the first PIN, or a new one with the old. */
+  private async pinMessage(pairingId: string, link: Link, body: Record<string, unknown>) {
+    const pins = this.options.pins, member = await this.options.pinMember?.(pairingId);
+    if (!pins || !member) return;
+    const pin = typeof body.pin === 'string' ? body.pin : '';
+    if (body.t === 'setPin' && !PIN.test(pin)) return link.channel.send({ t: 'pinInvalid' });
+    if (body.t === 'setPin' && !(await pins.has(member))) {
+      await pins.set(member, pin);
+    } else {
+      const result = await pins.check(member, body.t === 'setPin' ? (typeof body.old === 'string' ? body.old : '') : pin);
+      if (!result.ok) {
+        link.unlocked = false;
+        if (result.reason === 'unset') return link.channel.send({ t: 'pinRequired', set: true });
+        return link.channel.send(result.reason === 'wrong' ? { t: 'pinWrong', left: result.left } : { t: 'pinLocked' });
+      }
+      if (body.t === 'setPin') await pins.set(member, pin);
+    }
+    link.unlocked = true;
+    link.lastActive = this.now();
+    link.channel.send({ t: 'unlocked' });
+  }
+
+  /** What a locked channel answers its member's work with: the call fails, the stream ends, and nothing reaches DSH. */
+  private refuseLocked(link: Link, frame: Forwarded) {
+    if (frame.t === 'call') link.channel.send({ t: 'result', pairingId: frame.pairingId, id: frame.id, status: 200, body: { result: { ok: false, error: { code: 'teamwork/locked' } } } });
+    const mux = frame.t === 'mux' ? (frame.body as { type?: string; streamId?: string } | null) : null;
+    if (mux?.type === 'open' && mux.streamId) link.channel.send({ t: 'mux', pairingId: frame.pairingId, body: { type: 'error', streamId: mux.streamId, error: { code: 'locked', message: 'locked', details: {} } } });
+  }
+
   reset() {
     this.epoch++;
     this.offer = undefined;

@@ -117,6 +117,8 @@ Run these in DSH's command input, not your shell. IDs come from `/teamwork list`
 | `/teamwork share status` | Show the shared DSH's name, team and host token. |
 | `/teamwork share invite <email>` | A single-use link, valid a day, that pairs one listed member's device with this shared DSH. |
 | `/teamwork share members` | The members who may reach this shared DSH, and their devices. |
+| `/teamwork share unlock <email>` | Clear a member's PIN and lock on this shared DSH; they set a new PIN next time. |
+| `/teamwork pin reset` | Clear your own phone PIN and lock on this computer; set a new one from your phone. |
 | `/teamwork status` | Show authentication, sync status and recent errors. |
 | `/teamwork sync` | Refresh the team's resources. |
 | `/teamwork list` | List configuration IDs. |

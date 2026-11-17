@@ -27,6 +27,7 @@ import { watchTokenFile } from './token-file.js';
 import { SharedMode, sharedKeyPath } from './shared-mode.js';
 import { SharedRoster, sharedRosterPath } from './shared-roster.js';
 import { OwnerFilter } from './shared-owner.js';
+import { PinStore, pinsPath } from './pin-lock.js';
 import type { PanelPhone } from './panel.js';
 import { panelLocale, say, setLocale, speaking } from './messages.js';
 export const name = 'dsh-teamwork';
@@ -168,6 +169,8 @@ export async function apply(ctx: Context, config: Config) {
   let launchUrl: (() => string) | undefined;
   // A shared DSH's own roster and who owns each session (src/shared-roster.ts, src/shared-owner.ts).
   const roster = new SharedRoster(sharedRosterPath(config.cachePath));
+  // The PIN lock (src/pin-lock.ts): per member on a shared DSH, the one `owner` on a personal computer.
+  const pins = new PinStore(pinsPath(config.cachePath));
   const owners = new OwnerFilter(roster, (pairingId) => roster.memberOf(pairingId));
   /** Who the server lets reach this shared DSH, as the relay last said; and members whose handsets wait to join. */
   let sharedMembers: SharedMember[] = [];
@@ -252,6 +255,8 @@ export async function apply(ctx: Context, config: Config) {
     changed: () => {},
     error: error => ctx.logger.warn('phone security: %s', error.message),
     joining: (pairingId) => shared?.enabled ? joining.get(pairingId) : undefined,
+    pins,
+    pinMember: async (pairingId) => shared?.enabled ? roster.memberOf(pairingId) : 'owner',
     admit: async (input) => {
       if (!sharedMembers.some((m) => m.userId === input.userId)) return false;
       const admitted = await roster.accept({ inviteId: input.inviteId, secret: input.secret, userId: input.userId, pairingId: input.pairingId, deviceName: input.name });
@@ -319,13 +324,13 @@ export async function apply(ctx: Context, config: Config) {
   const shareEnable = async (key: string) => {
     if (!shared) throw new Error(say('auth.hostManaged'));
     pendingInstalls.clear(); stopCallback();
-    if (!shared.enabled && client.authenticated()) { await client.logout(); setLocale(null); await overlay.apply(); }
+    if (!shared.enabled && client.authenticated()) { await client.logout(); setLocale(null); await overlay.apply(); await pins.reset(); }
     await shared.enable(key);
     relay.refresh();
   };
   const shareDisable = async () => {
     if (!shared?.enabled) throw new Error(say('shared.off'));
-    await shared.disable(); await roster.clear(); sharedMembers = []; joining.clear(); relay.refresh();
+    await shared.disable(); await roster.clear(); await pins.reset(); sharedMembers = []; joining.clear(); relay.refresh();
   };
   /** `/teamwork share invite <email>`: a single-use link for one member the server lists, to hand over outside it. */
   const shareInvite = async (email: string) => {
@@ -346,7 +351,7 @@ export async function apply(ctx: Context, config: Config) {
     return { url: client.beginLogin(callback?.uri), automatic: callback !== undefined };
   };
   const restore = async () => { await client.restore(); await overlay.apply(client.current()); relay.refresh(); };
-  const logout = async () => { hostManaged(); pendingInstalls.clear(); stopCallback(); try { await client.logout(); } finally { setLocale(null); await overlay.apply(); relay.refresh(); } };
+  const logout = async () => { hostManaged(); pendingInstalls.clear(); stopCallback(); try { await client.logout(); await pins.reset(); } finally { setLocale(null); await overlay.apply(); relay.refresh(); } };
   ctx.provide('dshTeamwork', {
     beginLogin, completeLogin: authorize,
     sync: () => configSync.sync(),
@@ -531,7 +536,7 @@ export async function apply(ctx: Context, config: Config) {
   ctx.inject(['commands'], (child) => {
     child.effect(() => child.commands.register({
       name: 'teamwork', description: 'Team sign-in, configuration sync and model selection',
-      input: { hint: 'login | authorize <code> | share enable <key> | share disable | share status | share invite <email> | share members | sync | status | session [check] | continue <instruction> | cancel | retry [confirm] | list | tools | plugins [presetId] | info [id] | new <id> | use <id> | install <id> confirm | logout' },
+      input: { hint: 'login | authorize <code> | share enable <key> | share disable | share status | share invite <email> | share members | share unlock <email> | pin reset | sync | status | session [check] | continue <instruction> | cancel | retry [confirm] | list | tools | plugins [presetId] | info [id] | new <id> | use <id> | install <id> confirm | logout' },
       handler: async ({ agent, rawInput }) => {
         const [action, requestedId, confirmation] = rawInput.trim().split(/\s+/);
         const [id,pinVersion]=requestedId?.split('@') ?? [];
@@ -562,6 +567,12 @@ export async function apply(ctx: Context, config: Config) {
               const invite = await shareInvite(confirmation ?? '');
               return { kind: 'success', text: [`Invite for ${confirmation}, single use, valid until ${invite.expiresAt}:`, invite.link, 'Hand it over yourself, in person or through a channel your team trusts, never through the Teamwork server. Whoever opens it signed in as that member pairs a device with this DSH.'].join('\n') };
             }
+            if (requestedId === 'unlock') {
+              const member = sharedMembers.find((m) => m.email?.toLowerCase() === (confirmation ?? '').trim().toLowerCase());
+              if (!shared?.enabled || !member) throw new Error(`${confirmation ?? ''} is not on this shared DSH's access list.`);
+              await pins.clear(member.userId);
+              return { kind: 'success', text: `${confirmation}'s PIN and lock are cleared; they set a new PIN on their next connection.` };
+            }
             if (requestedId === 'members') {
               const devices = await roster.devices();
               const rows = sharedMembers.map((m) => `${m.email ?? m.userId}: ${Object.values(devices).filter((d) => d.userId === m.userId).map((d) => d.name).join(', ') || 'no device yet'}`);
@@ -574,6 +585,11 @@ export async function apply(ctx: Context, config: Config) {
             await configSync.sync();
             const synced = client.current(), problems = [...new Set(allConfigs(synced).filter(c => c.kind === 'model').flatMap(c => modelLimitProblem(synced!, c) ?? []))];
             return { kind: 'success', text: ['Team configuration synced; your local configuration is unchanged.', ...problems].join('\n') };
+          }
+          if (action === 'pin' && requestedId === 'reset') {
+            if (shared?.enabled) throw new Error('On a shared DSH, clear a member\'s PIN with /teamwork share unlock <email>.');
+            await pins.clear('owner');
+            return { kind: 'success', text: 'Your phone PIN and its lock are cleared; set a new PIN on your phone\'s next connection.' };
           }
           if (action === 'logout') { await logout(); return { kind: 'success', text: 'Signed out, and the team configuration removed.' }; }
           if (action === 'status') { const status = configSync.status(); return { kind: 'success', text: [`Signed in: ${status.authenticated ? 'yes' : 'no (a cache is not a valid sign-in)'}`, `Auto sync: ${status.autoSync ? 'on' : 'off'}`, `Teams: ${status.teams.length ? status.teams.join(', ') : 'none'} · configurations: ${status.configCount}`, `Last successful sync: ${status.lastSuccess ?? 'not since this start'}`, status.syncing ? 'Syncing' : '', status.lastError ?? ''].filter(Boolean).join('\n') }; }
