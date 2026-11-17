@@ -6,10 +6,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pinnedPlugin } from '../src/client.js';
 import type { PresetContext } from '../src/preset-context.js';
+import { setLocale } from '../src/messages.js';
+
+// The host speaks the account's language; these cases pin English.
+setLocale('en');
 const preset: PresetContext = {teamId:'t',id:'p',name:'Review',version:1,description:'Review code',instructions:'Provide a diff',outputDescription:'List issues',systemPrompt:'Literal {{text}}',requiredTools:['Read'],optionalTools:['Shell']};
 test('native session rules reject started and running conversations, allow blank ones', () => {
   expect(()=>assertBlank({lastTurn:0,openTurnStartSeq:null})).not.toThrow();
-  for (const boundary of [{lastTurn:1,openTurnStartSeq:null},{lastTurn:0,openTurnStartSeq:0}]) expect(()=>assertBlank(boundary)).toThrow('新建会话');
+  for (const boundary of [{lastTurn:1,openTurnStartSeq:null},{lastTurn:0,openTurnStartSeq:0}]) expect(()=>assertBlank(boundary)).toThrow('new session');
 });
 test('tool checks distinguish registration, conditions, absence, and unavailable host inspection', () => {
   expect(toolReport(preset, name=>name==='Read'?'available':'conditional')).toEqual([{name:'Read',required:true,state:'available'},{name:'Shell',required:false,state:'conditional'}]);

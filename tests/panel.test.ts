@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { panelRoutes, ROUTE_PREFIX, type PanelOps } from '../src/panel.js';
+import { setLocale } from '../src/messages.js';
 
 const calls: Array<[string, unknown[]]> = [];
 const ops: PanelOps = {
-  quota: async () => ({ remaining: null, state: "unlimited", resetAt: null, tokenLimited: false, exhausted: false }),
+  summary: async () => ({ budget: { remaining: null, state: "unlimited", resetAt: null, tokenLimited: false, exhausted: false }, pendingReviews: 0 }),
   profile: async () => ({ id: 'user', email: 'user@example.com', name: null, image: null, locale: 'en' }),
   updateProfile: async input => { calls.push(['profile', [input]]); return { id: 'user', email: 'user@example.com', image: null, ...input }; },
   state: async (sessionId) => { calls.push(['state', [sessionId]]); return { authenticated: false } as never; },
@@ -29,7 +30,7 @@ describe('panel routes', () => {
     expect(calls).toHaveLength(1);
   });
   it('registers POST-only routes under /api/teamwork', () => {
-    expect([...routes.keys()].sort()).toEqual(['authorize', 'decide-phone', 'install', 'login', 'logout', 'pair-phone', 'profile', 'quota', 'revoke-phone', 'server', 'state', 'sync', 'update-profile', 'use'].map((n) => `${ROUTE_PREFIX}/${n}`));
+    expect([...routes.keys()].sort()).toEqual(['authorize', 'decide-phone', 'install', 'login', 'logout', 'pair-phone', 'profile', 'revoke-phone', 'server', 'state', 'summary', 'sync', 'update-profile', 'use'].map((n) => `${ROUTE_PREFIX}/${n}`));
     for (const route of routes.values()) expect(route.methods).toEqual(['POST']);
   });
 
@@ -67,5 +68,13 @@ describe('panel routes', () => {
 
   it('never caches an answer', async () => {
     expect((await post('login')).headers.get('cache-control')).toBe('no-store');
+  });
+  it('words its own refusals in the account’s language', async () => {
+    setLocale('zh-CN');
+    expect(await (await post('state', '{')).json()).toEqual({ error: '请求格式无效。' });
+    expect(await (await post('authorize', {})).json()).toEqual({ error: '缺少授权码。' });
+    setLocale('en');
+    expect(await (await post('state', '{')).json()).toEqual({ error: 'The request could not be read.' });
+    expect(await (await post('authorize', {})).json()).toEqual({ error: 'Authorization code is missing.' });
   });
 });

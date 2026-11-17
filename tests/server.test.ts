@@ -3,6 +3,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ServerChoice, serverAddress, TeamworkClient } from '../src/client.js';
+import { setLocale } from '../src/messages.js';
+
+// The host speaks the account's language; these cases pin English.
+setLocale('en');
 
 describe('the server a member signs in to', () => {
   it('accepts https anywhere and plain http only on this machine', () => {
@@ -10,8 +14,8 @@ describe('the server a member signs in to', () => {
     expect(serverAddress(' https://teamwork.example.com/base/ ')).toBe('https://teamwork.example.com/base');
     expect(serverAddress('http://localhost:3800')).toBe('http://localhost:3800');
     expect(() => serverAddress('http://teamwork.example.com')).toThrow('https');
-    expect(() => serverAddress('https://dshteamwork.com/?x=1')).toThrow('查询参数');
-    expect(() => serverAddress('dshteamwork.com')).toThrow('无效');
+    expect(() => serverAddress('https://dshteamwork.com/?x=1')).toThrow('query');
+    expect(() => serverAddress('dshteamwork.com')).toThrow('not a server address');
   });
 
   it('signs out and drops the cache when it changes, since a token belongs to one server', async () => {

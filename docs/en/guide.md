@@ -46,11 +46,14 @@ phone pairing to that team. A person may belong to several teams.
 
 Create or join teams in the web console. New teams receive a built-in assistant;
 existing teams are unchanged. Team renaming does not automatically rename the
-assistant. Use its preset with a working model and ask it to inspect real state.
+assistant. It leads the panel's presets: **Ask the assistant** starts a session
+with it. Give it a working model and ask it to inspect real state. While an
+administrator browses a team, the panel's header shows how many submissions wait
+for review and opens them in the console.
 
 ## Choose a model or preset
 
-Use **New session** for a team preset. **Use in current session** works only
+Use **New session** for a team preset. **Use in this blank session** works only
 before the conversation begins. Started sessions keep their preset generation;
 use a new session to adopt an update. A restart cannot promise to reconstruct a
 deleted old preset: a version mismatch blocks team inference and gives recovery

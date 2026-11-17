@@ -11,6 +11,7 @@
 
 import { createServer, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { say } from './messages.js';
 
 export const CALLBACK_PATH = '/callback';
 const CALLBACK_TTL_MS = 10 * 60_000;
@@ -32,8 +33,8 @@ export async function listenForCode(redeem: (code: string) => Promise<void>, ttl
     const attempt = queue.then(async () => { if (!redeemed) { await redeem(code); redeemed = true; } });
     queue = attempt.catch(() => {});
     attempt.then(
-      () => { page(response, 200, '已登录 DSH Teamwork', '可以关闭这个页面，回到 DSH。'); close(); },
-      (error: Error) => page(response, 400, '授权没有完成', `${error.message || '授权失败'}。请回到 DSH 重新运行 /teamwork login，或把网页上显示的那一行粘贴到 DSH。`),
+      () => { page(response, 200, say('callback.doneTitle'), say('callback.doneBody')); close(); },
+      (error: Error) => page(response, 400, say('callback.failTitle'), say('callback.failBody', { reason: error.message || say('callback.failReason') })),
     );
   });
   const close = () => {

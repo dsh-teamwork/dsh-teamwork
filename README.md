@@ -17,8 +17,10 @@ The team assistant helps with sharing, usage and administration in conversation.
 
 ![Teamwork panel in a real DSH host, with demonstration team resources](https://raw.githubusercontent.com/dsh-teamwork/dsh-teamwork/main/assets/readme/teamwork-panel.png)
 
-The plugin panel currently uses Simplified Chinese. The web console supports
-English and Simplified Chinese. Screenshots use a local demonstration team.
+The plugin panel and the web console speak English and Simplified Chinese:
+the panel follows the language of your Teamwork account (**Account** in the
+panel). Terminal `/teamwork` output is still Chinese. Screenshots use a local
+demonstration team.
 
 ## What you can do
 

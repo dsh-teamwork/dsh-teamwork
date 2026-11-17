@@ -1,6 +1,10 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { ConfigSync } from '../src/config-sync.js';
 import type { TeamworkClient, TeamOverlay } from '../src/client.js';
+import { setLocale } from '../src/messages.js';
+
+// The host speaks the account's language; these cases pin English.
+setLocale('en');
 function fixture() {
   let authenticated = true;
   const client = { authenticated: () => authenticated, current: () => undefined, sync: vi.fn(async () => {}) };
@@ -31,6 +35,6 @@ test('failure still reconciles permissions, hides transport details, and recover
   expect(f.sync.status().lastError).not.toContain('sensitive');
   await f.sync.sync(); expect(f.sync.status().lastError).toBeUndefined();
   f.revoke(); f.client.sync.mockRejectedValueOnce(new Error('403'));
-  await expect(f.sync.sync()).rejects.toThrow(); expect(f.sync.status().lastError).toContain('重新登录');
+  await expect(f.sync.sync()).rejects.toThrow(); expect(f.sync.status().lastError).toContain('Sign in again');
   await f.sync.stop();
 });

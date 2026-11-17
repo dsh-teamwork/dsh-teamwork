@@ -7,14 +7,14 @@ import { api } from '../../src/web/api.js';
 import type { PanelState } from '../../src/panel.js';
 import type { Host } from '../../src/web/host.js';
 
-vi.mock('../../src/web/api.js', () => ({ api: { quota: vi.fn().mockRejectedValue(new Error("Unavailable")), state: vi.fn(), profile: vi.fn(), updateProfile: vi.fn(), sync: vi.fn(), use: vi.fn(), login: vi.fn(), authorize: vi.fn(), pairPhone: vi.fn(), decidePhone: vi.fn(), revokePhone: vi.fn() } }));
+vi.mock('../../src/web/api.js', async (original) => ({ HostUnreachable: (await original<typeof import('../../src/web/api.js')>()).HostUnreachable, api: { summary: vi.fn().mockRejectedValue(new Error("Unavailable")), state: vi.fn(), profile: vi.fn(), updateProfile: vi.fn(), sync: vi.fn(), use: vi.fn(), login: vi.fn(), authorize: vi.fn(), pairPhone: vi.fn(), decidePhone: vi.fn(), revokePhone: vi.fn() } }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const profile = { id: 'user', name: 'Ada', email: 'ada@example.com', image: null, locale: 'zh-CN' as const };
 const state: PanelState = {
-  authRevision: 0, authenticated: true, server: 'https://example.com', defaultServer: 'https://example.com',
+  locale: 'zh-CN', authRevision: 0, authenticated: true, server: 'https://example.com', defaultServer: 'https://example.com',
   sync: { auto: true, running: false }, relay: 'connected', phones: [], session: null,
   teams: [{ id: 'a', name: 'Alpha', role: 'admin', consoleUrl: 'https://example.com/teams/a' }, { id: 'b', name: 'Beta', role: 'member', consoleUrl: 'https://example.com/teams/b' }],
-  presets: ['a', 'b'].map(id => ({ id: `preset-${id}`, teamId: id, teamName: id, name: `Preset ${id}`, version: 1, description: 'Review', model: 'Model', modelAvailable: true, tools: [], plugins: [] })),
+  presets: ['a', 'b'].map(id => ({ id: `preset-${id}`, teamId: id, teamName: id, name: `Preset ${id}`, version: 1, description: 'Review', model: 'Model', assistant: false, modelAvailable: true, tools: [], plugins: [] })),
   models: [], plugins: [],
 };
 const host: Host = { sessions: { list: { getSnapshot: () => ({ byId: {} }), subscribe: () => () => {} } }, layout: { selectPanel: vi.fn() }, uiWorkspace: { startSession: vi.fn() } };
@@ -206,9 +206,9 @@ test('never overlaps state polling while a slow request is pending', async () =>
   expect(api.state).toHaveBeenCalledTimes(1);
 });
 
-test('switching resource teams discards a late quota and does not block resource rendering', async () => {
-  let finish!: (value: Awaited<ReturnType<typeof api.quota>>) => void;
-  vi.mocked(api.quota).mockImplementation(id => id === 'a' ? new Promise(resolve => { finish = resolve; }) : Promise.resolve({ remaining: '2', state: 'known', resetAt: null, tokenLimited: false, exhausted: false }));
+test('switching resource teams discards a late summary and does not block resource rendering', async () => {
+  let finish!: (value: Awaited<ReturnType<typeof api.summary>>) => void;
+  vi.mocked(api.summary).mockImplementation(id => id === 'a' ? new Promise(resolve => { finish = resolve; }) : Promise.resolve({ budget: { remaining: '2', state: 'known', resetAt: null, tokenLimited: false, exhausted: false }, pendingReviews: 0 }));
   await mount(); await click('查看全部团队资源');
   const select = async (index: number) => {
     await act(async () => document.querySelector<HTMLButtonElement>('.twui-select-trigger')!.click());
@@ -216,7 +216,60 @@ test('switching resource teams discards a late quota and does not block resource
   };
   await select(1); expect(document.body.textContent).toContain('Preset a');
   await select(2); expect(document.body.textContent).toContain('预算剩余 2 积分');
-  await act(async () => finish({ remaining: '999', state: 'known', resetAt: null, tokenLimited: false, exhausted: false }));
+  await act(async () => finish({ budget: { remaining: '999', state: 'known', resetAt: null, tokenLimited: false, exhausted: false }, pendingReviews: 0 }));
   expect(document.body.textContent).not.toContain('999');
   expect(api.use).not.toHaveBeenCalled();
+});
+
+test('speaks the language the host reports, and every word follows when it changes', async () => {
+  vi.useFakeTimers();
+  vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en' });
+  await mount();
+  expect(document.body.textContent).toContain('Which team first?');
+  expect(document.body.textContent).not.toMatch(/[\u4e00-\u9fff]/);
+  vi.mocked(api.state).mockResolvedValue(state);
+  await act(async () => { await vi.advanceTimersByTimeAsync(5001); });
+  expect(document.body.textContent).toContain('先从哪个团队开始');
+});
+
+test('words a request that never reached the host in the panel’s language', async () => {
+  const { HostUnreachable } = await import('../../src/web/api.js');
+  vi.mocked(api.state).mockResolvedValueOnce({ ...state, locale: 'en' }).mockRejectedValue(new HostUnreachable('not-loaded'));
+  vi.mocked(api.sync).mockRejectedValue(new HostUnreachable('offline'));
+  await mount(); await click('Show every team’s resources'); await click('Refresh');
+  expect(document.querySelector('.twui-toast')?.textContent).toContain('Cannot reach DSH.');
+  expect(document.querySelector('.twui-banner')?.textContent).toContain('Restart DSH.');
+});
+
+test('leads with the team assistant, starts a session with it, and names teams only while all are shown', async () => {
+  const assistant = { ...state.presets[0], id: 'assistant-a', name: 'Alpha assistant', assistant: true };
+  vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', presets: [assistant, ...state.presets] });
+  await mount(); await click('Show every team’s resources');
+  const featured = document.querySelector('.twui-featured')!;
+  expect(featured.textContent).toContain('Alpha assistant'); expect(featured.textContent).toContain('Team assistant');
+  expect(featured.textContent).toContain('a');
+  expect(document.querySelector('.twui-resource-list')!.textContent).not.toContain('Alpha assistant');
+  // Only the assistant's action is primary; every other row's new session is secondary.
+  expect([...document.querySelectorAll('.twui-btn[data-variant="primary"]')].map(b => b.textContent)).toEqual(['Ask the assistant']);
+  await click('Ask the assistant');
+  expect(host.uiWorkspace.startSession).toHaveBeenCalledWith(undefined, { agentPreset: 'team:a:assistant-a' });
+  await act(async () => document.querySelector<HTMLButtonElement>('.twui-select-trigger')!.click());
+  await act(async () => document.querySelector('[role="option"][data-index="1"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  expect(document.querySelector('.twui-resource-list .twui-item-subtitle')).toBeNull();
+  expect(document.querySelector('.twui-featured .twui-item-subtitle')).toBeNull();
+});
+
+test('shows an admin the reviews waiting in the browsed team, and a member none', async () => {
+  vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en' });
+  vi.mocked(api.summary).mockResolvedValue({ budget: { remaining: null, state: 'unlimited', resetAt: null, tokenLimited: false, exhausted: false }, pendingReviews: 2 });
+  const open = vi.spyOn(window, 'open').mockReturnValue(null);
+  try {
+    await mount();
+    await act(async () => document.querySelector('article button')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    await click('2 to review');
+    expect(open).toHaveBeenCalledWith('https://example.com/teams/a/sharing', '_blank', 'noopener');
+    await act(async () => document.querySelector<HTMLButtonElement>('.twui-select-trigger')!.click());
+    await act(async () => document.querySelector('[role="option"][data-index="2"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    expect(document.body.textContent).not.toContain('to review');
+  } finally { open.mockRestore(); }
 });

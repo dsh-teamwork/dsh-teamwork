@@ -2,7 +2,9 @@ import { createHash, randomBytes } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
-import type { PanelProfile, PanelQuota } from './panel.js';
+import { say } from './messages.js';
+import type { PanelProfile, PanelSummary } from './panel.js';
+import type { Locale } from './locale.js';
 const common = { builtin: z.literal('team-assistant').optional(), id: z.string().min(1), name: z.string(), version: z.number().int().positive() };
 const route = { provider: z.string().min(1), model: z.string().min(1), contextWindow: z.number().int().positive().max(10000000).optional(), maxTokens: z.number().int().positive().max(10000000).optional() };
 const pluginDataSchema = z.object({ artifactId: z.string().regex(/^[A-Za-z0-9_-]{1,32}$/).optional(), sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(), package: z.string().regex(/^(?:@[a-z0-9-]+\/)?[a-z0-9][a-z0-9._-]*$/), version: z.string().regex(/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/), providesTools: z.array(z.string().min(1)).optional(), description: z.string().default('') });
@@ -33,10 +35,10 @@ export const teamOf = (snapshot: Snapshot | undefined, configId: string) => snap
  */
 export function serverAddress(input: string) {
   let url: URL;
-  try { url = new URL(input.trim()); } catch { throw new Error('服务器地址无效，请输入完整地址，例如 https://www.dshteamwork.com'); }
+  try { url = new URL(input.trim()); } catch { throw new Error(say('server.invalid')); }
   const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
-  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) throw new Error('服务器地址必须使用 https；只有本机地址（localhost）可以用 http');
-  if (url.search || url.hash || url.username || url.password) throw new Error('服务器地址不能包含查询参数、片段或账号信息');
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) throw new Error(say('server.https'));
+  if (url.search || url.hash || url.username || url.password) throw new Error(say('server.extra'));
   return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
 }
 export class TeamworkClient {
@@ -196,28 +198,31 @@ export class TeamworkClient {
   platformCredential() { if (!this.token) throw new Error('Sign in to platform first'); return this.token; }
   sessionRevision() { return this.epoch; }
   authenticated() { return !!this.token; }
-  /** Independent of configuration sync: no credentials or other members' budgets leave the host. */
-  async quota(teamId: string): Promise<PanelQuota> {
-    if (!this.token || !this.snapshot?.teams.some(team => team.teamId === teamId)) throw new Error('请先同步并选择有效团队');
+  /** Independent of configuration sync: only the member's own budget and a count of reviews leave the host. */
+  async summary(teamId: string): Promise<PanelSummary> {
+    if (!this.token || !this.snapshot?.teams.some(team => team.teamId === teamId)) throw new Error(say('summary.team'));
     const epoch = this.epoch, endpoint = this.endpoint, token = this.token;
-    const response = await this.request(`${endpoint}/api/teams/${encodeURIComponent(teamId)}/budgets`, {
+    const response = await this.request(`${endpoint}/api/teams/${encodeURIComponent(teamId)}/summary`, {
       headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(3000),
     });
-    if (!response.ok) throw new Error('预算暂不可用');
-    const result = z.object({ summary: z.object({
-      remaining: z.string().regex(/^\d+(?:\.\d{1,9})?$/).nullable(),
-      state: z.enum(['known', 'unlimited', 'unconfirmed']), resetAt: z.string().nullable(),
-      tokenLimited: z.boolean(), exhausted: z.boolean(),
-    }) }).parse(await response.json());
-    if (epoch !== this.epoch || endpoint !== this.endpoint || this.token !== token) throw new Error('登录状态已改变');
-    return result.summary;
+    if (!response.ok) throw new Error(say('summary.unavailable'));
+    const result = z.object({
+      budget: z.object({
+        remaining: z.string().regex(/^\d+(?:\.\d{1,9})?$/).nullable(),
+        state: z.enum(['known', 'unlimited', 'unconfirmed']), resetAt: z.string().nullable(),
+        tokenLimited: z.boolean(), exhausted: z.boolean(),
+      }),
+      pendingReviews: z.number().int().nonnegative(),
+    }).parse(await response.json());
+    if (epoch !== this.epoch || endpoint !== this.endpoint || this.token !== token) throw new Error(say('auth.changed'));
+    return { budget: result.budget, pendingReviews: result.pendingReviews };
   }
   profile(): Promise<PanelProfile> {
-    if (!this.token) return Promise.reject(new Error('请先登录 Teamwork'));
+    if (!this.token) return Promise.reject(new Error(say('auth.signedOut')));
     return this.api('profile');
   }
-  updateProfile(input: { name: string | null; locale: 'en' | 'zh-CN' }): Promise<PanelProfile> {
-    if (!this.token) return Promise.reject(new Error('请先登录 Teamwork'));
+  updateProfile(input: { name: string | null; locale: Locale }): Promise<PanelProfile> {
+    if (!this.token) return Promise.reject(new Error(say('auth.signedOut')));
     return this.api('profile', 'PATCH', input);
   }
   current() { return this.snapshot; }

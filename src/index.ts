@@ -25,6 +25,7 @@ import { listenForCode, type LoginCallback } from './login-callback.js';
 import { offerSchema, pairingSchema, RelayError, RelayLink, relayClientIdPath } from './relay.js';
 import { watchTokenFile } from './token-file.js';
 import type { PanelPhone } from './panel.js';
+import { currentLocale, say, setLocale } from './messages.js';
 export const name = 'dsh-teamwork';
 export const inject = ['agentPresets', 'agents', 'llm', 'sessionProjections'];
 export interface Config { apiEndpoint: string; cachePath: string; autoSync?: boolean; syncIntervalMs?: number; tokenFile?: string; }
@@ -232,8 +233,8 @@ export async function apply(ctx: Context, config: Config) {
     catch (error) { ctx.logger.warn('无法读取已配对的手机：%s', (error as Error).message); }
   };
   const phoneError = (error: unknown): never => {
-    if (error instanceof RelayError && error.code === 'not_found') throw new Error('这台设备已不在配对列表中');
-    throw new Error(relay.status === 'connected' ? '中转服务暂时无法处理，请稍后再试' : '还没有连上中转服务，无法管理手机');
+    if (error instanceof RelayError && error.code === 'not_found') throw new Error(say('phone.notFound'));
+    throw new Error(say(relay.status === 'connected' ? 'phone.relayBusy' : 'phone.relayOff'));
   };
   ctx.effect(() => () => relay.stop());
   // The phone's notifications (dsh-teamwork-premium, mobile-relay.md, "Push notifications"): when an agent waits on its member,
@@ -250,7 +251,7 @@ export async function apply(ctx: Context, config: Config) {
   let callback: LoginCallback | undefined;
   const stopCallback = () => { callback?.close(); callback = undefined; };
   ctx.effect(() => () => stopCallback());
-  const hostManaged = () => { if (config.tokenFile) throw new Error('这台 DSH 的 Teamwork 登录由宿主提供，无法在这里登录或退出'); };
+  const hostManaged = () => { if (config.tokenFile) throw new Error(say('auth.hostManaged')); };
   const authorize = async (code: string) => { hostManaged(); pendingInstalls.clear(); try { await client.completeLogin(code); } finally { await overlay.apply(client.current()); relay.refresh(); } stopCallback(); if (config.autoSync !== false) await configSync.sync(); };
   /** The sign-in page's address, and whether the code comes back by itself; without a listener it is pasted. */
   const beginLogin = async () => {
@@ -260,7 +261,7 @@ export async function apply(ctx: Context, config: Config) {
     return { url: client.beginLogin(callback?.uri), automatic: callback !== undefined };
   };
   const restore = async () => { await client.restore(); await overlay.apply(client.current()); relay.refresh(); };
-  const logout = async () => { hostManaged(); pendingInstalls.clear(); stopCallback(); try { await client.logout(); } finally { await overlay.apply(); relay.refresh(); } };
+  const logout = async () => { hostManaged(); pendingInstalls.clear(); stopCallback(); try { await client.logout(); } finally { setLocale(null); await overlay.apply(); relay.refresh(); } };
   ctx.provide('dshTeamwork', {
     beginLogin, completeLogin: authorize,
     sync: () => configSync.sync(),
@@ -293,36 +294,36 @@ export async function apply(ctx: Context, config: Config) {
   const useConfig = async (agent: Agent, id: string) => {
     const snapshot = client.current();
     const item = findConfig(snapshot, id), team = teamOf(snapshot, id);
-    if (!item || !team || item.kind === 'plugin') throw new Error('请选择团队模型或预设 ID');
-    if (!inheritsModel(item) && !modelData(snapshot!,item)) throw new Error('预设引用的团队模型已不可用，请联系管理员。');
+    if (!item || !team || item.kind === 'plugin') throw new Error(say('use.pick'));
+    if (!inheritsModel(item) && !modelData(snapshot!,item)) throw new Error(say('use.modelGone'));
     if (item.kind === 'preset') {
       assertBlank(ctx.agents.turnBoundaryOf(agent.session));
       if (item.data.pluginDependencies?.length) await checkPlugins({teamId:team.teamId,pluginDependencies:item.data.pluginDependencies} as PresetContext);
       const candidate = {requiredTools:item.data.requiredTools ?? [],optionalTools:item.data.optionalTools ?? []};
       const unavailable = requirements(agent, candidate as PresetContext).filter(t=>t.required && ['missing','unknown'].includes(t.state));
-      if (unavailable.length) throw new Error(`缺少必需工具：${unavailable.map(t=>t.name).join(', ')}。请先通过本地插件管理器安装或启用。`);
+      if (unavailable.length) throw new Error(say('use.missingTools', { tools: unavailable.map(t=>t.name).join(', ') }));
       await ctx.agentPresets.select(agent, `team:${team.teamId}:${item.id}`);
       const active = activePreset(agent); if (active && !sameRevision(stamps.get(String(agent.id)),active)) stamp(agent,active);
     }
     if (!inheritsModel(item)) agent.model.select({ provider: platformProvider, model: item.id });
-    return { preset: item.kind === 'preset', text: `本会话已选择 ${item.name}。本地默认配置未改变。` };
+    return { preset: item.kind === 'preset', text: say('use.done', { name: item.name }) };
   };
   /** Installs a pinned plugin disabled, enables it only when it adds configuration and overrides nothing. Callers confirm first. */
   const installPlugin = async (item: Extract<TeamConfig, { kind: 'plugin' }>, agent?: Agent) => {
     const spec = `${item.data.package}@${item.data.version}`;
     const epoch=client.sessionRevision(),signature=JSON.stringify(item);
     const manager = ctx.get('pluginManager');
-    if (!manager) throw new Error('宿主没有插件管理服务');
+    if (!manager) throw new Error(say('install.noManager'));
     const existing = (await manager.listBundles()).find(bundle => bundle.name === item.data.package);
-    if (existing && (existing.installed || existing.enabled || existing.availability === 'installation')) throw new Error('插件已存在，请通过本地插件管理器管理，团队同步不会覆盖它');
+    if (existing && (existing.installed || existing.enabled || existing.availability === 'installation')) throw new Error(say('install.exists'));
     const teamId=teamOf(client.current(),item.id)?.teamId;
     const target=item.data.artifactId ? await client.downloadArtifact(teamId!,item.data.artifactId,item.data.sha256!) : spec;
-    if(epoch!==client.sessionRevision() || JSON.stringify(pinnedPlugin(client.current(),item.id,item.data.version))!==signature)throw new Error('安装期间账号或插件配置已变化，请重新确认');
+    if(epoch!==client.sessionRevision() || JSON.stringify(pinnedPlugin(client.current(),item.id,item.data.version))!==signature)throw new Error(say('install.changed'));
     const installed = await manager.installBundle(target, { saveExact: true, enabled: false });
-    if (installed.error || ['failed', 'cancelled', 'overridden'].includes(installed.application)) throw new Error(`安装未完成（${installed.error?.code ?? installed.application}），请在本地插件管理器查看诊断后重新检查。`);
+    if (installed.error || ['failed', 'cancelled', 'overridden'].includes(installed.application)) throw new Error(say('install.incomplete', { reason: installed.error?.code ?? installed.application }));
     const bundle = (await manager.listBundles()).find(bundle => bundle.name === item.data.package);
     if (!bundle || bundle.error || bundle.version !== item.data.version || bundle.overrides.length || bundle.rows.some(row => row.entryId !== undefined)) {
-      throw new Error('插件已下载但未启用：无法确认它只新增配置，或存在本地配置冲突。请在本地插件管理器中检查');
+      throw new Error(say('install.notEnabled'));
     }
     const result = await manager.setBundleEnabled(item.data.package, true);
     if (result.error || ['failed', 'cancelled', 'overridden'].includes(result.application)) throw new Error(result.error?.code ?? result.application);
@@ -331,13 +332,14 @@ export async function apply(ctx: Context, config: Config) {
     const currentPreset = agent && activePreset(agent);
     const missingTools = agent && currentPreset ? requirements(agent,currentPreset).filter(t=>t.required && ['missing','unknown'].includes(t.state)) : [];
     const toolSummary = currentPreset ? `当前预设必需工具检查：${missingTools.length ? missingTools.map(t=>t.name).join(', ') + ' 尚不可用' : '均已注册（运行权限仍需宿主确认）'}` : '';
-    return [(result.application === 'restart-required' ? '已安装，请重启 DSH 生效。' : '插件已安装并启用。'), refreshed?.text ?? '', toolSummary].filter(Boolean).join('\n');
+    return [say(result.application === 'restart-required' ? 'install.restart' : 'install.done'), refreshed?.text ?? '', toolSummary].filter(Boolean).join('\n');
   };
   const sessionAgent = (sessionId: string | undefined) => sessionId ? ctx.agents.get(sessionId as SessionId) : undefined;
   const panel: PanelOps = {
-    quota: teamId => client.quota(teamId),
-    profile: () => client.profile(),
-    updateProfile: (input) => client.updateProfile(input),
+    summary: teamId => client.summary(teamId),
+    // The panel reads the profile as it opens, so the host speaks the account's language from then on.
+    profile: async () => { const profile = await client.profile(); setLocale(profile.locale); return profile; },
+    updateProfile: async (input) => { const profile = await client.updateProfile(input); setLocale(profile.locale); return profile; },
     async state(sessionId) {
       const status = configSync.status(), snapshot = client.current(), agent = sessionAgent(sessionId);
       // Inventory scans read the whole host. Share one within this response, never across requests.
@@ -350,7 +352,8 @@ export async function apply(ctx: Context, config: Config) {
         const candidate = {requiredTools:item.data.requiredTools ?? [],optionalTools:item.data.optionalTools ?? []} as PresetContext;
         presets.push({
           id: item.id, teamId: team.teamId, teamName: team.teamName, name: item.name, version: item.version, description: item.data.description ?? '',
-          model: item.data.inheritModel ? '本地／当前会话模型' : item.data.modelConfigId ? linked?.name ?? item.data.modelConfigId : `${item.data.provider}/${item.data.model}`,
+          model: item.data.inheritModel ? null : item.data.modelConfigId ? linked?.name ?? item.data.modelConfigId : `${item.data.provider}/${item.data.model}`,
+          assistant: item.builtin === 'team-assistant',
           modelAvailable: inheritsModel(item) || !!modelData(snapshot!, item),
           tools: agent ? requirements(agent, candidate) : toolReport(candidate, () => 'unknown'),
           plugins: item.data.pluginDependencies?.length ? await plugins({teamId:team.teamId,pluginDependencies:item.data.pluginDependencies} as PresetContext, readInventory) : [],
@@ -358,6 +361,7 @@ export async function apply(ctx: Context, config: Config) {
       }
       const selection = agent?.model.current(), active = agent && activePreset(agent), boundary = agent && ctx.agents.turnBoundaryOf(agent.session);
       return {
+        locale: currentLocale(),
         authRevision: client.sessionRevision(),
         authenticated: status.authenticated,
         teams: (snapshot?.teams ?? []).map(team => ({ id: team.teamId, name: team.teamName, role: team.role, consoleUrl: `${client.endpoint}/teams/${team.teamId}` })),
@@ -372,7 +376,7 @@ export async function apply(ctx: Context, config: Config) {
           preset: active ? { id: active.id, name: active.name, version: active.version } : null,
           started: boundary!.openTurnStartSeq !== null || boundary!.lastTurn > 0,
         } : null,
-        presets: presets.sort((a,b) => Number(findConfig(snapshot,b.id)?.builtin === 'team-assistant') - Number(findConfig(snapshot,a.id)?.builtin === 'team-assistant')),
+        presets: presets.sort((a,b) => Number(b.assistant) - Number(a.assistant)),
         models: (snapshot?.teams ?? []).flatMap(team => team.configs.flatMap(c => c.kind === 'model'
           ? [{ id: c.id, teamId: team.teamId, teamName: team.teamName, name: c.name, version: c.version, upstream: `${c.data.provider}/${c.data.model}` }] : [])),
         plugins: (await plugins(undefined, readInventory)).map(plugin => {
@@ -392,7 +396,7 @@ export async function apply(ctx: Context, config: Config) {
       try {
         await client.setEndpoint(next);
         await serverChoice.write(next === serverAddress(config.apiEndpoint) ? undefined : next);
-      } finally { await overlay.apply(client.current()); relay.refresh(); }
+      } finally { setLocale(null); await overlay.apply(client.current()); relay.refresh(); }
     },
     async pairPhone() {
       const offer = offerSchema.parse(await relay.request({ t: 'offer' }).catch(phoneError));
@@ -413,14 +417,14 @@ export async function apply(ctx: Context, config: Config) {
     },
     async use(sessionId, id) {
       const agent = sessionAgent(sessionId);
-      if (!agent) throw new Error('当前会话尚未加载，请先在会话中发送或打开它后再试。');
+      if (!agent) throw new Error(say('use.notLoaded'));
       return (await useConfig(agent, id)).text;
     },
     async install(id, version) {
       const item = pinnedPlugin(client.current(), id,version);
-      if (!item || item.kind !== 'plugin') throw new Error('请选择团队插件 ID');
+      if (!item || item.kind !== 'plugin') throw new Error(say('install.pick'));
       // The member confirmed this exact version; a sync since then may have changed the pin.
-      if (item.data.version !== version) throw new Error('团队已更新这个插件的版本，请重新确认安装。');
+      if (item.data.version !== version) throw new Error(say('install.pinChanged'));
       return installPlugin(item);
     },
   };

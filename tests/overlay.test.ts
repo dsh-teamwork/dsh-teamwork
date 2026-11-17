@@ -81,9 +81,10 @@ test('late login completion cannot reauthenticate after logout', async () => {
   } finally { await rm(dir, { recursive: true }); }
 });
 
-test('quota reads retain only own summary, fail closed and discard an old account response', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'teamwork-quota-'));
-  let reply = Response.json({ summary: { remaining: '9.85', state: 'known', resetAt: null, tokenLimited: true, exhausted: false }, policies: [{ subjectId: 'other' }] });
+test('summary reads keep only the own budget and review count, fail closed and discard an old account response', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'teamwork-summary-'));
+  const budget = { remaining: '9.85', state: 'known', resetAt: null, tokenLimited: true, exhausted: false };
+  let reply = Response.json({ since: '2026-10-18T00:00:00Z', calls: 4, points: '12', unpriced: 0, unresolved: 1, failedNotices: 0, nearLimit: [{ scope: 'member', subjectId: 'other', period: 'month', threshold: 80 }], budget, pendingReviews: 2 });
   let finish: ((response: Response) => void) | undefined;
   const calls: Array<[string, RequestInit | undefined]> = [];
   const request: typeof fetch = async (input, init) => {
@@ -95,17 +96,18 @@ test('quota reads retain only own summary, fail closed and discard an old accoun
   const client = new TeamworkClient('https://example.com', join(dir, 'cache.json'), request);
   try {
     client.beginLogin(); await client.completeLogin('code'); await client.sync();
-    await expect(client.quota('other')).rejects.toThrow();
-    const own = await client.quota('team1');
-    expect(own).toEqual({ remaining: '9.85', state: 'known', resetAt: null, tokenLimited: true, exhausted: false });
+    await expect(client.summary('other')).rejects.toThrow();
+    const own = await client.summary('team1');
+    expect(own).toEqual({ budget, pendingReviews: 2 });
     expect(JSON.stringify(own)).not.toContain('secret'); expect(JSON.stringify(own)).not.toContain('subjectId');
+    expect(calls.at(-1)?.[0]).toBe('https://example.com/api/teams/team1/summary');
     expect(calls.at(-1)?.[1]?.headers).toEqual({ Authorization: 'Bearer secret' });
-    reply = new Response('', { status: 404 }); await expect(client.quota('team1')).rejects.toThrow();
-    reply = Response.json({ summary: {} }); await expect(client.quota('team1')).rejects.toThrow();
+    reply = new Response('', { status: 404 }); await expect(client.summary('team1')).rejects.toThrow();
+    reply = Response.json({ budget: {}, pendingReviews: 0 }); await expect(client.summary('team1')).rejects.toThrow();
     finish = () => {};
-    const pending = client.quota('team1');
+    const pending = client.summary('team1');
     await client.setEndpoint('https://other.example.com');
-    finish(Response.json({ summary: own })); await expect(pending).rejects.toThrow('登录状态已改变');
+    finish(Response.json({ budget, pendingReviews: 0 })); await expect(pending).rejects.toThrow();
     expect(client.current()).toBeUndefined();
   } finally { await rm(dir, { recursive: true }); }
 });

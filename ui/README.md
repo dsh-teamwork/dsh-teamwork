@@ -51,7 +51,7 @@ Nothing is published yet: the plugin's browser bundle compiles it in.
 | `Monogram`, `Spinner`, `Skeleton`, `Notice`, `DefinitionList`, `Toast` | What their names say. |
 
 Utility classes for layout inside a screen: `twui-row` (a wrapping row with
-gaps), `twui-stack`, `twui-tile`, `twui-link`, `twui-mono`, `twui-muted`,
+gaps), `twui-featured` (around the one `Item` a screen leads with), `twui-stack`, `twui-tile`, `twui-link`, `twui-mono`, `twui-muted`,
 `twui-subtle`. `--twui-fill` is a quiet fill drawn from the text colour, which
 shows on any surface in both themes; use it rather than a host layer token.
 
