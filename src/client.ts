@@ -286,6 +286,24 @@ export function modelData(snapshot: Snapshot, config: TeamConfig) {
 }
 
 /**
+ * The name of the team model, or of the model a preset calls, that cannot run here. Without its `contextWindow`
+ * the adapter cannot size it: a guessed window either overstates the model or leaves the host's
+ * compaction, which reserves its headroom out of the window, no room at all. Nothing is guessed;
+ * the model stays unusable until the team configures the real window.
+ */
+export function unsizedModel(snapshot: Snapshot, config: TeamConfig): string | undefined {
+  const data = modelData(snapshot, config);
+  if (!data || data.contextWindow !== undefined) return undefined;
+  const model = config.kind === 'preset' && config.data.modelConfigId ? findConfig(snapshot, config.data.modelConfigId) : undefined;
+  return model?.name ?? (config.kind === 'preset' ? `${data.provider}/${data.model}` : config.name);
+}
+/** `unsizedModel` as the member reads it; the panel words it itself from `contextWindowMissing`. */
+export function modelLimitProblem(snapshot: Snapshot, config: TeamConfig): string | undefined {
+  const name = unsizedModel(snapshot, config);
+  return name === undefined ? undefined : say('model.noContextWindow', { name });
+}
+
+/**
  * The server the member picked in the panel, kept beside the configuration cache
  * (`teamwork-cache.json` → `teamwork-cache.server.json`). Absent, the profile's
  * `apiEndpoint` applies, which defaults to the hosted service.

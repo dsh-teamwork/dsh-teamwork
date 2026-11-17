@@ -118,6 +118,7 @@ const en = {
   'model.body': 'Called by the team’s server, so the provider key stays there. Changes this session only, never your local default.',
   'model.use': 'Use in this session',
   'model.openSession': 'Open or start a session in DSH first, then choose a model.',
+  'model.noContextWindow': 'The team model “{name}” has no context window (contextWindow) configured, so it cannot be used yet. Ask a team admin to set it in the console, then sync again.',
 
   // Plugins
   'plugin.ready': 'Enabled',
@@ -351,6 +352,7 @@ const zhCN: Record<PanelMessage, string> = {
   'model.body': '由团队服务器代为调用，provider 密钥留在服务器上。只改当前会话，不改本地默认模型。',
   'model.use': '用于当前会话',
   'model.openSession': '先在 DSH 新建或打开一个会话，再选择模型。',
+  'model.noContextWindow': '团队模型「{name}」没有配置上下文窗口（contextWindow），暂时不能使用。请团队管理员在控制台补充后重新同步。',
 
   'plugin.ready': '已启用',
   'plugin.missing': '未安装',

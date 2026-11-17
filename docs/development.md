@@ -74,8 +74,13 @@ retain the previous snapshot. Sync never installs plugins or uploads conversatio
 Team models use `teamwork-platform` with the configuration ID as wire model.
 `src/platform-models.ts` adapts text, tool calls and streamed output to the chosen
 service's `/api/llm/chat/completions`. There is no provider-direct fallback or
-local provider-key lookup. Model capability values come from team configuration;
-missing context/output limits use 32K/4096, with output bounded by context.
+local provider-key lookup. Model capability values come from team configuration.
+A model, or a preset's model, without `contextWindow` is not guessed: the adapter
+does not offer it; selection, readiness, `agent/request` and sync report
+`modelLimitProblem` (`say('model.noContextWindow')`), and the panel words
+`contextWindowMissing` itself. (A guessed 32K window left DSH's compaction,
+which reserves 64K headroom by default, no budget: `MODEL_SWITCH_COMPACTION_FAILED`.)
+A missing output limit uses 4096, bounded by the context window.
 Multimodal input and other provider protocols are not implemented by this adapter.
 
 Presets use native `agentPresets` registration, mounting, selection and revisions.

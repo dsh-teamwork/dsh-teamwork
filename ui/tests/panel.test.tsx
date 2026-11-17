@@ -14,7 +14,7 @@ const state: PanelState = {
   locale: 'zh-CN', authRevision: 0, authenticated: true, server: 'https://example.com', defaultServer: 'https://example.com',
   sync: { auto: true, running: false }, relay: 'connected', phones: [], session: null,
   teams: [{ id: 'a', name: 'Alpha', role: 'admin', consoleUrl: 'https://example.com/teams/a' }, { id: 'b', name: 'Beta', role: 'member', consoleUrl: 'https://example.com/teams/b' }],
-  presets: ['a', 'b'].map(id => ({ id: `preset-${id}`, teamId: id, teamName: id, name: `Preset ${id}`, version: 1, description: 'Review', model: 'Model', assistant: false, modelAvailable: true, tools: [], plugins: [] })),
+  presets: ['a', 'b'].map(id => ({ id: `preset-${id}`, teamId: id, teamName: id, name: `Preset ${id}`, version: 1, description: 'Review', model: 'Model', assistant: false, modelAvailable: true, contextWindowMissing: false, tools: [], plugins: [] })),
   models: [], plugins: [],
 };
 const host: Host = { sessions: { list: { getSnapshot: () => ({ byId: {} }), subscribe: () => () => {} } }, layout: { selectPanel: vi.fn() }, uiWorkspace: { startSession: vi.fn() } };
@@ -272,4 +272,21 @@ test('shows an admin the reviews waiting in the browsed team, and a member none'
     await act(async () => document.querySelector('[role="option"][data-index="2"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
     expect(document.body.textContent).not.toContain('to review');
   } finally { open.mockRestore(); }
+});
+
+test('marks a team model without its context window, and a preset on it, as not ready with the reason', async () => {
+  const session = { id: 's', model: null, preset: null, started: false };
+  const model = (id: string, name: string, contextWindowMissing: boolean) => ({ id, teamId: 'a', teamName: 'a', name, version: 1, upstream: `p/${id}`, contextWindowMissing });
+  const preset = { ...state.presets[0], model: 'Flash', modelAvailable: false, contextWindowMissing: true };
+  vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', session, presets: [preset], models: [model('sized', 'Sized', false), model('flash', 'Flash', true)] });
+  await mount(); await click('Show every team’s resources');
+  const reason = 'The team model “Flash” has no context window (contextWindow) configured';
+  const row = (title: string) => [...document.querySelectorAll('.twui-item')].find(r => r.querySelector('.twui-item-title')?.firstChild?.textContent === title)!;
+  expect(row('Preset a').textContent).toContain(reason);
+  const tab = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(b => b.textContent?.startsWith('Models'))!;
+  await act(async () => tab.click());
+  expect(row('Flash').textContent).toContain(reason);
+  expect(row('Flash').querySelector('button:disabled')).not.toBeNull();
+  expect(row('Sized').textContent).not.toContain('context window');
+  expect(row('Sized').querySelector('button:disabled')).toBeNull();
 });

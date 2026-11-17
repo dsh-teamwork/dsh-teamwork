@@ -15,11 +15,16 @@ export function platformAdapter(client: TeamworkClient) {
       if (snapshot === previous) return profiles;
       previous = snapshot;
       const baseUrl = `${client.endpoint.replace(/\/$/, '')}/api/llm`;
-      const models: Model<'openai-completions'>[] = allConfigs(snapshot).filter(c => c.kind !== 'plugin' && modelData(snapshot!, c)).map(c => { const data = modelData(snapshot!, c)!; return ({
-        id: c.id, name: c.name, provider: platformProvider, api: 'openai-completions', baseUrl,
-        reasoning: false, input: ['text'], contextWindow: data.contextWindow ?? Math.max(32768, data.maxTokens ?? 0), maxTokens: data.maxTokens ?? Math.min(4096, data.contextWindow ?? 32768),
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      }); });
+      // A model without its contextWindow is not offered at all (see modelLimitProblem); the plugin says why.
+      const models: Model<'openai-completions'>[] = allConfigs(snapshot).flatMap(c => {
+        const data = c.kind === 'plugin' ? undefined : modelData(snapshot!, c);
+        if (data?.contextWindow === undefined) return [];
+        return [{
+          id: c.id, name: c.name, provider: platformProvider, api: 'openai-completions' as const, baseUrl,
+          reasoning: false, input: ['text' as const], contextWindow: data.contextWindow, maxTokens: data.maxTokens ?? Math.min(4096, data.contextWindow),
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        }];
+      });
       profiles = new Map([[platformProvider, {
         provider: platformProvider, displayName: 'Teamwork Platform', api: 'openai-completions', baseURL: baseUrl,
         streamIdleTimeoutMs: 120000, maxRequestImageBytes: 1048576, maxRequestImages: 1,
