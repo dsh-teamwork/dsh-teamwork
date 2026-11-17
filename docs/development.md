@@ -106,6 +106,19 @@ conflicts. Exact historical pins remain installable. Existing local plugins use
 the host's separate update flow. See the community server's
 [resource contract](https://github.com/dsh-teamwork/dsh-teamwork-platform/blob/main/docs/tech/team-assistant.md).
 
+## Host-provided token
+
+`tokenFile` (`src/token-file.ts`) is for hosts that sign DSH in themselves, such
+as a DSH Teamwork cloud computer, where a supervisor writes a short-lived token
+after DSH has booted. The file is polled once a second with `watchFile`, which
+sees an atomic replacement that a directory watch can miss, and only a changed
+value reaches `TeamworkClient.useToken`. Renewing one token with another keeps
+the session revision, so pending approvals and preset stamps survive renewal;
+gaining or losing a token moves it, and losing one drops the cache. A 401/403
+still clears the token until the file changes. In this mode the relay is never
+opened, and sign-in, sign-out and server changes are refused: the server reaches
+a cloud computer itself, and the token belongs to the host, not a member.
+
 ## Phone transport
 
 The hosted relay is optional and discovered through `GET /api/relay`. The host

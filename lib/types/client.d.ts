@@ -465,6 +465,12 @@ export declare class TeamworkClient {
             }[] | undefined;
         }[];
     } | undefined;
+    /**
+     * Takes a token the host's supervisor provides instead of a browser sign-in (`tokenFile`, docs/development.md).
+     * Replacing one token with another keeps the session revision, since short-lived tokens are renewed for the
+     * same computer; signing in from none, or out to none, moves it and drops the cached configuration on the way out.
+     */
+    useToken(token: string | undefined): Promise<void>;
     clear(): Promise<void>;
     logout(): Promise<void>;
     /** Forgets the token locally; the platform cannot revoke it, but a removed member is refused on every request. */

@@ -23,17 +23,19 @@ import { PhoneSessionError, phonePresets } from './phone-session.js';
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm';
 import { listenForCode, type LoginCallback } from './login-callback.js';
 import { offerSchema, pairingSchema, RelayError, RelayLink, relayClientIdPath } from './relay.js';
+import { watchTokenFile } from './token-file.js';
 import type { PanelPhone } from './panel.js';
 export const name = 'dsh-teamwork';
 export const inject = ['agentPresets', 'agents', 'llm', 'sessionProjections'];
-export interface Config { apiEndpoint: string; cachePath: string; autoSync?: boolean; syncIntervalMs?: number; }
+export interface Config { apiEndpoint: string; cachePath: string; autoSync?: boolean; syncIntervalMs?: number; tokenFile?: string; }
 /** The hosted service. A member can pick another server in the panel; the profile's `apiEndpoint` sets the default. */
 export const DEFAULT_SERVER = 'https://www.dshteamwork.com';
-export const Config = z.object({ apiEndpoint: z.string().default(DEFAULT_SERVER), cachePath: z.string().required(), autoSync: z.boolean().default(true), syncIntervalMs: z.number().default(60000) });
+export const Config = z.object({ apiEndpoint: z.string().default(DEFAULT_SERVER), cachePath: z.string().required(), autoSync: z.boolean().default(true), syncIntervalMs: z.number().default(60000), tokenFile: z.string() });
 export async function apply(ctx: Context, config: Config) {
   const client = new TeamworkClient(config.apiEndpoint, config.cachePath);
   const serverChoice = ServerChoice.beside(config.cachePath);
-  const chosen = await serverChoice.read();
+  // With tokenFile the host names the server in apiEndpoint, and a member's earlier choice does not apply.
+  const chosen = config.tokenFile ? undefined : await serverChoice.read();
   if (chosen) await client.setEndpoint(chosen);
   ctx.effect(() => ctx.llm.registerAdapter([platformProvider], platformAdapter(client)));
   const taskState = await ctx.sessionProjections.register(taskProjection);
@@ -212,7 +214,8 @@ export async function apply(ctx: Context, config: Config) {
   });
   const relay: RelayLink = new RelayLink({
     endpoint: () => client.endpoint,
-    token: () => client.authenticated() ? client.platformCredential() : undefined,
+    // A token from tokenFile belongs to a cloud computer, which the server reaches directly; it never opens the relay.
+    token: () => !config.tokenFile && client.authenticated() ? client.platformCredential() : undefined,
     clientIdPath: relayClientIdPath(config.cachePath),
     onStatus: (status) => {
       ctx.logger.debug('relay: %s', status);
@@ -245,15 +248,17 @@ export async function apply(ctx: Context, config: Config) {
   let callback: LoginCallback | undefined;
   const stopCallback = () => { callback?.close(); callback = undefined; };
   ctx.effect(() => () => stopCallback());
-  const authorize = async (code: string) => { pendingInstalls.clear(); try { await client.completeLogin(code); } finally { await overlay.apply(client.current()); relay.refresh(); } stopCallback(); if (config.autoSync !== false) await configSync.sync(); };
+  const hostManaged = () => { if (config.tokenFile) throw new Error('这台 DSH 的 Teamwork 登录由宿主提供，无法在这里登录或退出'); };
+  const authorize = async (code: string) => { hostManaged(); pendingInstalls.clear(); try { await client.completeLogin(code); } finally { await overlay.apply(client.current()); relay.refresh(); } stopCallback(); if (config.autoSync !== false) await configSync.sync(); };
   /** The sign-in page's address, and whether the code comes back by itself; without a listener it is pasted. */
   const beginLogin = async () => {
+    hostManaged();
     stopCallback();
     callback = await listenForCode(authorize).catch((error: Error) => { ctx.logger.warn('无法在本机接收授权码，需要手动粘贴：%s', error.message); return undefined; });
     return { url: client.beginLogin(callback?.uri), automatic: callback !== undefined };
   };
   const restore = async () => { await client.restore(); await overlay.apply(client.current()); relay.refresh(); };
-  const logout = async () => { pendingInstalls.clear(); stopCallback(); try { await client.logout(); } finally { await overlay.apply(); relay.refresh(); } };
+  const logout = async () => { hostManaged(); pendingInstalls.clear(); stopCallback(); try { await client.logout(); } finally { await overlay.apply(); relay.refresh(); } };
   ctx.provide('dshTeamwork', {
     beginLogin, completeLogin: authorize,
     sync: () => configSync.sync(),
@@ -379,6 +384,7 @@ export async function apply(ctx: Context, config: Config) {
     sync: () => configSync.sync(),
     logout,
     async setServer(server) {
+      hostManaged();
       const next = server === null ? serverAddress(config.apiEndpoint) : serverAddress(server);
       pendingInstalls.clear();
       try {
@@ -509,5 +515,15 @@ export async function apply(ctx: Context, config: Config) {
     }));
   });
   try { await restore(); } catch { ctx.logger.warn('团队缓存无法恢复，请登录并重新同步。'); }
+  if (config.tokenFile) {
+    const watcher = watchTokenFile(config.tokenFile, async (token) => {
+      pendingInstalls.clear();
+      await client.useToken(token);
+      await overlay.apply(client.current());
+      if (token && config.autoSync !== false) await configSync.sync().catch(() => { /* status retains the failure */ });
+    }, error => ctx.logger.warn('无法读取 Teamwork 令牌文件：%s', error.message));
+    ctx.effect(() => () => watcher.stop());
+    await watcher.ready;
+  }
   configSync.start();
 }
