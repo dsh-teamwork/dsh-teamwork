@@ -15,6 +15,7 @@
 import { z } from 'zod';
 import { PhoneSessionError, type PhoneSessionOps } from './phone-session.js';
 import { PhoneUploads, uploadLimits, uploadSchemas } from './phone-uploads.js';
+import type { OwnerFilter } from './shared-owner.js';
 
 /** Unary methods a phone may call. A test holds this list. */
 export const ALLOWED_CALLS: ReadonlySet<string> = new Set([
@@ -58,6 +59,8 @@ export interface BridgeOptions {
   log?: (message: string, error?: unknown) => void;
   /** Only these session operations supplement DSH's native calls. */
   session?: PhoneSessionOps;
+  /** On a shared DSH, whose sessions each pairing's member may reach (src/shared-owner.ts); none on a personal computer. */
+  owners?: () => OwnerFilter | undefined;
 }
 
 interface Link {
@@ -66,8 +69,11 @@ interface Link {
   mux?: WebSocket;
   /** Mux frames waiting for the socket to open. */
   queued: string[];
-  /** Streams this pairing opened and DSH has not ended. */
-  streams: Set<string>;
+  /** Streams this pairing opened and DSH has not ended, with what each one is. */
+  streams: Map<string, string>;
+  /** The pairing's mux frames in each direction, one at a time, so a filter's wait keeps their order. */
+  inbound: Promise<void>;
+  outbound: Promise<void>;
 }
 
 export class Bridge {
@@ -90,7 +96,7 @@ export class Bridge {
 
   private link(pairingId: string) {
     let link = this.links.get(pairingId);
-    if (!link) this.links.set(pairingId, link = { queued: [], streams: new Set() });
+    if (!link) this.links.set(pairingId, link = { queued: [], streams: new Map(), inbound: Promise.resolve(), outbound: Promise.resolve() });
     return link;
   }
 
@@ -99,6 +105,7 @@ export class Bridge {
     if (!link) return;
     this.links.delete(pairingId);
     this.uploads.drop(pairingId);
+    this.options.owners?.()?.drop(pairingId);
     link.mux?.close(1000, 'phone left');
   }
 
@@ -116,6 +123,9 @@ export class Bridge {
       return output(status, body);
     };
     if (!ALLOWED_CALLS.has(frame.method)) return answer(403, { error: 'method_not_allowed' });
+    const owners = this.options.owners?.();
+    if (owners && !(await owners.admitCall(frame.pairingId, frame.method, frame.body)))
+      return answer(200, { result: { ok: false, error: { code: 'teamwork/not_found' } } });
     const origin = this.origin();
     if (!origin) return answer(503, { error: 'no_web_server' });
     const link = this.link(frame.pairingId);
@@ -204,7 +214,8 @@ export class Bridge {
       if (promptSession && response.ok && (parseJson(text) as { result?: { ok?: boolean } } | null)?.result?.ok) {
         for (const id of uploaded) this.uploads.cancel(frame.pairingId, promptSession, id);
       }
-      answer(response.status, text ? parseJson(text) : null);
+      const body = text ? parseJson(text) : null;
+      answer(response.status, owners && response.ok ? await owners.afterCall(frame.pairingId, frame.method, body) : body);
     } catch (error) {
       if (error instanceof PhoneSessionError) return answer(200, { result: { ok: false, error: { code: `teamwork/${error.code}` } } });
       link.cookie = undefined;
@@ -216,12 +227,19 @@ export class Bridge {
   private mux(pairingId: string, body: unknown) {
     const parsed = clientMuxSchema.safeParse(body);
     if (!parsed.success) return;
-    const message = parsed.data;
     const link = this.link(pairingId);
+    // Without a filter nothing waits, so frames go on at once and in order.
+    if (!this.options.owners?.()) return void this.muxNow(pairingId, link, parsed.data);
+    link.inbound = link.inbound.then(() => this.muxNow(pairingId, link, parsed.data)).catch((error) => this.options.log?.('A phone stream frame failed', error));
+  }
+
+  private async muxNow(pairingId: string, link: Link, message: z.infer<typeof clientMuxSchema>) {
     if (message.type === 'open') {
       if (!ALLOWED_STREAMS.has(message.endpoint)) return this.fail(pairingId, message.streamId, 'stream_not_allowed');
       if (link.streams.has(message.streamId)) return this.fail(pairingId, message.streamId, 'stream_exists');
-      link.streams.add(message.streamId);
+      const owners = this.options.owners?.();
+      if (owners && !(await owners.admitOpen(pairingId, message.endpoint, message.payload))) return this.fail(pairingId, message.streamId, 'not_found');
+      link.streams.set(message.streamId, message.endpoint);
     } else if (!link.streams.has(message.streamId)) {
       // Not a stream this pairing opened: it reaches nothing.
       return;
@@ -255,8 +273,15 @@ export class Bridge {
     mux.addEventListener('message', (event) => {
       const message = serverMuxSchema.safeParse(parseJson(String(event.data)));
       if (!message.success) return;
+      const endpoint = link.streams.get(message.data.streamId);
       if (message.data.type === 'end' || message.data.type === 'error') link.streams.delete(message.data.streamId);
-      this.options.send({ t: 'mux', pairingId, body: message.data });
+      const owners = this.options.owners?.();
+      if (!owners || endpoint !== '$events' || message.data.type !== 'item') return void this.options.send({ t: 'mux', pairingId, body: message.data });
+      const data = message.data;
+      link.outbound = link.outbound.then(async () => {
+        const value = await owners.eventFor(pairingId, data.value);
+        if (value !== undefined) this.options.send({ t: 'mux', pairingId, body: data });
+      }).catch((error) => this.options.log?.('A phone event could not be filtered', error));
     });
     mux.addEventListener('close', () => {
       if (link.mux !== mux) return;
@@ -268,7 +293,7 @@ export class Bridge {
   /** Every open stream of a pairing ends, as DSH itself would end it. */
   private closeStreams(pairingId: string, link: Link, code: string) {
     link.queued = [];
-    for (const streamId of link.streams) this.fail(pairingId, streamId, code);
+    for (const streamId of link.streams.keys()) this.fail(pairingId, streamId, code);
     link.streams.clear();
   }
 

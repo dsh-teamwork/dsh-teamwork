@@ -25,7 +25,7 @@
 
 ### 团队共享 DSH
 
-在托管服务上，团队管理员可以把一台 DSH 设为团队自己的：在团队控制台的**共享 DSH**里创建 key，再在那台 DSH 中运行 `/teamwork share enable <key>`。之后它以团队身份登录而不是个人：共享期间拒绝个人登录，只同步这一个团队，团队模型的调用计入团队。第一台使用 key 的机器会绑定它，同一个 key 换到其他机器上会被拒绝；管理员更换或删除 key 后它立即失效。`/teamwork share disable` 会删除 key。成员用手机访问共享 DSH 将在后续版本提供。
+在托管服务上，团队管理员可以把一台 DSH 设为团队自己的：在团队控制台的**共享 DSH**里创建 key，再在那台 DSH 中运行 `/teamwork share enable <key>`。之后它以团队身份登录而不是个人：共享期间拒绝个人登录，只同步这一个团队，团队模型的调用计入团队。第一台使用 key 的机器会绑定它，同一个 key 换到其他机器上会被拒绝；管理员更换或删除 key 后它立即失效。`/teamwork share disable` 会删除 key。团队管理员在控制台决定谁可以访问它；对其中每个人，在这里运行 `/teamwork share invite <email>`，并当面或通过团队信任的渠道交给对方，不要经过 Teamwork 服务器。每个成员的会话只属于自己，其他人无法查看、跟随或回答。打开邀请链接的手机和网页客户端将在后续版本提供。
 
 ## 选择模型或预设
 
@@ -58,6 +58,8 @@
 | `/teamwork share enable <key>` | 用团队授权 key 把这台 DSH 设为团队的共享 DSH（托管服务）。 |
 | `/teamwork share disable` | 关闭共享模式并删除 key。 |
 | `/teamwork share status` | 查看共享 DSH 的名称、团队和 token 状态。 |
+| `/teamwork share invite <email>` | 生成一次性邀请链接（一天内有效），让名单中的一位成员把设备配对到这台共享 DSH。 |
+| `/teamwork share members` | 查看可访问这台共享 DSH 的成员及其设备。 |
 | `/teamwork status` | 查看登录、同步和最近错误。 |
 | `/teamwork sync` | 刷新团队资源。 |
 | `/teamwork list` | 列出配置 ID。 |

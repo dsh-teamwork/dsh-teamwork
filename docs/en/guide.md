@@ -60,8 +60,11 @@ a person: personal sign-in is refused while it is shared, it syncs that one
 team, and its team-model calls are billed to the team. The first machine that
 uses a key keeps it; the same key on another machine is refused, and an admin
 who rotates or deletes the key cuts it off. `/teamwork share disable` deletes
-the key. Members reaching a shared DSH from their phones arrives in a later
-release.
+the key. A team admin chooses in the console who may reach it; for each of
+them, run `/teamwork share invite <email>` here and hand the link over in
+person or through a channel the team trusts, never through the Teamwork server.
+Each member's sessions are theirs alone: others cannot list, follow or answer
+them. Phone and web clients that open the link arrive in a later release.
 
 ## Choose a model or preset
 
@@ -112,6 +115,8 @@ Run these in DSH's command input, not your shell. IDs come from `/teamwork list`
 | `/teamwork share enable <key>` | Make this DSH its team's shared DSH with a team host key (hosted service). |
 | `/teamwork share disable` | End shared mode and delete its key. |
 | `/teamwork share status` | Show the shared DSH's name, team and host token. |
+| `/teamwork share invite <email>` | A single-use link, valid a day, that pairs one listed member's device with this shared DSH. |
+| `/teamwork share members` | The members who may reach this shared DSH, and their devices. |
 | `/teamwork status` | Show authentication, sync status and recent errors. |
 | `/teamwork sync` | Refresh the team's resources. |
 | `/teamwork list` | List configuration IDs. |

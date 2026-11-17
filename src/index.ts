@@ -22,9 +22,11 @@ import { Bridge } from './bridge.js';
 import { PhoneSessionError, phonePresets } from './phone-session.js';
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm';
 import { listenForCode, type LoginCallback } from './login-callback.js';
-import { offerSchema, pairingSchema, RelayError, RelayLink, relayClientIdPath } from './relay.js';
+import { offerSchema, pairingSchema, RelayError, RelayLink, relayClientIdPath, type SharedMember } from './relay.js';
 import { watchTokenFile } from './token-file.js';
 import { SharedMode, sharedKeyPath } from './shared-mode.js';
+import { SharedRoster, sharedRosterPath } from './shared-roster.js';
+import { OwnerFilter } from './shared-owner.js';
 import type { PanelPhone } from './panel.js';
 import { panelLocale, say, setLocale, speaking } from './messages.js';
 export const name = 'dsh-teamwork';
@@ -164,8 +166,15 @@ export async function apply(ctx: Context, config: Config) {
   let phones: PanelPhone[] = [];
   // A paired phone's calls, replayed against this DSH's own web server through the allow-list; set where DSH serves web.
   let launchUrl: (() => string) | undefined;
+  // A shared DSH's own roster and who owns each session (src/shared-roster.ts, src/shared-owner.ts).
+  const roster = new SharedRoster(sharedRosterPath(config.cachePath));
+  const owners = new OwnerFilter(roster, (pairingId) => roster.memberOf(pairingId));
+  /** Who the server lets reach this shared DSH, as the relay last said; and members whose handsets wait to join. */
+  let sharedMembers: SharedMember[] = [];
+  const joining = new Map<string, string>();
   const bridge = new Bridge({
     launchUrl: () => launchUrl?.(),
+    owners: () => shared?.enabled ? owners : undefined,
     send: (frame) => security.send(frame),
     log: (message, error) => ctx.logger.warn('%s: %s', message, (error as Error | undefined)?.message ?? ''),
     session: {
@@ -230,7 +239,9 @@ export async function apply(ctx: Context, config: Config) {
     scope: () => {
       const revision = client.sessionRevision();
       if (!keyScope || keyScope.revision !== revision) {
-        const value = client.profile().then(profile => `${client.endpoint}|${profile.id}`);
+        // A shared DSH has no profile: its phones are trusted under its shared host.
+        const hostId = shared?.enabled ? shared.status().hostId : undefined;
+        const value = hostId ? Promise.resolve(`${client.endpoint}|shared:${hostId}`) : client.profile().then(profile => `${client.endpoint}|${profile.id}`);
         keyScope = { revision, value };
         void value.catch(() => { if (keyScope?.value === value) keyScope = undefined; });
       }
@@ -240,24 +251,44 @@ export async function apply(ctx: Context, config: Config) {
     confirm: async id => { await relay.request({ t: 'decide', pairingId: id, accept: true }); },
     changed: () => {},
     error: error => ctx.logger.warn('phone security: %s', error.message),
+    joining: (pairingId) => shared?.enabled ? joining.get(pairingId) : undefined,
+    admit: async (input) => {
+      if (!sharedMembers.some((m) => m.userId === input.userId)) return false;
+      const admitted = await roster.accept({ inviteId: input.inviteId, secret: input.secret, userId: input.userId, pairingId: input.pairingId, deviceName: input.name });
+      if (admitted) joining.delete(input.pairingId);
+      return admitted;
+    },
   });
   const relay: RelayLink = new RelayLink({
     endpoint: () => client.endpoint,
     // A token from tokenFile belongs to a cloud computer, which the server reaches directly; it never opens the relay.
-    // A shared DSH reaches the relay as its team's host once members can pair (shared-dsh.md, step 3), not before.
-    token: () => !config.tokenFile && !shared?.enabled && client.authenticated() ? client.platformCredential() : undefined,
+    // A shared DSH reaches it with its host token, as its team's host.
+    token: () => !config.tokenFile && client.authenticated() ? client.platformCredential() : undefined,
     clientIdPath: relayClientIdPath(config.cachePath),
     onStatus: (status) => {
       ctx.logger.debug('relay: %s', status);
       if (status === 'connected') void readPhones();
       else { phones = []; security.reset(); bridge.dropAll(); }
     },
-    onEvent: () => void readPhones(),
+    onEvent: (event) => {
+      if (event.t === 'members') void sharedList(event.members);
+      else void readPhones();
+    },
     onForward: (frame) => void security.handle(frame),
   });
+  /** The server's list changed: whoever left loses their devices here too, whatever the relay already cut. */
+  const sharedList = async (members: SharedMember[]) => {
+    sharedMembers = members;
+    try {
+      for (const pairingId of await roster.prune(new Set(members.map((m) => m.userId)))) await security.revoke(pairingId);
+    } catch (error) { ctx.logger.warn('Could not update the shared roster: %s', (error as Error).message); }
+  };
   const readPhones = async () => {
     try {
-      phones = pairingSchema.array().parse(await relay.request({ t: 'pairings' }));
+      const listed = pairingSchema.array().parse(await relay.request({ t: 'pairings' }));
+      joining.clear();
+      for (const phone of listed) if (phone.status === 'pending' && phone.userId) joining.set(phone.id, phone.userId);
+      phones = listed.map(({ userId: _userId, ...phone }) => phone);
       await security.reconcile(phones.map((phone) => phone.id));
     } catch (error) { ctx.logger.warn('Could not read the paired phones: %s', (error as Error).message); }
   };
@@ -292,7 +323,20 @@ export async function apply(ctx: Context, config: Config) {
     await shared.enable(key);
     relay.refresh();
   };
-  const shareDisable = async () => { if (!shared?.enabled) throw new Error(say('shared.off')); await shared.disable(); relay.refresh(); };
+  const shareDisable = async () => {
+    if (!shared?.enabled) throw new Error(say('shared.off'));
+    await shared.disable(); await roster.clear(); sharedMembers = []; joining.clear(); relay.refresh();
+  };
+  /** `/teamwork share invite <email>`: a single-use link for one member the server lists, to hand over outside it. */
+  const shareInvite = async (email: string) => {
+    const status = shared?.status();
+    if (!status?.enabled || !status.hostId) throw new Error(say('shared.off'));
+    const member = sharedMembers.find((m) => m.email?.toLowerCase() === email.trim().toLowerCase());
+    if (!member?.email) throw new Error(`${email} is not on this shared DSH's access list. A team admin manages it in the console.`);
+    const { id, secret, expiresAt } = await roster.invite({ userId: member.userId, email: member.email });
+    const query = new URLSearchParams({ server: client.endpoint, host: status.hostId, key: await security.publicKey(), invite: id, secret });
+    return { link: `dshteamwork://join?${query}`, expiresAt: new Date(expiresAt).toISOString() };
+  };
   const authorize = async (code: string) => { hostManaged(); pendingInstalls.clear(); try { await client.completeLogin(code); } finally { await overlay.apply(client.current()); relay.refresh(); } stopCallback(); if (config.autoSync !== false) await configSync.sync(); };
   /** The sign-in page's address, and whether the code comes back by itself; without a listener it is pasted. */
   const beginLogin = async () => {
@@ -487,7 +531,7 @@ export async function apply(ctx: Context, config: Config) {
   ctx.inject(['commands'], (child) => {
     child.effect(() => child.commands.register({
       name: 'teamwork', description: 'Team sign-in, configuration sync and model selection',
-      input: { hint: 'login | authorize <code> | share enable <key> | share disable | share status | sync | status | session [check] | continue <instruction> | cancel | retry [confirm] | list | tools | plugins [presetId] | info [id] | new <id> | use <id> | install <id> confirm | logout' },
+      input: { hint: 'login | authorize <code> | share enable <key> | share disable | share status | share invite <email> | share members | sync | status | session [check] | continue <instruction> | cancel | retry [confirm] | list | tools | plugins [presetId] | info [id] | new <id> | use <id> | install <id> confirm | logout' },
       handler: async ({ agent, rawInput }) => {
         const [action, requestedId, confirmation] = rawInput.trim().split(/\s+/);
         const [id,pinVersion]=requestedId?.split('@') ?? [];
@@ -514,6 +558,15 @@ export async function apply(ctx: Context, config: Config) {
           if (action === 'share') {
             if (requestedId === 'enable') { await shareEnable(confirmation ?? ''); const st = shared!.status(); return { kind: 'success', text: `This DSH is now the shared DSH “${st.name}” of its team. Personal sign-in is off while it is shared; /teamwork share disable ends it.` }; }
             if (requestedId === 'disable') { await shareDisable(); return { kind: 'success', text: 'Shared mode is off and its key deleted. Sign in with /teamwork login to use this DSH as yourself.' }; }
+            if (requestedId === 'invite') {
+              const invite = await shareInvite(confirmation ?? '');
+              return { kind: 'success', text: [`Invite for ${confirmation}, single use, valid until ${invite.expiresAt}:`, invite.link, 'Hand it over yourself, in person or through a channel your team trusts, never through the Teamwork server. Whoever opens it signed in as that member pairs a device with this DSH.'].join('\n') };
+            }
+            if (requestedId === 'members') {
+              const devices = await roster.devices();
+              const rows = sharedMembers.map((m) => `${m.email ?? m.userId}: ${Object.values(devices).filter((d) => d.userId === m.userId).map((d) => d.name).join(', ') || 'no device yet'}`);
+              return { kind: 'success', text: rows.length ? ['Members who may reach this shared DSH, and their devices:', ...rows].join('\n') : 'Nobody is listed yet, or the relay is not connected.' };
+            }
             const st = shared?.status() ?? { enabled: false };
             return { kind: 'success', text: st.enabled ? [`Shared DSH: ${st.name ?? st.hostId ?? 'not yet confirmed'}`, `Team: ${st.teamId ?? 'unknown'}`, st.expiresAt ? `Host token valid until ${st.expiresAt}` : '', st.error ?? ''].filter(Boolean).join('\n') : 'Shared mode is off. A team admin creates a team host key in the console; run /teamwork share enable <key> here.' };
           }

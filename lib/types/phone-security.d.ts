@@ -34,6 +34,18 @@ export declare class PhoneSecurity {
         confirm(id: string): Promise<void>;
         changed(): void;
         error(error: Error): void;
+        /**
+         * On a shared DSH, the member a pending pairing belongs to, as the relay said when they joined; and whether their
+         * invite admits this device. Absent on a personal computer, which pairs by code alone.
+         */
+        joining?(pairingId: string): string | undefined;
+        admit?(input: {
+            pairingId: string;
+            userId: string;
+            inviteId: string;
+            secret: string;
+            name: string;
+        }): Promise<boolean>;
     });
     offerCode(expiresAt: string): void;
     publicKey(): Promise<string>;

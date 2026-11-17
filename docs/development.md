@@ -146,8 +146,18 @@ token reaches `TeamworkClient.useToken` like a host-provided one, and it is
 renewed ten minutes before it ends, or a minute after a failure that may pass;
 a key the server no longer accepts drops the token. Enabling signs a personal
 account out first, and while shared, sign-in and sign-out are refused and the
-relay stays closed until members can pair (step 3 of that plan). A host-provided
-token (`tokenFile`) excludes shared mode.
+relay connects with the host token. A host-provided token (`tokenFile`)
+excludes shared mode.
+
+`src/shared-roster.ts` is the DSH's own roster (`<cache>.shared-roster.json`,
+mode 0600): invites (a single-use secret per listed member, kept as a hash, a
+day long), each member's paired devices, and each session's starter. A member's
+handset joins through the relay, pins this DSH's key from the invite, and hands
+the secret over inside the channel; `PhoneSecurity` admits it through the
+roster instead of a safety code. The relay's `members` list prunes the roster.
+`src/shared-owner.ts` is what the bridge asks before any call or stream and
+after `session/create` and `session/list`: a member reaches only sessions they
+started, sees only their events, and answers only questions they were shown.
 
 ## Phone transport
 

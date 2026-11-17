@@ -97,6 +97,8 @@ interface Link {
   phoneConfirmed: boolean;
   authorized: boolean;
   pending: boolean;
+  /** A shared DSH's joining member (src/shared-roster.ts): the invite in the channel stands in for the safety code. */
+  joining?: string;
 }
 export class PhoneSecurity {
   private links = new Map<string, Link>();
@@ -113,6 +115,12 @@ export class PhoneSecurity {
       confirm(id: string): Promise<void>;
       changed(): void;
       error(error: Error): void;
+      /**
+       * On a shared DSH, the member a pending pairing belongs to, as the relay said when they joined; and whether their
+       * invite admits this device. Absent on a personal computer, which pairs by code alone.
+       */
+      joining?(pairingId: string): string | undefined;
+      admit?(input: { pairingId: string; userId: string; inviteId: string; secret: string; name: string }): Promise<boolean>;
     },
   ) {}
   offerCode(expiresAt: string) {
@@ -157,7 +165,8 @@ export class PhoneSecurity {
       const trusted = await this.options.keys.peer(scope, frame.pairingId);
       const identity = await this.options.keys.identity();
       if (epoch !== this.epoch) return;
-      if (!trusted) {
+      const joining = trusted ? undefined : this.options.joining?.(frame.pairingId);
+      if (!trusted && !joining) {
         if (
           !this.offer ||
           this.offer.expires < Date.now() ||
@@ -184,7 +193,7 @@ export class PhoneSecurity {
             link.authorized = true;
             channel.verified();
             channel.send({ t: 'secureReady' });
-          } else channel.send({ t: 'verify', code });
+          } else if (!link.joining) channel.send({ t: 'verify', code });
           this.options.changed();
         },
         message: async (value) => {
@@ -196,6 +205,24 @@ export class PhoneSecurity {
             body.name.length <= 100
           ) {
             link.name = body.name;
+            this.options.changed();
+            return;
+          }
+          if (body?.t === 'shareJoin' && link.joining && !link.authorized) {
+            const input = { inviteId: body.invite, secret: body.secret, name: body.name };
+            const valid = Object.values(input).every((v) => typeof v === 'string' && v.length > 0 && v.length <= 100);
+            const admitted = valid && link.remoteKey && await this.options.admit?.({ pairingId: frame.pairingId, userId: link.joining, ...(input as Record<string, string>) } as never);
+            if (!admitted) {
+              channel.send({ t: 'joinRefused' });
+              throw new Error('invite_refused');
+            }
+            await this.options.keys.trust(link.scope, frame.pairingId, link.remoteKey!, input.name as string);
+            await this.options.confirm(frame.pairingId);
+            link.name = input.name as string;
+            link.authorized = true;
+            link.pending = false;
+            channel.verified();
+            channel.send({ t: 'pairAccepted' });
             this.options.changed();
             return;
           }
@@ -240,6 +267,7 @@ export class PhoneSecurity {
         phoneConfirmed: false,
         authorized: false,
         pending: !trusted,
+        ...(joining ? { joining } : {}),
       };
       this.links.set(frame.pairingId, link);
       channel.start();
