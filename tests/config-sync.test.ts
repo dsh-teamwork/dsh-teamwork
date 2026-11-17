@@ -31,6 +31,6 @@ test('failure still reconciles permissions, hides transport details, and recover
   expect(f.sync.status().lastError).not.toContain('sensitive');
   await f.sync.sync(); expect(f.sync.status().lastError).toBeUndefined();
   f.revoke(); f.client.sync.mockRejectedValueOnce(new Error('403'));
-  await expect(f.sync.sync()).rejects.toThrow(); expect(f.sync.status().lastError).toContain('重新登录');
+  await expect(f.sync.sync()).rejects.toThrow(); expect(f.sync.status().lastError).toContain('Sign in again');
   await f.sync.stop();
 });

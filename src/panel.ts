@@ -5,10 +5,12 @@
  * token stays here and never reaches the browser. DSH admits only its owner
  * peer to an exact route.
  *
- * This file is imported by both halves: types only, no Node or host imports.
+ * This file is imported by both halves, so it imports nothing from the host:
+ * `panelRoutes` is handed the host's words (`src/messages.ts`) by its caller.
  */
 
 import type { PluginState } from './plugin-status.js';
+import type { Locale } from './locale.js';
 export type { PluginState };
 
 export type ToolState = 'available' | 'conditional' | 'missing' | 'unknown';
@@ -34,8 +36,10 @@ export interface PanelPreset {
   name: string;
   version: number;
   description: string;
-  /** The team model the preset calls, or its own provider/model. */
-  model: string;
+  /** The team model the preset calls, or its own provider/model; null when it runs on the session's own model. */
+  model: string | null;
+  /** The assistant every team is given (`builtin: team-assistant`), shown first. */
+  assistant: boolean;
   /** False when the model it references is gone from the team. */
   modelAvailable: boolean;
   /** Checked against the current session; `unknown` without one. */
@@ -73,6 +77,8 @@ export interface PanelPairingOffer {
 }
 
 export interface PanelState {
+  /** The language the panel speaks: the Teamwork account's once read, the system's before (`src/messages.ts`). */
+  locale: Locale;
   authRevision: number;
   authenticated: boolean;
   /**
@@ -111,19 +117,26 @@ export interface PanelQuota {
   exhausted: boolean;
 }
 
+/** One team's `GET /api/teams/{teamId}/summary`, reduced to what the panel shows: the member's budget and the reviews waiting. */
+export interface PanelSummary {
+  budget: PanelQuota;
+  /** Submissions awaiting review: the team's for an admin, the member's own otherwise. */
+  pendingReviews: number;
+}
+
 export interface PanelProfile {
   id: string;
   email: string | null;
   name: string | null;
   image: string | null;
-  locale: 'en' | 'zh-CN' | null;
+  locale: Locale | null;
 }
 
 /** What the host half implements for the routes. Each throws an `Error` whose message is shown to the member. */
 export interface PanelOps {
-  quota(teamId: string): Promise<PanelQuota>;
+  summary(teamId: string): Promise<PanelSummary>;
   profile(): Promise<PanelProfile>;
-  updateProfile(input: { name: string | null; locale: 'en' | 'zh-CN' }): Promise<PanelProfile>;
+  updateProfile(input: { name: string | null; locale: Locale }): Promise<PanelProfile>;
   state(sessionId: string | undefined): Promise<PanelState>;
   /** The sign-in page; `automatic` when the code comes back to this DSH by itself (src/login-callback.ts). */
   login(): Promise<{ url: string; automatic: boolean }>;
@@ -157,50 +170,59 @@ export interface FetchRoute {
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value ?? null), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
 
-const text = (value: unknown, field: string) => {
-  if (typeof value !== 'string' || !value.trim()) throw new Error(`缺少 ${field}`);
-  return value.trim();
-};
+/** The host's words the routes themselves use, and the request scope that sets their language. */
+export interface RouteVoice {
+  say(key: 'request.invalid' | 'request.failed' | 'request.missing' | 'profile.nameTooLong' | 'profile.badLocale' | RouteField, values?: Record<string, string>): string;
+  /** Runs one request in the panel's language. */
+  speak<T>(answer: () => T): T;
+}
+type RouteField = 'field.team' | 'field.code' | 'field.server' | 'field.session' | 'field.config' | 'field.plugin' | 'field.version' | 'field.device';
 
-export function panelRoutes(ops: PanelOps): FetchRoute[] {
+
+export function panelRoutes(ops: PanelOps, voice: RouteVoice): FetchRoute[] {
+  const { say } = voice;
+  const text = (value: unknown, field: RouteField) => {
+    if (typeof value !== 'string' || !value.trim()) throw new Error(say('request.missing', { field: say(field) }));
+    return value.trim();
+  };
   const post = (name: string, handle: (body: Record<string, unknown>) => unknown): FetchRoute => ({
     path: `${ROUTE_PREFIX}/${name}`,
     methods: ['POST'],
     requestBody: 'buffered',
-    async fetch(request) {
+    fetch: (request) => voice.speak(async () => {
       let body: Record<string, unknown> = {};
       try {
         const raw = await request.text();
         if (raw) body = JSON.parse(raw);
       } catch {
-        return json({ error: '请求格式无效' }, 400);
+        return json({ error: say('request.invalid') }, 400);
       }
       try {
         return json((await handle(body)) ?? {});
       } catch (error) {
-        return json({ error: (error as Error).message || '操作失败' }, 400);
+        return json({ error: (error as Error).message || say('request.failed') }, 400);
       }
-    },
+    }),
   });
   const session = (body: Record<string, unknown>) => (typeof body.sessionId === 'string' && body.sessionId ? body.sessionId : undefined);
   return [
     post('state', (body) => ops.state(session(body))),
     post('profile', () => ops.profile()),
-    post('quota', (body) => ops.quota(text(body.teamId, '团队'))),
+    post('summary', (body) => ops.summary(text(body.teamId, 'field.team'))),
     post('update-profile', (body) => {
-      if (body.name !== null && (typeof body.name !== 'string' || body.name.length > 80)) throw new Error('显示名称不能超过 80 个字符');
-      if (body.locale !== 'en' && body.locale !== 'zh-CN') throw new Error('请选择有效的语言');
+      if (body.name !== null && (typeof body.name !== 'string' || body.name.length > 80)) throw new Error(say('profile.nameTooLong'));
+      if (body.locale !== 'en' && body.locale !== 'zh-CN') throw new Error(say('profile.badLocale'));
       return ops.updateProfile({ name: body.name as string | null, locale: body.locale });
     }),
     post('login', () => ops.login()),
-    post('authorize', (body) => ops.authorize(text(body.code, '授权码'))),
+    post('authorize', (body) => ops.authorize(text(body.code, 'field.code'))),
     post('sync', () => ops.sync()),
     post('logout', () => ops.logout()),
-    post('server', (body) => ops.setServer(body.server === null ? null : text(body.server, '服务器地址'))),
-    post('use', async (body) => ({ message: await ops.use(text(body.sessionId, '会话'), text(body.id, '配置 ID')) })),
-    post('install', async (body) => ({ message: await ops.install(text(body.id, '插件 ID'), text(body.version, '版本')) })),
+    post('server', (body) => ops.setServer(body.server === null ? null : text(body.server, 'field.server'))),
+    post('use', async (body) => ({ message: await ops.use(text(body.sessionId, 'field.session'), text(body.id, 'field.config')) })),
+    post('install', async (body) => ({ message: await ops.install(text(body.id, 'field.plugin'), text(body.version, 'field.version')) })),
     post('pair-phone', () => ops.pairPhone()),
-    post('decide-phone', (body) => ops.decidePhone(text(body.id, '设备'), body.accept === true)),
-    post('revoke-phone', (body) => ops.revokePhone(text(body.id, '设备'))),
+    post('decide-phone', (body) => ops.decidePhone(text(body.id, 'field.device'), body.accept === true)),
+    post('revoke-phone', (body) => ops.revokePhone(text(body.id, 'field.device'))),
   ];
 }

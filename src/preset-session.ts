@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { z } from 'zod/v4';
 import type { PresetContext } from './preset-context.js';
+import { say } from './messages.js';
 const stampSchema = z.object({teamId:z.string(),id:z.string(),version:z.number().int().positive()});
 export type PresetStamp = z.infer<typeof stampSchema> | null;
 /**
@@ -52,5 +53,5 @@ export function toolReport(preset: Pick<PresetContext,'requiredTools'|'optionalT
   return [...preset.requiredTools.map(name=>({name,required:true})),...preset.optionalTools.map(name=>({name,required:false}))].map(t=>({...t,state:lookup(t.name)}));
 }
 export function assertBlank(boundary: {openTurnStartSeq:unknown;lastTurn:number}) {
-  if (boundary.openTurnStartSeq!==null || boundary.lastTurn>0) throw new Error('会话已开始或正在执行，DSH 不允许切换预设。请新建会话后选择该预设。');
+  if (boundary.openTurnStartSeq!==null || boundary.lastTurn>0) throw new Error(say('use.started'));
 }

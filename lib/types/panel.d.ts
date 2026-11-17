@@ -5,9 +5,11 @@
  * token stays here and never reaches the browser. DSH admits only its owner
  * peer to an exact route.
  *
- * This file is imported by both halves: types only, no Node or host imports.
+ * This file is imported by both halves, so it imports nothing from the host:
+ * `panelRoutes` is handed the host's words (`src/messages.ts`) by its caller.
  */
 import type { PluginState } from './plugin-status.js';
+import type { Locale } from './locale.js';
 export type { PluginState };
 export type ToolState = 'available' | 'conditional' | 'missing' | 'unknown';
 export interface PanelPlugin {
@@ -30,8 +32,10 @@ export interface PanelPreset {
     name: string;
     version: number;
     description: string;
-    /** The team model the preset calls, or its own provider/model. */
-    model: string;
+    /** The team model the preset calls, or its own provider/model; null when it runs on the session's own model. */
+    model: string | null;
+    /** The assistant every team is given (`builtin: team-assistant`), shown first. */
+    assistant: boolean;
     /** False when the model it references is gone from the team. */
     modelAvailable: boolean;
     /** Checked against the current session; `unknown` without one. */
@@ -69,6 +73,8 @@ export interface PanelPairingOffer {
     link: string;
 }
 export interface PanelState {
+    /** The language the panel speaks: the Teamwork account's once read, the system's before (`src/messages.ts`). */
+    locale: Locale;
     authRevision: number;
     authenticated: boolean;
     /**
@@ -130,20 +136,26 @@ export interface PanelQuota {
     tokenLimited: boolean;
     exhausted: boolean;
 }
+/** One team's `GET /api/teams/{teamId}/summary`, reduced to what the panel shows: the member's budget and the reviews waiting. */
+export interface PanelSummary {
+    budget: PanelQuota;
+    /** Submissions awaiting review: the team's for an admin, the member's own otherwise. */
+    pendingReviews: number;
+}
 export interface PanelProfile {
     id: string;
     email: string | null;
     name: string | null;
     image: string | null;
-    locale: 'en' | 'zh-CN' | null;
+    locale: Locale | null;
 }
 /** What the host half implements for the routes. Each throws an `Error` whose message is shown to the member. */
 export interface PanelOps {
-    quota(teamId: string): Promise<PanelQuota>;
+    summary(teamId: string): Promise<PanelSummary>;
     profile(): Promise<PanelProfile>;
     updateProfile(input: {
         name: string | null;
-        locale: 'en' | 'zh-CN';
+        locale: Locale;
     }): Promise<PanelProfile>;
     state(sessionId: string | undefined): Promise<PanelState>;
     /** The sign-in page; `automatic` when the code comes back to this DSH by itself (src/login-callback.ts). */
@@ -175,5 +187,12 @@ export interface FetchRoute {
     requestBody: 'buffered' | 'streaming';
     fetch(request: Request): Promise<Response>;
 }
-export declare function panelRoutes(ops: PanelOps): FetchRoute[];
+/** The host's words the routes themselves use, and the request scope that sets their language. */
+export interface RouteVoice {
+    say(key: 'request.invalid' | 'request.failed' | 'request.missing' | 'profile.nameTooLong' | 'profile.badLocale' | RouteField, values?: Record<string, string>): string;
+    /** Runs one request in the panel's language. */
+    speak<T>(answer: () => T): T;
+}
+type RouteField = 'field.team' | 'field.code' | 'field.server' | 'field.session' | 'field.config' | 'field.plugin' | 'field.version' | 'field.device';
+export declare function panelRoutes(ops: PanelOps, voice: RouteVoice): FetchRoute[];
 //# sourceMappingURL=panel.d.ts.map

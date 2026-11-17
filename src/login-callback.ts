@@ -32,8 +32,8 @@ export async function listenForCode(redeem: (code: string) => Promise<void>, ttl
     const attempt = queue.then(async () => { if (!redeemed) { await redeem(code); redeemed = true; } });
     queue = attempt.catch(() => {});
     attempt.then(
-      () => { page(response, 200, '已登录 DSH Teamwork', '可以关闭这个页面，回到 DSH。'); close(); },
-      (error: Error) => page(response, 400, '授权没有完成', `${error.message || '授权失败'}。请回到 DSH 重新运行 /teamwork login，或把网页上显示的那一行粘贴到 DSH。`),
+      () => { page(response, 200, 'Signed in to DSH Teamwork', 'You can close this page and go back to DSH.'); close(); },
+      (error: Error) => page(response, 400, 'Sign-in did not finish', `${error.message || 'Authorization failed'}. Go back to DSH and sign in again, or paste the line shown on the website into DSH.`),
     );
   });
   const close = () => {

@@ -1,4 +1,10 @@
-import { ROUTE_PREFIX, type PanelPairingOffer, type PanelState, type PanelProfile, type PanelQuota } from '../panel.js';
+import { ROUTE_PREFIX, type PanelPairingOffer, type PanelState, type PanelProfile, type PanelSummary } from '../panel.js';
+import type { Locale } from '../locale.js';
+
+/** A request that never reached the host's answer; the panel words it in its own language. */
+export class HostUnreachable extends Error {
+  constructor(readonly reason: 'offline' | 'not-loaded' | 'status', readonly status?: number) { super(reason); }
+}
 
 // Relative to the page, like the host's own calls, so a DSH served under a path still reaches it.
 const base = ROUTE_PREFIX.slice(1) + '/';
@@ -13,20 +19,22 @@ async function call<T>(route: string, payload: Record<string, unknown> = {}): Pr
       credentials: 'same-origin',
     });
   } catch {
-    throw new Error('无法连接 DSH 服务');
+    throw new HostUnreachable('offline');
   }
   const data = await response.json().catch(() => null);
   if (!response.ok) {
-    if (response.status === 404 && !data) throw new Error('DSH 还没有加载 Teamwork 插件的服务端，请重启 DSH');
-    throw new Error(data?.error || `请求失败（HTTP ${response.status}）`);
+    if (response.status === 404 && !data) throw new HostUnreachable('not-loaded');
+    // The host words its own errors in the member's language (src/messages.ts).
+    if (data?.error) throw new Error(data.error);
+    throw new HostUnreachable('status', response.status);
   }
   return data as T;
 }
 
 export const api = {
-  quota: (teamId: string) => call<PanelQuota>('quota', { teamId }),
+  summary: (teamId: string) => call<PanelSummary>('summary', { teamId }),
   profile: () => call<PanelProfile>('profile'),
-  updateProfile: (input: { name: string | null; locale: 'en' | 'zh-CN' }) => call<PanelProfile>('update-profile', input),
+  updateProfile: (input: { name: string | null; locale: Locale }) => call<PanelProfile>('update-profile', input),
   state: (sessionId: string | undefined) => call<PanelState>('state', { sessionId }),
   login: () => call<{ url: string; automatic: boolean }>('login'),
   authorize: (code: string) => call('authorize', { code }),

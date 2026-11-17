@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import type { PanelProfile, PanelQuota } from './panel.js';
+import type { PanelProfile, PanelSummary } from './panel.js';
+import type { Locale } from './locale.js';
 /** `GET /api/configs`: every team the member is in, each with its configuration (platform ADR 0013). */
 export declare const snapshotSchema: z.ZodObject<{
     teams: z.ZodArray<z.ZodObject<{
@@ -388,12 +389,12 @@ export declare class TeamworkClient {
     platformCredential(): string;
     sessionRevision(): number;
     authenticated(): boolean;
-    /** Independent of configuration sync: no credentials or other members' budgets leave the host. */
-    quota(teamId: string): Promise<PanelQuota>;
+    /** Independent of configuration sync: only the member's own budget and a count of reviews leave the host. */
+    summary(teamId: string): Promise<PanelSummary>;
     profile(): Promise<PanelProfile>;
     updateProfile(input: {
         name: string | null;
-        locale: 'en' | 'zh-CN';
+        locale: Locale;
     }): Promise<PanelProfile>;
     current(): {
         teams: {

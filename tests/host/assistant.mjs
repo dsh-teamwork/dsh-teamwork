@@ -68,7 +68,7 @@ export function apply(ctx) {
         new AbortController().signal,
       );
       assert.equal(freshResult.result.kind, 'success', freshResult.result.text);
-      const freshId = freshResult.result.text.match(/已创建会话 ([a-z0-9-]+)/)[1];
+      const freshId = freshResult.result.text.match(/Created session ([a-z0-9-]+)/)[1];
       assert.deepEqual(
         ctx.agents.get(freshId).model.current(),
         agent.model.current(),
@@ -142,7 +142,7 @@ export function apply(ctx) {
           ],
         });
         assert(
-          JSON.stringify(accepted).includes('已创建会话'),
+          JSON.stringify(accepted).includes('Created session'),
           'Trusted host approval executes the real Teamwork operation',
         );
         invalidate = true;

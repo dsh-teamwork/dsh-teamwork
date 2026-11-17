@@ -313,6 +313,11 @@ export const css = String.raw`
 .twui-resource-list .twui-item-subtitle { font: inherit; font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--twui-fill); color: var(--twui-fg-muted); }
 .twui-resource-list .twui-item-tags { margin-top: 8px; }
 .twui-resource-list .twui-item-title { font-size: 15px; font-weight: 500; }
+/* The one entry a screen leads with (the team assistant): a strong border, and the team's navy as a bar and on its tile. */
+.twui-featured .twui-item { border-color: var(--twui-border-strong); box-shadow: inset 3px 0 0 var(--twui-brand); }
+.twui-featured .twui-item-main { padding: 20px 20px 20px 23px; }
+.twui-featured .twui-tile { background: var(--twui-brand); color: var(--twui-brand-fg); }
+.twui-featured .twui-item-desc { max-width: 68ch; }
 .twui-account-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; margin-top: 12px; align-items: start; }
 .twui-account-grid > section { gap: 20px; min-width: 0; }
 .twui-account-grid h3 { font-size: 15px; font-weight: 500; }

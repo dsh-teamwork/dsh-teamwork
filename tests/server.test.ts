@@ -10,8 +10,8 @@ describe('the server a member signs in to', () => {
     expect(serverAddress(' https://teamwork.example.com/base/ ')).toBe('https://teamwork.example.com/base');
     expect(serverAddress('http://localhost:3800')).toBe('http://localhost:3800');
     expect(() => serverAddress('http://teamwork.example.com')).toThrow('https');
-    expect(() => serverAddress('https://dshteamwork.com/?x=1')).toThrow('查询参数');
-    expect(() => serverAddress('dshteamwork.com')).toThrow('无效');
+    expect(() => serverAddress('https://dshteamwork.com/?x=1')).toThrow('query');
+    expect(() => serverAddress('dshteamwork.com')).toThrow('not a server address');
   });
 
   it('signs out and drops the cache when it changes, since a token belongs to one server', async () => {

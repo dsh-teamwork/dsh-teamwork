@@ -208,7 +208,7 @@ export class Bridge {
     } catch (error) {
       if (error instanceof PhoneSessionError) return answer(200, { result: { ok: false, error: { code: `teamwork/${error.code}` } } });
       link.cookie = undefined;
-      this.options.log?.('手机的请求无法到达 DSH', error);
+      this.options.log?.('A phone request could not reach DSH', error);
       answer(502, { error: 'dsh_unreachable' });
     }
   }
@@ -242,7 +242,7 @@ export class Bridge {
     let cookie: string;
     try { cookie = await this.cookie(link, origin); } catch (error) {
       link.cookie = undefined;
-      this.options.log?.('无法为手机登录 DSH', error);
+      this.options.log?.('Could not sign DSH in for the phone', error);
       return this.closeStreams(pairingId, link, 'dsh_unreachable');
     }
     if (this.links.get(pairingId) !== link || link.mux) return;
