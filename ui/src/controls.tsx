@@ -65,7 +65,8 @@ export function Field({ label, hint, error, htmlFor, children }: {
   );
 }
 
-export type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'accent';
+/** `brand` is the team's navy, for an admin or the team edition. */
+export type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'accent' | 'brand';
 
 export function Badge({ tone = 'neutral', dot = false, outline = false, title, children }: {
   tone?: Tone;

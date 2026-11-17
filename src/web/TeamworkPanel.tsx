@@ -463,10 +463,11 @@ function Header({ state, page, team, selectTeam, navigate }: { state: PanelState
     <div className="twui-brand-lockup"><button type="button" className="twui-brand-home" aria-label="返回团队资源" onClick={() => navigate('resources')}><BrandMark size={32} title="DSH Teamwork" /></button>
       <div className="twui-row twui-team-scope"><Button variant="ghost" onClick={() => navigate('teams')}>我的团队</Button>
         {!!state.teams.length && <><Icon name="chevronRight" size={14} /><Select label="选择团队" value={team} onActivate={() => navigate('resources')} onChange={selectTeam} options={[{ value: 'all', label: '全部团队' }, ...state.teams.map(t => ({ value: t.id, label: t.name, description: t.role === 'admin' ? '管理员' : '成员' }))]} /></>}
+        {state.teams.find(t => t.id === team)?.role === 'admin' && <Badge tone="brand">管理员</Badge>}
       </div>
     </div>
     <div className="twui-row twui-header-actions">
-      <Button variant="ghost" icon="smartphone" aria-current={page === 'devices' ? 'page' : undefined} onClick={() => navigate('devices')}>手机连接{pending ? ` · ${pending}` : ''}</Button>
+      <Button variant="ghost" icon="smartphone" aria-current={page === 'devices' ? 'page' : undefined} onClick={() => navigate('devices')}>手机连接{pending ? <>{` · ${pending}`}<span className="twui-signal-dot" aria-hidden="true" /></> : null}</Button>
       <Button variant="ghost" icon="settings" aria-current={page === 'profile' ? 'page' : undefined} onClick={() => navigate('profile')}>我的账号</Button>
     </div>
   </>;
@@ -475,23 +476,26 @@ function Header({ state, page, team, selectTeam, navigate }: { state: PanelState
 /** Resource-filter context only: changing this team never changes a running conversation. */
 function Quota({ team }: { team: string }) {
   const [label, setLabel] = useState('预算加载中…');
+  const [exhausted, setExhausted] = useState(false);
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
     const load = async () => {
       let next = '预算暂不可用';
+      let out = false;
       try {
         const q = await api.quota(team);
+        out = q.exhausted;
         next = q.exhausted ? '预算已用尽' : q.state === 'unconfirmed' ? '预算待核实'
           : q.state === 'known' && q.remaining !== null ? `预算剩余 ${q.remaining} 积分`
           : q.tokenLimited ? '已设 Token 上限' : '未设预算上限';
       } catch { /* Availability is advisory; failed reads never imply unlimited use. */ }
-      if (active) { setLabel(next); timer = setTimeout(load, 30000); }
+      if (active) { setLabel(next); setExhausted(out); timer = setTimeout(load, 30000); }
     };
     void load();
     return () => { active = false; clearTimeout(timer); };
   }, [team]);
-  return <span className="twui-footer-service" role="status" title="所选团队中我的预算；模型或上游仍可能有其他限制。切换资源团队不改变当前会话。">{label}</span>;
+  return <span className="twui-footer-service" role="status" title="所选团队中我的预算；模型或上游仍可能有其他限制。切换资源团队不改变当前会话。">{exhausted && <span className="twui-signal-dot" aria-hidden="true" />}{label}</span>;
 }
 
 function Footer({ state, team, run }: { state: PanelState; team: string; run: Run }) {

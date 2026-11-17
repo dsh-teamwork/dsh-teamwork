@@ -5,7 +5,7 @@
  * `--twui-*` variables that default to DSH's own tokens (`styles.ts`).
  */
 export { UIRoot, ensureStyles, join } from './root.js';
-export { BrandMark, BRAND_INDIGO, BRAND_PAPER } from './brand.js';
+export { BrandMark, BRAND_FLUKE, BRAND_INDIGO, BRAND_PAPER, BRAND_SURFACE, BRAND_SWELL } from './brand.js';
 export { Icon } from './icons.js';
 export type { IconName } from './icons.js';
 export { Badge, Button, Field, Input, Monogram, Skeleton, Spinner, Tabs } from './controls.js';
