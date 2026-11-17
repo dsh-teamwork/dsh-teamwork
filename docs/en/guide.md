@@ -51,6 +51,18 @@ with it. Give it a working model and ask it to inspect real state. While an
 administrator browses a team, the panel's header shows how many submissions wait
 for review and opens them in the console.
 
+### A team's shared DSH
+
+On the hosted service a team admin can make one DSH the team's own: create a
+key under **Shared DSHs** in the team's console, then run
+`/teamwork share enable <key>` in that DSH. It then signs in as the team, not as
+a person: personal sign-in is refused while it is shared, it syncs that one
+team, and its team-model calls are billed to the team. The first machine that
+uses a key keeps it; the same key on another machine is refused, and an admin
+who rotates or deletes the key cuts it off. `/teamwork share disable` deletes
+the key. Members reaching a shared DSH from their phones arrives in a later
+release.
+
 ## Choose a model or preset
 
 Use **New session** for a team preset. **Use in this blank session** works only
@@ -97,6 +109,9 @@ Run these in DSH's command input, not your shell. IDs come from `/teamwork list`
 | --- | --- |
 | `/teamwork login` | Open browser authorization. |
 | `/teamwork authorize <code>` | Redeem a fallback authorization code. |
+| `/teamwork share enable <key>` | Make this DSH its team's shared DSH with a team host key (hosted service). |
+| `/teamwork share disable` | End shared mode and delete its key. |
+| `/teamwork share status` | Show the shared DSH's name, team and host token. |
 | `/teamwork status` | Show authentication, sync status and recent errors. |
 | `/teamwork sync` | Refresh the team's resources. |
 | `/teamwork list` | List configuration IDs. |

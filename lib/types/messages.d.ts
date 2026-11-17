@@ -25,6 +25,8 @@ declare const en: {
     'server.extra': string;
     'auth.signedOut': string;
     'auth.hostManaged': string;
+    'auth.shared': string;
+    'shared.off': string;
     'auth.changed': string;
     'summary.team': string;
     'summary.unavailable': string;

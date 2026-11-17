@@ -134,6 +134,21 @@ still clears the token until the file changes. In this mode the relay is never
 opened, and sign-in, sign-out and server changes are refused: the server reaches
 a cloud computer itself, and the token belongs to the host, not a member.
 
+## Shared mode
+
+`src/shared-mode.ts` makes a DSH its team's shared DSH (the hosted service's
+`premium/docs/tech/shared-dsh.md`). `/teamwork share enable <key>` trades a team
+host key for a one-hour host token (platform ADR 0042): the server's nonce is
+signed with this DSH's identity key from `<cache>.phone-keys.json`, and the first
+exchange binds the key to that identity, so a copied key is refused elsewhere.
+The key is saved to `<cache>.shared.json` (mode 0600) only once accepted, the
+token reaches `TeamworkClient.useToken` like a host-provided one, and it is
+renewed ten minutes before it ends, or a minute after a failure that may pass;
+a key the server no longer accepts drops the token. Enabling signs a personal
+account out first, and while shared, sign-in and sign-out are refused and the
+relay stays closed until members can pair (step 3 of that plan). A host-provided
+token (`tokenFile`) excludes shared mode.
+
 ## Phone transport
 
 The hosted relay is optional and discovered through `GET /api/relay`. The host
