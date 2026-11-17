@@ -10,6 +10,7 @@ export type TaskState = z.infer<typeof taskSchema>;
 declare module '@deepseek-ai/dsh-session-projection/types' {
     interface SessionProjectionMap {
         teamworkTask: TaskState;
+        teamworkStep: StepState;
     }
 }
 export declare const taskProjection: {
@@ -54,6 +55,66 @@ export declare const taskProjection: {
             outcome: string;
             failureCode: string | null;
             turn: number;
+        };
+    };
+    stateVersion: number;
+};
+declare const stepSchema: z.ZodObject<{
+    turn: z.ZodNumber;
+    count: z.ZodNumber;
+    tool: z.ZodString;
+    target: z.ZodString;
+}, z.core.$strip>;
+export type StepState = z.infer<typeof stepSchema>;
+/** What a tool call works on, as the phone's session view names it; '' when its arguments name nothing. */
+export declare function stepTarget(args: string): string;
+/**
+ * The running turn's progress for the phone's session list: how many tool calls
+ * it has made and what the latest works on. A new turn starts at zero and an
+ * ended one clears, so an idle session says nothing.
+ */
+export declare const stepProjection: {
+    key: "teamworkStep";
+    stateSchema: z.ZodObject<{
+        turn: z.ZodNumber;
+        count: z.ZodNumber;
+        tool: z.ZodString;
+        target: z.ZodString;
+    }, z.core.$strip>;
+    init: () => {
+        turn: number;
+        count: number;
+        tool: string;
+        target: string;
+    };
+    apply: (state: NoInfer<{
+        turn: number;
+        count: number;
+        tool: string;
+        target: string;
+    }>, event: import("@deepseek-ai/dsh-session").SessionEvent) => {
+        turn: number;
+        count: number;
+        tool: string;
+        target: string;
+    };
+    wire: {
+        viewSchema: z.ZodObject<{
+            turn: z.ZodNumber;
+            count: z.ZodNumber;
+            tool: z.ZodString;
+            target: z.ZodString;
+        }, z.core.$strip>;
+        view: (state: NoInfer<{
+            turn: number;
+            count: number;
+            tool: string;
+            target: string;
+        }>) => {
+            turn: number;
+            count: number;
+            tool: string;
+            target: string;
         };
     };
     stateVersion: number;
