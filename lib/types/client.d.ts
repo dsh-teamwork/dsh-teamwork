@@ -518,6 +518,15 @@ export declare function modelData(snapshot: Snapshot, config: TeamConfig): {
     maxTokens?: number | undefined;
 } | undefined;
 /**
+ * The name of the team model, or of the model a preset calls, that cannot run here. Without its `contextWindow`
+ * the adapter cannot size it: a guessed window either overstates the model or leaves the host's
+ * compaction, which reserves its headroom out of the window, no room at all. Nothing is guessed;
+ * the model stays unusable until the team configures the real window.
+ */
+export declare function unsizedModel(snapshot: Snapshot, config: TeamConfig): string | undefined;
+/** `unsizedModel` as the member reads it; the panel words it itself from `contextWindowMissing`. */
+export declare function modelLimitProblem(snapshot: Snapshot, config: TeamConfig): string | undefined;
+/**
  * The server the member picked in the panel, kept beside the configuration cache
  * (`teamwork-cache.json` → `teamwork-cache.server.json`). Absent, the profile's
  * `apiEndpoint` applies, which defaults to the hosted service.

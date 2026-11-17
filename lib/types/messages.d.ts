@@ -33,6 +33,7 @@ declare const en: {
     'phone.relayOff': string;
     'use.pick': string;
     'use.modelGone': string;
+    'model.noContextWindow': string;
     'use.missingTools': string;
     'use.started': string;
     'use.notLoaded': string;

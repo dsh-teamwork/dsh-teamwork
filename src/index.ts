@@ -12,7 +12,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session';
 import type { Agent } from '@deepseek-ai/dsh-agent';
 import type { PresetContext } from './preset-context.js';
 import { PresetStamps, presetStampPath, sameRevision, toolReport, assertBlank } from './preset-session.js';
-import { modelData, inheritsModel, pinnedPlugin, type TeamConfig } from './client.js';
+import { modelData, modelLimitProblem, unsizedModel, inheritsModel, pinnedPlugin, type TeamConfig } from './client.js';
 import { taskProjection, stepProjection, TaskActions, recoveryHint, retryInstruction, outcomeText } from './task-session.js';
 import { pluginState, stateText, type PluginState } from './plugin-status.js';
 import { panelRoutes, type FetchRoute, type PanelOps, type PanelPreset } from './panel.js';
@@ -101,6 +101,7 @@ export async function apply(ctx: Context, config: Config) {
     const revision = latest ? latest.version === preset.version ? 'Up to date' : `Version v${latest.version} is available; a started session needs a new session to use it` : 'This preset is no longer in the team configuration';
     return [`${preset.name} · v${preset.version}`, `Source: team ${team?.teamName ?? preset.teamId} / preset ${preset.id}`, revision,
       latest && snapshot && !inheritsModel(latest) && !modelData(snapshot,latest) ? 'The linked model is no longer available. Ask an admin to link a team model again.' : '',
+      latest && snapshot ? modelLimitProblem(snapshot,latest) ?? '' : '',
       saved && !sameRevision(saved,preset) ? `This session recorded v${saved.version}, which differs from the loaded version; inference is blocked. Start a new session.` : '',
       `Session model: ${agent.model.current()?.provider ?? "none"}/${agent.model.current()?.model ?? "none"}`,
       `Preset model: ${preset.inheritModel ? 'the session’s model' : preset.modelConfigId ?? 'legacy own model'} · through the platform; the server always applies its current model policy`,
@@ -110,7 +111,13 @@ export async function apply(ctx: Context, config: Config) {
       'Install or enable a missing tool in the local plugin manager; a preset never installs a plugin or grants a permission.',
     ].filter(Boolean).join('\n');
   };
+  /** The reason a team model or preset id cannot run here (see modelLimitProblem), if any. */
+  const limitProblem = (id: string) => { const snapshot = client.current(), item = findConfig(snapshot, id); return snapshot && item ? modelLimitProblem(snapshot, item) : undefined; };
+  // Runs inside the host's model-switch compaction check, so a model without its window gets this reason, not that failure.
   ctx.on('agent/request', async ({agent}, next) => {
+    const selection = agent.model.current();
+    const limit = selection?.provider === platformProvider ? limitProblem(selection.model) : undefined;
+    if (limit) throw new Error(limit);
     const preset = activePreset(agent);
     if (preset) {
       if(preset.inheritModel && !agent.model.current())throw new Error('Choose a working local model first, or ask an admin to link a team model to the assistant.');
@@ -133,6 +140,8 @@ export async function apply(ctx: Context, config: Config) {
       if(fresh) { try {await configSync.sync();} catch {throw new PhoneSessionError('unavailable', 'Could not verify team access. Check the connection and /teamwork status, and sign in again if needed.');} }
       const snapshot=client.current(), item=findConfig(snapshot, selection.model);
       if(!snapshot || !item || !modelData(snapshot,item)) throw new PhoneSessionError('model_unavailable', 'The team model was removed or its link is broken. Choose an available model; for a changed preset, start a new session.');
+      const limit=modelLimitProblem(snapshot,item);
+      if(limit) throw new PhoneSessionError('model_unavailable', limit);
     }
     const preset=activePreset(agent);
     if(preset) {
@@ -298,6 +307,8 @@ export async function apply(ctx: Context, config: Config) {
     const item = findConfig(snapshot, id), team = teamOf(snapshot, id);
     if (!item || !team || item.kind === 'plugin') throw new Error(say('use.pick'));
     if (!inheritsModel(item) && !modelData(snapshot!,item)) throw new Error(say('use.modelGone'));
+    const limit = modelLimitProblem(snapshot!, item);
+    if (limit) throw new Error(limit);
     if (item.kind === 'preset') {
       assertBlank(ctx.agents.turnBoundaryOf(agent.session));
       if (item.data.pluginDependencies?.length) await checkPlugins({teamId:team.teamId,pluginDependencies:item.data.pluginDependencies} as PresetContext);
@@ -356,7 +367,8 @@ export async function apply(ctx: Context, config: Config) {
           id: item.id, teamId: team.teamId, teamName: team.teamName, name: item.name, version: item.version, description: item.data.description ?? '',
           model: item.data.inheritModel ? null : item.data.modelConfigId ? linked?.name ?? item.data.modelConfigId : `${item.data.provider}/${item.data.model}`,
           assistant: item.builtin === 'team-assistant',
-          modelAvailable: inheritsModel(item) || !!modelData(snapshot!, item),
+          modelAvailable: inheritsModel(item) || !!modelData(snapshot!, item) && !unsizedModel(snapshot!, item),
+          contextWindowMissing: !!unsizedModel(snapshot!, item),
           tools: agent ? requirements(agent, candidate) : toolReport(candidate, () => 'unknown'),
           plugins: item.data.pluginDependencies?.length ? await plugins({teamId:team.teamId,pluginDependencies:item.data.pluginDependencies} as PresetContext, readInventory) : [],
         });
@@ -380,7 +392,7 @@ export async function apply(ctx: Context, config: Config) {
         } : null,
         presets: presets.sort((a,b) => Number(b.assistant) - Number(a.assistant)),
         models: (snapshot?.teams ?? []).flatMap(team => team.configs.flatMap(c => c.kind === 'model'
-          ? [{ id: c.id, teamId: team.teamId, teamName: team.teamName, name: c.name, version: c.version, upstream: `${c.data.provider}/${c.data.model}` }] : [])),
+          ? [{ id: c.id, teamId: team.teamId, teamName: team.teamName, name: c.name, version: c.version, upstream: `${c.data.provider}/${c.data.model}`, contextWindowMissing: !!unsizedModel(snapshot!, c) }] : [])),
         plugins: (await plugins(undefined, readInventory)).map(plugin => {
           const team = teamOf(snapshot, plugin.id);
           return { ...plugin, teamId: team?.teamId, teamName: team?.teamName };
@@ -469,7 +481,11 @@ export async function apply(ctx: Context, config: Config) {
               : `Sign in and authorize in the browser: ${url}\nThen paste the line shown on the page here and run it (/teamwork authorize <code>).` };
           }
           if (action === 'authorize') { await authorize(id ?? ''); return { kind: 'success', text: 'Authorized. Run /teamwork status to see the sync status.' }; }
-          if (action === 'sync') { await configSync.sync(); return { kind: 'success', text: 'Team configuration synced; your local configuration is unchanged.' }; }
+          if (action === 'sync') {
+            await configSync.sync();
+            const synced = client.current(), problems = [...new Set(allConfigs(synced).filter(c => c.kind === 'model').flatMap(c => modelLimitProblem(synced!, c) ?? []))];
+            return { kind: 'success', text: ['Team configuration synced; your local configuration is unchanged.', ...problems].join('\n') };
+          }
           if (action === 'logout') { await logout(); return { kind: 'success', text: 'Signed out, and the team configuration removed.' }; }
           if (action === 'status') { const status = configSync.status(); return { kind: 'success', text: [`Signed in: ${status.authenticated ? 'yes' : 'no (a cache is not a valid sign-in)'}`, `Auto sync: ${status.autoSync ? 'on' : 'off'}`, `Teams: ${status.teams.length ? status.teams.join(', ') : 'none'} · configurations: ${status.configCount}`, `Last successful sync: ${status.lastSuccess ?? 'not since this start'}`, status.syncing ? 'Syncing' : '', status.lastError ?? ''].filter(Boolean).join('\n') }; }
           const snapshot = client.current();
@@ -497,6 +513,8 @@ export async function apply(ctx: Context, config: Config) {
           if (action === 'new') {
             if (!item || item.kind !== 'preset') throw new Error('Choose a team preset ID');
             if (!inheritsModel(item) && !modelData(snapshot!,item)) throw new Error(say('use.modelGone'));
+            const limit = modelLimitProblem(snapshot!, item);
+            if (limit) throw new Error(limit);
             const sessionId = `team-${crypto.randomUUID()}` as SessionId;
             const agentPreset = `team:${team!.teamId}:${item.id}`;
             await child.agents.create({sessionId, meta:{cwd:agent.session.header.cwd,agentPreset}, setup:async agentCtx=>{await child.agentPresets.mount(agentCtx,agentPreset);}, ...(inheritsModel(item) && agent.model.current() ? {agentOptions:agent.model.current()} : {})});

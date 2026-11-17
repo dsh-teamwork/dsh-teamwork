@@ -56,7 +56,7 @@ const home = join(work, 'home'), cache = join(work, 'cache.json'), result = join
 await mkdir(home); const registryUrl = `http://127.0.0.1:${registry.address().port}/`;
 // One team; the host scripts write it to the cache as `{ teams: [snapshot] }`.
 const snapshot = { teamId: 'host-smoke', teamName: 'Host smoke', role: 'member', configs: [
-  { id: 'review', kind: 'preset', name: 'Review', version: 1, data: { provider: 'deepseek', model: 'deepseek-chat', systemPrompt: 'Review {{literal_team_token}}.' } },
+  { id: 'review', kind: 'preset', name: 'Review', version: 1, data: { provider: 'deepseek', model: 'deepseek-chat', contextWindow: 131072, systemPrompt: 'Review {{literal_team_token}}.' } },
   { id: 'fixture', kind: 'plugin', name: 'Fixture', version: 1, data: { package: '@teamwork-test/fixture', version: '1.0.0', description: 'Local install fixture' } },
   { id: 'override', kind: 'plugin', name: 'Override fixture', version: 1, data: { package: '@teamwork-test/override', version: '1.0.0', description: 'Must remain disabled' } },
 ] };

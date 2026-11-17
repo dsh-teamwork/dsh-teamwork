@@ -61,3 +61,45 @@ test('a panel request reads one inventory for every preset and sees changes on t
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('a team model without its context window is shown as not ready and stops a request with the reason', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'teamwork-limits-'));
+  const cachePath = join(dir, 'cache.json');
+  const configs = [
+    { id: 'sized', kind: 'model', name: 'Sized', version: 1, data: { provider: 'kimi', model: 'k2', contextWindow: 131072 } },
+    { id: 'unsized', kind: 'model', name: 'DeepSeek Flash', version: 1, data: { provider: 'hosted:billing', model: 'deepseek-flash' } },
+    { id: 'writer', kind: 'preset', name: 'Writer', version: 1, data: { modelConfigId: 'unsized' } },
+  ];
+  await writeFile(cachePath, JSON.stringify({ teams: [{ teamId: 'team', teamName: 'Team', role: 'member', configs }] }));
+  const routes = new Map<string, FetchRoute>();
+  const listeners = new Map<string, (...args: any[]) => unknown>();
+  const services: Record<string, any> = {};
+  const ctx: any = {
+    llm: { registerAdapter: () => () => {} },
+    sessionProjections: { register: async () => ({ dispose() {} }) },
+    agentPresets: { register: async () => async () => {}, presetForSession: () => undefined, serviceFor: () => undefined },
+    agents: { get: () => undefined },
+    logger: { warn: vi.fn(), debug() {} },
+    get: (name: string) => services[name],
+    provide: (name: string, service: unknown) => { services[name] = service; },
+    on: (name: string, listener: (...args: any[]) => unknown) => { listeners.set(name, listener); return () => {}; },
+    effect: (fn: () => unknown) => { fn(); },
+    connection: { fetch: { register: (route: FetchRoute) => { routes.set(route.path, route); return async () => {}; } } },
+    inject: (names: string[], fn: (ctx: unknown) => void) => { if (names.length === 1 && names[0] === 'connection') fn(ctx); },
+  };
+  try {
+    await apply(ctx, { apiEndpoint: 'http://localhost:3800', cachePath, autoSync: false });
+    const response = await routes.get('/api/teamwork/state')!.fetch(new Request('http://localhost/api/teamwork/state', { method: 'POST', body: '{}' }));
+    const state: PanelState = await response.json();
+    expect(state.models.find(m => m.id === 'sized')?.contextWindowMissing).toBe(false);
+    expect(state.models.find(m => m.id === 'unsized')?.contextWindowMissing).toBe(true);
+    expect(state.presets[0]).toMatchObject({ model: 'DeepSeek Flash', modelAvailable: false, contextWindowMissing: true });
+
+    const request = listeners.get('agent/request')!;
+    const agent = (model: string) => ({ id: 's', model: { current: () => ({ provider: 'teamwork-platform', model }) }, session: {} });
+    const next = vi.fn(async () => 'config');
+    await expect(request({ agent: agent('unsized') }, next)).rejects.toThrow('“DeepSeek Flash” has no context window');
+    expect(next).not.toHaveBeenCalled();
+    await expect(request({ agent: agent('sized') }, next)).resolves.toBe('config');
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
