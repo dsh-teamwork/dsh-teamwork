@@ -1,5 +1,5 @@
 /**
- * Shared mode (dsh-teamwork-premium, `premium/docs/tech/shared-dsh.md`): this DSH is a team's, signed in by a team host
+ * Shared mode (the server's `docs/tech/shared-dsh.md`): this DSH is a team's, signed in by a team host
  * key instead of a person. The key is kept beside the cache (`<cache>.shared.json`, mode 0600) and traded for a host token
  * (platform ADR 0042): the server sends a nonce, this DSH signs it with its identity key, and the first exchange binds the
  * key to that identity, so the key copied to another machine is refused. The token lasts an hour and is renewed before it ends.

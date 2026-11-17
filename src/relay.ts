@@ -1,6 +1,6 @@
 /**
  * The outbound connection to the hosted mobile relay (dsh-teamwork-premium,
- * `premium/docs/tech/mobile-relay.md`). While a member is signed in, and only
+ * the server's `docs/tech/relay.md`). While a member is signed in, and only
  * when their server announces a relay at `GET /api/relay`, this DSH holds one
  * WebSocket to it and is recorded there as a host. A server without a relay,
  * such as every self-hosted community edition, answers 404, and no socket is

@@ -266,7 +266,7 @@ export async function apply(ctx: Context, config: Config) {
     throw new Error(say(relay.status === 'connected' ? 'phone.relayBusy' : 'phone.relayOff'));
   };
   ctx.effect(() => () => relay.stop());
-  // The phone's notifications (dsh-teamwork-premium, mobile-relay.md, "Push notifications"): when an agent waits on its member,
+  // The phone's notifications (the server's docs/tech/relay.md, "Push notifications"): when an agent waits on its member,
   // tell the relay which session, and hand on to the answerers untouched. Prepended, so it is told even when one claims the request.
   const reportWaiting = (kind: 'question' | 'approval') => function (this: unknown, request: { agent?: { id?: unknown } } | undefined, next: () => unknown) {
     const agent = request?.agent ?? (this as { id?: unknown } | undefined);
