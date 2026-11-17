@@ -16,6 +16,8 @@ export declare class PhoneKeys {
     private update;
     trust(scope: string, id: string, key: string, name: string): Promise<void>;
     forget(scope: string, id: string): Promise<void>;
+    /** Forgets every phone of `scope` outside `kept`, and answers which ones went. */
+    forgetExcept(scope: string, kept: ReadonlySet<string>): Promise<string[]>;
 }
 export declare class PhoneSecurity {
     private readonly options;
@@ -54,6 +56,12 @@ export declare class PhoneSecurity {
     send(value: unknown): void;
     approve(id: string): Promise<void>;
     revoke(id: string): Promise<void>;
+    /**
+     * The relay's list of this computer's unrevoked pairings: a phone trusted here but absent from it was
+     * revoked while this computer was offline (the phone no longer waits for an acknowledgement), so its
+     * trust goes now.
+     */
+    reconcile(listed: readonly string[]): Promise<void>;
     reset(): void;
 }
 //# sourceMappingURL=phone-security.d.ts.map
