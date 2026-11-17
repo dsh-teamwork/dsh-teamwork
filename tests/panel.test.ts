@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { panelRoutes, ROUTE_PREFIX, type PanelOps } from '../src/panel.js';
-import { setLocale } from '../src/messages.js';
+import { say, speaking } from '../src/messages.js';
 
 const calls: Array<[string, unknown[]]> = [];
 const ops: PanelOps = {
@@ -10,13 +10,14 @@ const ops: PanelOps = {
   state: async (sessionId) => { calls.push(['state', [sessionId]]); return { authenticated: false } as never; },
   login: async () => ({ url: 'https://teamwork.example.com/plugin?challenge=abc', automatic: true }),
   authorize: async (code) => { calls.push(['authorize', [code]]); },
-  sync: async () => { throw new Error('同步失败'); },
+  sync: async () => { throw new Error('Sync failed'); },
   logout: async () => {},
   setServer: async (server) => { calls.push(['server', [server]]); },
   use: async (sessionId, id) => `used ${id} in ${sessionId}`,
   install: async (id, version) => { calls.push(['install', [id, version]]); return 'installed'; },
 };
-const routes = new Map(panelRoutes(ops).map((r) => [r.path, r]));
+let locale: 'en' | 'zh-CN' = 'en';
+const routes = new Map(panelRoutes(ops, { say, speak: answer => speaking(locale, answer) }).map((r) => [r.path, r]));
 const post = (name: string, body?: unknown) =>
   routes.get(`${ROUTE_PREFIX}/${name}`)!.fetch(new Request(`http://dsh.local${ROUTE_PREFIX}/${name}`, { method: 'POST', body: typeof body === 'string' ? body : JSON.stringify(body ?? {}) }));
 
@@ -53,7 +54,7 @@ describe('panel routes', () => {
   it('answers a failure as 400 with the message the panel shows', async () => {
     const response = await post('sync');
     expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: '同步失败' });
+    expect(await response.json()).toEqual({ error: 'Sync failed' });
     expect((await post('authorize', '{not json')).status).toBe(400);
     expect((await post('use', { sessionId: 's1' })).status).toBe(400);
   });
@@ -69,11 +70,12 @@ describe('panel routes', () => {
   it('never caches an answer', async () => {
     expect((await post('login')).headers.get('cache-control')).toBe('no-store');
   });
-  it('words its own refusals in the account’s language', async () => {
-    setLocale('zh-CN');
+  it('words its own refusals in the panel’s language, and only inside its requests', async () => {
+    locale = 'zh-CN';
     expect(await (await post('state', '{')).json()).toEqual({ error: '请求格式无效。' });
     expect(await (await post('authorize', {})).json()).toEqual({ error: '缺少授权码。' });
-    setLocale('en');
+    expect(say('request.invalid')).toBe('The request could not be read.');
+    locale = 'en';
     expect(await (await post('state', '{')).json()).toEqual({ error: 'The request could not be read.' });
     expect(await (await post('authorize', {})).json()).toEqual({ error: 'Authorization code is missing.' });
   });

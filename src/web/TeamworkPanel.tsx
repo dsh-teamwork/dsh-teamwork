@@ -252,7 +252,8 @@ export function TeamworkPanel({ host: dsh }: { host: Host }) {
         {loadError !== undefined && <Banner tone="danger" title={t('load.stale')} action={retry}>{describe(t, loadError)}</Banner>}
         {state.sync.lastError && (
           <Banner tone="warning" title={t('sync.failedTitle')} action={<Button size="sm" icon="refresh" onClick={() => run(() => api.sync(), t('sync.done'))}>{t('common.retry')}</Button>}>
-            {state.sync.lastError}
+            {/* The host's own text is English for the terminal (/teamwork status); the panel words it. */}
+            {t('sync.failedBody')}
           </Banner>
         )}
         {page !== 'resources' && !choosing && <div><Button variant="ghost" size="sm" onClick={() => navigate('resources')}>{t('common.back')}</Button></div>}

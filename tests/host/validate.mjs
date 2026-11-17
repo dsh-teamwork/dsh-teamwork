@@ -45,14 +45,14 @@ export function apply(ctx) {
    assert.equal(install.result.kind, 'success', install.result.text);
    const bundle = (await ctx.pluginManager.listBundles()).find(b => b.name === '@teamwork-test/fixture');
    assert(bundle, 'Installed bundle absent');
-   if (!install.result.text.includes('重启')) assert.equal(ctx.get('teamworkFixture')?.version, '1.0.0');
+   if (!install.result.text.includes('Restart')) assert.equal(ctx.get('teamworkFixture')?.version, '1.0.0');
    await execute('/teamwork install fixture');
    const duplicate = await execute('/teamwork install fixture confirm');
    assert.equal(duplicate.result.kind, 'error', 'Existing installation must not be silently overwritten');
    const originalPlugins = await ctx.pluginManager.listPlugins();
    await execute('/teamwork install override');
    const blocked = await execute('/teamwork install override confirm');
-   assert.equal(blocked.result.kind, 'error'); assert.match(blocked.result.text, /未启用/);
+   assert.equal(blocked.result.kind, 'error'); assert.match(blocked.result.text, /not enabled/);
    const disabled = (await ctx.pluginManager.listBundles()).find(b => b.name === '@teamwork-test/override');
    assert(disabled?.installed); assert.equal(disabled.enabled, false);
    assert.equal(ctx.get('teamworkOverride'), undefined, 'Override bundle code must never run');

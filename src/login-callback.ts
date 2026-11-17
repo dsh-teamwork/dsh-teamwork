@@ -11,7 +11,6 @@
 
 import { createServer, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { say } from './messages.js';
 
 export const CALLBACK_PATH = '/callback';
 const CALLBACK_TTL_MS = 10 * 60_000;
@@ -33,8 +32,8 @@ export async function listenForCode(redeem: (code: string) => Promise<void>, ttl
     const attempt = queue.then(async () => { if (!redeemed) { await redeem(code); redeemed = true; } });
     queue = attempt.catch(() => {});
     attempt.then(
-      () => { page(response, 200, say('callback.doneTitle'), say('callback.doneBody')); close(); },
-      (error: Error) => page(response, 400, say('callback.failTitle'), say('callback.failBody', { reason: error.message || say('callback.failReason') })),
+      () => { page(response, 200, 'Signed in to DSH Teamwork', 'You can close this page and go back to DSH.'); close(); },
+      (error: Error) => page(response, 400, 'Sign-in did not finish', `${error.message || 'Authorization failed'}. Go back to DSH and sign in again, or paste the line shown on the website into DSH.`),
     );
   });
   const close = () => {

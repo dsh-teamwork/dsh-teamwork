@@ -5,8 +5,8 @@
  * token stays here and never reaches the browser. DSH admits only its owner
  * peer to an exact route.
  *
- * This file is imported by both halves: the browser takes its types and
- * `ROUTE_PREFIX`; `panelRoutes` and the host's messages are tree-shaken out of it.
+ * This file is imported by both halves, so it imports nothing from the host:
+ * `panelRoutes` is handed the host's words (`src/messages.ts`) by its caller.
  */
 import type { PluginState } from './plugin-status.js';
 import type { Locale } from './locale.js';
@@ -187,5 +187,12 @@ export interface FetchRoute {
     requestBody: 'buffered' | 'streaming';
     fetch(request: Request): Promise<Response>;
 }
-export declare function panelRoutes(ops: PanelOps): FetchRoute[];
+/** The host's words the routes themselves use, and the request scope that sets their language. */
+export interface RouteVoice {
+    say(key: 'request.invalid' | 'request.failed' | 'request.missing' | 'profile.nameTooLong' | 'profile.badLocale' | RouteField, values?: Record<string, string>): string;
+    /** Runs one request in the panel's language. */
+    speak<T>(answer: () => T): T;
+}
+type RouteField = 'field.team' | 'field.code' | 'field.server' | 'field.session' | 'field.config' | 'field.plugin' | 'field.version' | 'field.device';
+export declare function panelRoutes(ops: PanelOps, voice: RouteVoice): FetchRoute[];
 //# sourceMappingURL=panel.d.ts.map

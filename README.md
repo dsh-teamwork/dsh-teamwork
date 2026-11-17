@@ -19,7 +19,8 @@ The team assistant helps with sharing, usage and administration in conversation.
 
 The plugin panel and the web console speak English and Simplified Chinese:
 the panel follows the language of your Teamwork account (**Account** in the
-panel). Terminal `/teamwork` output is still Chinese. Screenshots use a local
+panel). Terminal `/teamwork` output is always English; model replies follow the
+conversation. Screenshots use a local
 demonstration team.
 
 ## What you can do

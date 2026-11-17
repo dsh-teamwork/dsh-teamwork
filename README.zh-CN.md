@@ -15,7 +15,7 @@
 
 ![真实 DSH 宿主中的 Teamwork 面板，使用本地演示团队](https://raw.githubusercontent.com/dsh-teamwork/dsh-teamwork/main/assets/readme/teamwork-panel.png)
 
-插件面板和网页控制台都支持英文和简体中文；面板跟随你的 Teamwork 账号语言（面板中的“我的账号”）。终端 `/teamwork` 命令的输出目前仍是中文。截图均来自本地演示团队。
+插件面板和网页控制台都支持英文和简体中文；面板跟随你的 Teamwork 账号语言（面板中的“我的账号”）。终端 `/teamwork` 命令的输出统一为英文；模型的回复跟随对话语言。截图均来自本地演示团队。
 
 ## 可以做什么
 

@@ -1,5 +1,4 @@
 import type { TeamworkClient, TeamOverlay } from './client.js';
-import { say } from './messages.js';
 
 /** One shared flight for manual and scheduled configuration synchronization. */
 export class ConfigSync {
@@ -27,7 +26,7 @@ export class ConfigSync {
         this.lastSuccess = new Date().toISOString(); this.lastError = undefined;
       } catch (error) {
         // Do not expose arbitrary transport errors, which can contain credentials.
-        this.lastError = say(this.client.authenticated() ? 'sync.failed' : 'sync.signIn');
+        this.lastError = this.client.authenticated() ? 'Sync failed; the last synced configuration is kept. Try again later, or run /teamwork sync.' : 'Sign in again, then sync.';
         throw error;
       }
     })().finally(() => { this.flight = undefined; });

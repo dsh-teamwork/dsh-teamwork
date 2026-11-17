@@ -1,12 +1,12 @@
 /**
- * What the host half says to a member, in the member's language: the errors and
- * results the Teamwork panel shows, and the page the browser lands on after
- * sign-in. The language is the Teamwork account's once the host has read the
- * profile, and the system's before that (`setLocale`, `src/index.ts`).
- *
- * The `/teamwork` command's own report text is not here yet and stays Chinese.
+ * The host's errors and results that the Teamwork panel can show. Everything
+ * the host prints is English: `/teamwork` output, logs, the sign-in callback
+ * page. Only while it answers one of the panel's requests (`speaking`) does it
+ * word these in the panel's language: the Teamwork account's once the host has
+ * read the profile, the system's before that (`setLocale`, `src/index.ts`).
  */
 
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { pickLocale, translator, type Locale } from './locale.js';
 
 const en = {
@@ -31,8 +31,6 @@ const en = {
   'auth.changed': 'The signed-in account changed. Try again.',
   'summary.team': 'Sync first, and choose a team you are in.',
   'summary.unavailable': 'The team summary is unavailable right now.',
-  'sync.failed': 'Sync failed; the last synced configuration is kept. Try again later, or run /teamwork sync.',
-  'sync.signIn': 'Sign in again, then sync.',
   'phone.notFound': 'This device is no longer paired.',
   'phone.relayBusy': 'The relay cannot handle this right now. Try again in a moment.',
   'phone.relayOff': 'Not connected to the relay, so phones cannot be managed.',
@@ -51,11 +49,6 @@ const en = {
   'install.notEnabled': 'The plugin was downloaded but not enabled: it could not be confirmed to only add configuration, or it conflicts with local configuration. Check it in the local plugin manager.',
   'install.restart': 'Installed. Restart DSH to use it.',
   'install.done': 'Installed and enabled.',
-  'callback.doneTitle': 'Signed in to DSH Teamwork',
-  'callback.doneBody': 'You can close this page and go back to DSH.',
-  'callback.failTitle': 'Sign-in did not finish',
-  'callback.failReason': 'Authorization failed',
-  'callback.failBody': '{reason}. Go back to DSH and sign in again, or paste the line shown on the website into DSH.',
 };
 
 const zhCN: Record<keyof typeof en, string> = {
@@ -80,8 +73,6 @@ const zhCN: Record<keyof typeof en, string> = {
   'auth.changed': '登录状态已改变，请重试。',
   'summary.team': '请先同步，并选择你所在的团队。',
   'summary.unavailable': '团队摘要暂不可用。',
-  'sync.failed': '同步失败，保留已有配置；稍后重试或运行 /teamwork sync。',
-  'sync.signIn': '请重新登录后同步。',
   'phone.notFound': '这台设备已不在配对列表中。',
   'phone.relayBusy': '中转服务暂时无法处理，请稍后再试。',
   'phone.relayOff': '还没有连上中转服务，无法管理手机。',
@@ -100,29 +91,27 @@ const zhCN: Record<keyof typeof en, string> = {
   'install.notEnabled': '插件已下载但未启用：无法确认它只新增配置，或存在本地配置冲突。请在本地插件管理器中检查。',
   'install.restart': '已安装，请重启 DSH 生效。',
   'install.done': '插件已安装并启用。',
-  'callback.doneTitle': '已登录 DSH Teamwork',
-  'callback.doneBody': '可以关闭这个页面，回到 DSH。',
-  'callback.failTitle': '授权没有完成',
-  'callback.failReason': '授权失败',
-  'callback.failBody': '{reason}。请回到 DSH 重新登录，或把网页上显示的那一行粘贴到 DSH。',
 };
 
 export type HostMessage = keyof typeof en;
 
-/** The language of the machine DSH runs on, used until the account's is known. */
+/** The language of the machine DSH runs on, which the panel speaks until the account's is known. */
 export function systemLocale(): Locale {
-  // `process` is read through globalThis: the browser half type-checks this module (through `src/panel.ts`) without Node's types.
-  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
-  return pickLocale(Intl.DateTimeFormat().resolvedOptions().locale || env?.LANG);
+  return pickLocale(Intl.DateTimeFormat().resolvedOptions().locale || process.env.LANG);
 }
 
-// Unset until the account's language is known; read lazily so importing this module runs nothing.
 let account: Locale | undefined;
 
-/** The host has one member, so one language at a time: the account's once read, the system's otherwise. */
+/** The host has one member, so the panel has one language: the account's once read, the system's otherwise. */
 export function setLocale(locale: Locale | null | undefined) { account = locale ?? undefined; }
-export function currentLocale(): Locale { return account ?? systemLocale(); }
+export function panelLocale(): Locale { return account ?? systemLocale(); }
 
+const speaker = new AsyncLocalStorage<Locale>();
+
+/** Runs one panel request, so what it says is in the panel's language. */
+export function speaking<T>(locale: Locale, answer: () => T): T { return speaker.run(locale, answer); }
+
+/** English, except inside `speaking`. */
 export function say(key: HostMessage, values?: Record<string, string | number>) {
-  return translator({ en, 'zh-CN': zhCN }, currentLocale())(key, values);
+  return translator({ en, 'zh-CN': zhCN }, speaker.getStore() ?? 'en')(key, values);
 }

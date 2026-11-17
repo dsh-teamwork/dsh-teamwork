@@ -4,10 +4,6 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { TeamworkClient } from '../src/client.js';
 import { listenForCode } from '../src/login-callback.js';
-import { setLocale } from '../src/messages.js';
-
-// The host speaks the account's language; these cases pin English.
-setLocale('en');
 
 describe('the sign-in code coming back on loopback', () => {
   it('listens on 127.0.0.1 only, redeems the code once and closes', async () => {

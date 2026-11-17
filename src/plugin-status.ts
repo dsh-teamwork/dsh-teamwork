@@ -11,8 +11,8 @@ export function pluginState(expected: string, bundle: {version?:string;availabil
   return rows.length ? 'ready' : 'unknown';
 }
 export const stateText: Record<PluginState,string> = {
-  missing:'未安装：先查看安装说明并确认安装', disabled:'已安装未启用：请在 DSH 本地插件管理器启用',
-  'version-mismatch':'版本不符：请在本地插件管理器检查，团队操作不会覆盖已有版本', failed:'加载失败：请查看本地插件管理器诊断并修复',
-  pending:'尚未就绪：等待加载；如安装提示需要重启，请重启 DSH 后重新检查',ready:'正常',unknown:'无法确认运行状态：请在本地插件管理器检查',
-  'catalog-changed':'目录缺失或版本已变化：请联系管理员更新预设依赖',
+  missing:'not installed: read the install note, then confirm the install', disabled:'installed but not enabled: enable it in the DSH plugin manager',
+  'version-mismatch':'different version: check it in the local plugin manager; team actions never overwrite an installed version', failed:'failed to load: check the diagnostics in the local plugin manager',
+  pending:'not ready: waiting to load; if the install asked for a restart, restart DSH and check again',ready:'ready',unknown:'cannot confirm its state: check it in the local plugin manager',
+  'catalog-changed':'missing from the catalog or its version changed: ask an admin to update the preset’s dependencies',
 };

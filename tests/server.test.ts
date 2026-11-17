@@ -3,10 +3,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ServerChoice, serverAddress, TeamworkClient } from '../src/client.js';
-import { setLocale } from '../src/messages.js';
-
-// The host speaks the account's language; these cases pin English.
-setLocale('en');
 
 describe('the server a member signs in to', () => {
   it('accepts https anywhere and plain http only on this machine', () => {

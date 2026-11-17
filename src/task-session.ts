@@ -10,7 +10,7 @@ export const taskProjection = {
   apply:(state,event)=>{
     if(event.type==='user/message' && event.data.source.kind==='user') {
       const text=event.data.content.filter(b=>b.type==='text').map(b=>b.text).join('\n');
-      return {...state,task:text.slice(0,240) || '非文本任务（请查看会话历史）'};
+      return {...state,task:text.slice(0,240) || 'non-text task (see the session history)'};
     }
     if(event.type==='turn/start') return {...state,turn:event.data.turn,outcome:'running',failureCode:null};
     if(event.type==='turn/end') return {...state,outcome:event.data.reason.kind,failureCode:event.data.reason.kind==='error' ? event.data.reason.error.code ?? 'UNKNOWN' : null};
@@ -46,20 +46,20 @@ export const stepProjection = {
     return state;
   },wire:{viewSchema:stepSchema,view:state=>state},stateVersion:1,
 } satisfies ProjectionDefinition<'teamworkStep',StepState>;
-export function outcomeText(outcome:string) { return ({'not-started':'未开始',running:'执行中',completed:'已完成',aborted:'已取消',blocked:'被阻止',error:'失败',interrupted:'恢复前意外中断','max-tokens':'达到输出上限',forked:'从分支继承'} as Record<string,string>)[outcome] ?? '未知状态'; }
+export function outcomeText(outcome:string) { return ({'not-started':'not started',running:'running',completed:'completed',aborted:'cancelled',blocked:'blocked',error:'failed',interrupted:'interrupted before a restart','max-tokens':'hit the output limit',forked:'inherited from a fork'} as Record<string,string>)[outcome] ?? 'unknown'; }
 export function recoveryHint(code:string|null, outcome:string) {
-  if (['AUTH','AUTHENTICATION','UNAUTHORIZED','MISSING_CREDENTIAL'].includes(code ?? '')) return '登录或凭据无效：团队模型请 /teamwork login；本地模型请检查本地凭据。';
-  if(code==='RATE_LIMIT') return '模型限流：稍后再显式继续，不自动重复任务。';
-  if(code==='TOOL_ACTIVATION_FAILED') return '工具条件不满足：运行 /teamwork tools 和 /teamwork plugins 检查。';
-  if(['TRANSPORT','TIMEOUT','SERVER'].includes(code ?? '')) return '模型连接或服务异常：检查连接后显式继续；原始任务可能已经执行部分操作。';
-  if(outcome==='aborted') return '任务已取消；历史与已完成的文件修改保留，继续前请检查现有结果。';
-  if(outcome==='error' || outcome==='blocked' || outcome==='interrupted') return '任务未完成：查看 DSH 会话错误，检查权限、工具与已有修改后再继续。';
-  if(outcome==='max-tokens') return '达到输出上限：检查结果后使用 /teamwork continue <后续指令>。';
-  return '继续时发送新的后续指令；不会回滚文件或清空历史。';
+  if (['AUTH','AUTHENTICATION','UNAUTHORIZED','MISSING_CREDENTIAL'].includes(code ?? '')) return 'Sign-in or credentials are invalid: for a team model run /teamwork login; for a local model check its credentials.';
+  if(code==='RATE_LIMIT') return 'The model is rate limited: continue explicitly later; the task is not repeated automatically.';
+  if(code==='TOOL_ACTIVATION_FAILED') return 'A tool condition is not met: run /teamwork tools and /teamwork plugins to check.';
+  if(['TRANSPORT','TIMEOUT','SERVER'].includes(code ?? '')) return 'The model connection or service failed: check the connection, then continue explicitly; the task may already have done part of its work.';
+  if(outcome==='aborted') return 'The task was cancelled; history and finished file changes stay. Check what is there before continuing.';
+  if(outcome==='error' || outcome==='blocked' || outcome==='interrupted') return 'The task did not finish: read the DSH session error, check permissions, tools and existing changes, then continue.';
+  if(outcome==='max-tokens') return 'The output limit was reached: check the result, then run /teamwork continue <instruction>.';
+  return 'To continue, send a new follow-up; files are never rolled back and history is never cleared.';
 }
 export function assertIdle(agent:Pick<Agent,'status'|'inbox'>) {
-  if(agent.status!=='idle') throw new Error('任务正在执行，请等待结束或先 /teamwork cancel。');
-  if(agent.inbox.nextTurn.length || agent.inbox.nextStep.length) throw new Error('存在待处理输入，请先在 DSH 原生待办输入界面检查或处理，避免重复提交。');
+  if(agent.status!=='idle') throw new Error('A task is running. Wait for it to finish, or run /teamwork cancel first.');
+  if(agent.inbox.nextTurn.length || agent.inbox.nextStep.length) throw new Error('There is pending input. Check or handle it in DSH’s pending input first, so nothing is submitted twice.');
 }
 export class TaskActions {
   private tickets=new WeakMap<Agent,{fingerprint:string;expires:number}>();
@@ -73,25 +73,26 @@ export class TaskActions {
   }
   review(agent:Agent,outcome:string) {
     assertIdle(agent);
-    if(!['error','aborted','blocked','interrupted','max-tokens'].includes(outcome)) throw new Error('没有可重试的失败或中断任务，请使用 /teamwork continue <指令>。');
+    if(!['error','aborted','blocked','interrupted','max-tokens'].includes(outcome)) throw new Error('There is no failed or interrupted task to retry. Use /teamwork continue <instruction>.');
     this.tickets.set(agent,{fingerprint:this.fingerprint(agent),expires:this.now()+120000});
   }
   async submit(agent:Agent,text:string,retry=false) {
     assertIdle(agent);
-    if(this.busy.has(agent)) throw new Error('正在检查此会话，请勿重复提交。');
-    if(!text.trim() || text.length>16000) throw new Error('请输入 1–16000 字符的后续指令。');
+    if(this.busy.has(agent)) throw new Error('This session is being checked; do not submit again.');
+    if(!text.trim() || text.length>16000) throw new Error('Enter a follow-up of 1 to 16000 characters.');
     const cancellation=this.cancellations.get(agent) ?? 0;
     const before=this.fingerprint(agent),ticket=this.tickets.get(agent);
     this.tickets.delete(agent);
-    if(retry && (!ticket || ticket.expires<this.now() || ticket.fingerprint!==before)) throw new Error('重试确认已过期或会话配置已变化，请重新运行 /teamwork retry。');
+    if(retry && (!ticket || ticket.expires<this.now() || ticket.fingerprint!==before)) throw new Error('The retry confirmation expired, or the session configuration changed. Run /teamwork retry again.');
     this.busy.add(agent);
     try {
       await this.inspect(agent);
       assertIdle(agent);
-      if((this.cancellations.get(agent) ?? 0)!==cancellation) throw new Error('后续指令已取消。');
-      if(this.fingerprint(agent)!==before) throw new Error('检查期间会话或团队配置发生变化，请查看 /teamwork session 后重新提交。');
+      if((this.cancellations.get(agent) ?? 0)!==cancellation) throw new Error('The follow-up was cancelled.');
+      if(this.fingerprint(agent)!==before) throw new Error('The session or team configuration changed during the check. Run /teamwork session, then submit again.');
       agent.followup(createUserMessage({content:[{type:'text',text}],source:{kind:'user'}}));
     } finally { this.busy.delete(agent); }
   }
 }
-export const retryInstruction='请从当前会话的已有结果继续完成上次未完成的任务。先检查已经执行的操作与文件变化，避免重复写入、提交或执行有副作用的命令；遇到不确定的操作先向我确认。';
+// Sent to the model as the member's follow-up; it answers in the conversation's own language.
+export const retryInstruction='Continue the unfinished task from what this session has already done. First check the actions already taken and the files already changed, so nothing is written, committed or run with side effects twice; ask me before any action you are unsure of.';

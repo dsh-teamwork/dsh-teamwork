@@ -5,12 +5,11 @@
  * token stays here and never reaches the browser. DSH admits only its owner
  * peer to an exact route.
  *
- * This file is imported by both halves: the browser takes its types and
- * `ROUTE_PREFIX`; `panelRoutes` and the host's messages are tree-shaken out of it.
+ * This file is imported by both halves, so it imports nothing from the host:
+ * `panelRoutes` is handed the host's words (`src/messages.ts`) by its caller.
  */
 
 import type { PluginState } from './plugin-status.js';
-import { say, type HostMessage } from './messages.js';
 import type { Locale } from './locale.js';
 export type { PluginState };
 
@@ -171,17 +170,26 @@ export interface FetchRoute {
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value ?? null), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
 
-const text = (value: unknown, field: Extract<HostMessage, `field.${string}`>) => {
-  if (typeof value !== 'string' || !value.trim()) throw new Error(say('request.missing', { field: say(field) }));
-  return value.trim();
-};
+/** The host's words the routes themselves use, and the request scope that sets their language. */
+export interface RouteVoice {
+  say(key: 'request.invalid' | 'request.failed' | 'request.missing' | 'profile.nameTooLong' | 'profile.badLocale' | RouteField, values?: Record<string, string>): string;
+  /** Runs one request in the panel's language. */
+  speak<T>(answer: () => T): T;
+}
+type RouteField = 'field.team' | 'field.code' | 'field.server' | 'field.session' | 'field.config' | 'field.plugin' | 'field.version' | 'field.device';
 
-export function panelRoutes(ops: PanelOps): FetchRoute[] {
+
+export function panelRoutes(ops: PanelOps, voice: RouteVoice): FetchRoute[] {
+  const { say } = voice;
+  const text = (value: unknown, field: RouteField) => {
+    if (typeof value !== 'string' || !value.trim()) throw new Error(say('request.missing', { field: say(field) }));
+    return value.trim();
+  };
   const post = (name: string, handle: (body: Record<string, unknown>) => unknown): FetchRoute => ({
     path: `${ROUTE_PREFIX}/${name}`,
     methods: ['POST'],
     requestBody: 'buffered',
-    async fetch(request) {
+    fetch: (request) => voice.speak(async () => {
       let body: Record<string, unknown> = {};
       try {
         const raw = await request.text();
@@ -194,7 +202,7 @@ export function panelRoutes(ops: PanelOps): FetchRoute[] {
       } catch (error) {
         return json({ error: (error as Error).message || say('request.failed') }, 400);
       }
-    },
+    }),
   });
   const session = (body: Record<string, unknown>) => (typeof body.sessionId === 'string' && body.sessionId ? body.sessionId : undefined);
   return [

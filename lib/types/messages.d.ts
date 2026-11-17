@@ -1,10 +1,9 @@
 /**
- * What the host half says to a member, in the member's language: the errors and
- * results the Teamwork panel shows, and the page the browser lands on after
- * sign-in. The language is the Teamwork account's once the host has read the
- * profile, and the system's before that (`setLocale`, `src/index.ts`).
- *
- * The `/teamwork` command's own report text is not here yet and stays Chinese.
+ * The host's errors and results that the Teamwork panel can show. Everything
+ * the host prints is English: `/teamwork` output, logs, the sign-in callback
+ * page. Only while it answers one of the panel's requests (`speaking`) does it
+ * word these in the panel's language: the Teamwork account's once the host has
+ * read the profile, the system's before that (`setLocale`, `src/index.ts`).
  */
 import { type Locale } from './locale.js';
 declare const en: {
@@ -29,8 +28,6 @@ declare const en: {
     'auth.changed': string;
     'summary.team': string;
     'summary.unavailable': string;
-    'sync.failed': string;
-    'sync.signIn': string;
     'phone.notFound': string;
     'phone.relayBusy': string;
     'phone.relayOff': string;
@@ -49,18 +46,16 @@ declare const en: {
     'install.notEnabled': string;
     'install.restart': string;
     'install.done': string;
-    'callback.doneTitle': string;
-    'callback.doneBody': string;
-    'callback.failTitle': string;
-    'callback.failReason': string;
-    'callback.failBody': string;
 };
 export type HostMessage = keyof typeof en;
-/** The language of the machine DSH runs on, used until the account's is known. */
+/** The language of the machine DSH runs on, which the panel speaks until the account's is known. */
 export declare function systemLocale(): Locale;
-/** The host has one member, so one language at a time: the account's once read, the system's otherwise. */
+/** The host has one member, so the panel has one language: the account's once read, the system's otherwise. */
 export declare function setLocale(locale: Locale | null | undefined): void;
-export declare function currentLocale(): Locale;
+export declare function panelLocale(): Locale;
+/** Runs one panel request, so what it says is in the panel's language. */
+export declare function speaking<T>(locale: Locale, answer: () => T): T;
+/** English, except inside `speaking`. */
 export declare function say(key: HostMessage, values?: Record<string, string | number>): string;
 export {};
 //# sourceMappingURL=messages.d.ts.map

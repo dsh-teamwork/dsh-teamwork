@@ -120,7 +120,7 @@ export declare const stepProjection: {
     stateVersion: number;
 };
 export declare function outcomeText(outcome: string): string;
-export declare function recoveryHint(code: string | null, outcome: string): "登录或凭据无效：团队模型请 /teamwork login；本地模型请检查本地凭据。" | "模型限流：稍后再显式继续，不自动重复任务。" | "工具条件不满足：运行 /teamwork tools 和 /teamwork plugins 检查。" | "模型连接或服务异常：检查连接后显式继续；原始任务可能已经执行部分操作。" | "任务已取消；历史与已完成的文件修改保留，继续前请检查现有结果。" | "任务未完成：查看 DSH 会话错误，检查权限、工具与已有修改后再继续。" | "达到输出上限：检查结果后使用 /teamwork continue <后续指令>。" | "继续时发送新的后续指令；不会回滚文件或清空历史。";
+export declare function recoveryHint(code: string | null, outcome: string): "Sign-in or credentials are invalid: for a team model run /teamwork login; for a local model check its credentials." | "The model is rate limited: continue explicitly later; the task is not repeated automatically." | "A tool condition is not met: run /teamwork tools and /teamwork plugins to check." | "The model connection or service failed: check the connection, then continue explicitly; the task may already have done part of its work." | "The task was cancelled; history and finished file changes stay. Check what is there before continuing." | "The task did not finish: read the DSH session error, check permissions, tools and existing changes, then continue." | "The output limit was reached: check the result, then run /teamwork continue <instruction>." | "To continue, send a new follow-up; files are never rolled back and history is never cleared.";
 export declare function assertIdle(agent: Pick<Agent, 'status' | 'inbox'>): void;
 export declare class TaskActions {
     private inspect;
@@ -134,6 +134,6 @@ export declare class TaskActions {
     review(agent: Agent, outcome: string): void;
     submit(agent: Agent, text: string, retry?: boolean): Promise<void>;
 }
-export declare const retryInstruction = "\u8BF7\u4ECE\u5F53\u524D\u4F1A\u8BDD\u7684\u5DF2\u6709\u7ED3\u679C\u7EE7\u7EED\u5B8C\u6210\u4E0A\u6B21\u672A\u5B8C\u6210\u7684\u4EFB\u52A1\u3002\u5148\u68C0\u67E5\u5DF2\u7ECF\u6267\u884C\u7684\u64CD\u4F5C\u4E0E\u6587\u4EF6\u53D8\u5316\uFF0C\u907F\u514D\u91CD\u590D\u5199\u5165\u3001\u63D0\u4EA4\u6216\u6267\u884C\u6709\u526F\u4F5C\u7528\u7684\u547D\u4EE4\uFF1B\u9047\u5230\u4E0D\u786E\u5B9A\u7684\u64CD\u4F5C\u5148\u5411\u6211\u786E\u8BA4\u3002";
+export declare const retryInstruction = "Continue the unfinished task from what this session has already done. First check the actions already taken and the files already changed, so nothing is written, committed or run with side effects twice; ask me before any action you are unsure of.";
 export {};
 //# sourceMappingURL=task-session.d.ts.map

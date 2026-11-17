@@ -6,10 +6,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pinnedPlugin } from '../src/client.js';
 import type { PresetContext } from '../src/preset-context.js';
-import { setLocale } from '../src/messages.js';
-
-// The host speaks the account's language; these cases pin English.
-setLocale('en');
 const preset: PresetContext = {teamId:'t',id:'p',name:'Review',version:1,description:'Review code',instructions:'Provide a diff',outputDescription:'List issues',systemPrompt:'Literal {{text}}',requiredTools:['Read'],optionalTools:['Shell']};
 test('native session rules reject started and running conversations, allow blank ones', () => {
   expect(()=>assertBlank({lastTurn:0,openTurnStartSeq:null})).not.toThrow();

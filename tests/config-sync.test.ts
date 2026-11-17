@@ -1,10 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { ConfigSync } from '../src/config-sync.js';
 import type { TeamworkClient, TeamOverlay } from '../src/client.js';
-import { setLocale } from '../src/messages.js';
-
-// The host speaks the account's language; these cases pin English.
-setLocale('en');
 function fixture() {
   let authenticated = true;
   const client = { authenticated: () => authenticated, current: () => undefined, sync: vi.fn(async () => {}) };
