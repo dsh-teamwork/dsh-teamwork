@@ -1,6 +1,6 @@
 import {expect,test,vi} from 'vitest';
 import type {Agent} from '@deepseek-ai/dsh-agent';
-import {TaskActions,taskProjection,recoveryHint} from '../src/task-session.js';
+import {TaskActions,taskProjection,stepProjection,stepTarget,recoveryHint} from '../src/task-session.js';
 function fixture() {
   const agent={status:'idle',inbox:{nextTurn:[],nextStep:[]},followup:vi.fn(),cancel:vi.fn()} as unknown as Agent;
   let fingerprint='initial';const inspect=vi.fn(async()=>{});
@@ -41,4 +41,21 @@ test('permission failure, changed context and cancellation during inspection nev
   await expect(f.actions.submit(f.agent,'again')).rejects.toThrow('重复提交');
   f.actions.cancel(f.agent);release();await expect(pending).rejects.toThrow('已取消');
   expect(f.agent.cancel).toHaveBeenCalledWith({kind:'user'},{keepInbox:true});expect(f.agent.followup).not.toHaveBeenCalled();
+});
+test('a running turn counts its tool calls and names the latest target, and an ended turn clears it',()=>{
+  const call=(name:string,args:unknown)=>({type:'tool/call',data:{turn:2,step:1,callId:name,name,arguments:typeof args==='string' ? args : JSON.stringify(args)}}) as never;
+  let state=stepProjection.apply(stepProjection.init(),{type:'turn/start',data:{turn:2}} as never);
+  state=stepProjection.apply(state,call('bash',{command:'pnpm test --filter console\nrm -rf later'}));
+  state=stepProjection.apply(state,call('edit',{path:'server/relay/relay_test.go',old_string:'secret contents'}));
+  expect(state).toEqual({turn:2,count:2,tool:'edit',target:'server/relay/relay_test.go'});
+  expect(JSON.stringify(state)).not.toContain('secret');
+  expect(stepProjection.apply(state,{type:'user/message',data:{}} as never)).toBe(state);
+  expect(stepProjection.apply(state,{type:'turn/end',data:{turn:2,reason:{kind:'completed'}}} as never)).toEqual({turn:2,count:0,tool:'',target:''});
+  expect(stepProjection.apply(state,{type:'turn/start',data:{turn:3}} as never)).toEqual({turn:3,count:0,tool:'',target:''});
+});
+test('a step names only the first line of what it works on, and nothing for arguments it cannot read',()=>{
+  expect(stepTarget(JSON.stringify({command:'git status\ngit push'}))).toBe('git status');
+  expect(stepTarget(JSON.stringify({query:'x'.repeat(500)}))).toHaveLength(120);
+  expect(stepTarget(JSON.stringify({content:'file body'}))).toBe('');
+  expect(stepTarget('not json')).toBe('');
 });

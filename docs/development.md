@@ -85,7 +85,9 @@ preset definitions are not reconstructed. Unstamped/forked sessions are stamped
 on first inference. A pinned revision does not freeze current server permissions,
 routing or budgets.
 
-Task summaries use native session projections. Follow-up/recovery checks model,
+Task summaries use native session projections; `teamworkStep` gives the phone's
+session list a running turn's tool-call count and the latest call's target (its
+first line, at most 120 characters, never file contents). Follow-up/recovery checks model,
 team access, generations and dependencies before admission. Retry confirms a new
 recovery instruction for failed/blocked/cancelled/truncated/interrupted work; it
 never replays tools. Queued/guidance input is not bypassed. Cancellation keeps

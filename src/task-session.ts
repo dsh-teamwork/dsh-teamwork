@@ -4,7 +4,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent';
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection';
 const taskSchema = z.object({task:z.string(),outcome:z.string(),failureCode:z.string().nullable(),turn:z.number()});
 export type TaskState = z.infer<typeof taskSchema>;
-declare module '@deepseek-ai/dsh-session-projection/types' { interface SessionProjectionMap { teamworkTask: TaskState } }
+declare module '@deepseek-ai/dsh-session-projection/types' { interface SessionProjectionMap { teamworkTask: TaskState; teamworkStep: StepState } }
 export const taskProjection = {
   key:'teamworkTask',stateSchema:taskSchema,init:()=>({task:'',outcome:'not-started',failureCode:null,turn:0}),
   apply:(state,event)=>{
@@ -17,6 +17,35 @@ export const taskProjection = {
     return state;
   },wire:{viewSchema:taskSchema,view:state=>state},stateVersion:1,
 } satisfies ProjectionDefinition<'teamworkTask',TaskState>;
+const stepSchema = z.object({turn:z.number(),count:z.number(),tool:z.string(),target:z.string()});
+export type StepState = z.infer<typeof stepSchema>;
+/** The most of a step's target a session summary carries: a path or a command's first line, never a file's contents. */
+const TARGET_CHARS = 120;
+/** What a tool call works on, as the phone's session view names it; '' when its arguments name nothing. */
+export function stepTarget(args:string) {
+  try {
+    const parsed:unknown = JSON.parse(args);
+    if (parsed && typeof parsed==='object') for (const key of ['command','path','file_path','query','url','description']) {
+      const value = (parsed as Record<string,unknown>)[key];
+      if (typeof value==='string') return value.split('\n')[0]!.slice(0,TARGET_CHARS);
+    }
+  } catch { /* Not JSON: nothing worth showing. */ }
+  return '';
+}
+/**
+ * The running turn's progress for the phone's session list: how many tool calls
+ * it has made and what the latest works on. A new turn starts at zero and an
+ * ended one clears, so an idle session says nothing.
+ */
+export const stepProjection = {
+  key:'teamworkStep',stateSchema:stepSchema,init:()=>({turn:0,count:0,tool:'',target:''}),
+  apply:(state,event)=>{
+    if(event.type==='turn/start') return {turn:event.data.turn,count:0,tool:'',target:''};
+    if(event.type==='tool/call') return {...state,count:state.count+1,tool:event.data.name.slice(0,100),target:stepTarget(event.data.arguments)};
+    if(event.type==='turn/end') return {...state,count:0,tool:'',target:''};
+    return state;
+  },wire:{viewSchema:stepSchema,view:state=>state},stateVersion:1,
+} satisfies ProjectionDefinition<'teamworkStep',StepState>;
 export function outcomeText(outcome:string) { return ({'not-started':'未开始',running:'执行中',completed:'已完成',aborted:'已取消',blocked:'被阻止',error:'失败',interrupted:'恢复前意外中断','max-tokens':'达到输出上限',forked:'从分支继承'} as Record<string,string>)[outcome] ?? '未知状态'; }
 export function recoveryHint(code:string|null, outcome:string) {
   if (['AUTH','AUTHENTICATION','UNAUTHORIZED','MISSING_CREDENTIAL'].includes(code ?? '')) return '登录或凭据无效：团队模型请 /teamwork login；本地模型请检查本地凭据。';
