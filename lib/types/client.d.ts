@@ -25,6 +25,7 @@ export declare const snapshotSchema: z.ZodObject<{
         configs: z.ZodArray<z.ZodDiscriminatedUnion<[z.ZodObject<{
             kind: z.ZodLiteral<"model">;
             data: z.ZodObject<{
+                vision: z.ZodOptional<z.ZodBoolean>;
                 provider: z.ZodString;
                 model: z.ZodString;
                 contextWindow: z.ZodOptional<z.ZodNumber>;
@@ -85,6 +86,7 @@ export declare const findConfig: (snapshot: Snapshot | undefined, id: string) =>
     data: {
         provider: string;
         model: string;
+        vision?: boolean | undefined;
         contextWindow?: number | undefined;
         maxTokens?: number | undefined;
     };
@@ -141,6 +143,7 @@ export declare const teamOf: (snapshot: Snapshot | undefined, configId: string) 
         data: {
             provider: string;
             model: string;
+            vision?: boolean | undefined;
             contextWindow?: number | undefined;
             maxTokens?: number | undefined;
         };
@@ -255,6 +258,7 @@ export declare class TeamworkClient {
                 data: {
                     provider: string;
                     model: string;
+                    vision?: boolean | undefined;
                     contextWindow?: number | undefined;
                     maxTokens?: number | undefined;
                 };
@@ -326,6 +330,7 @@ export declare class TeamworkClient {
                 data: {
                     provider: string;
                     model: string;
+                    vision?: boolean | undefined;
                     contextWindow?: number | undefined;
                     maxTokens?: number | undefined;
                 };
@@ -406,6 +411,7 @@ export declare class TeamworkClient {
                 data: {
                     provider: string;
                     model: string;
+                    vision?: boolean | undefined;
                     contextWindow?: number | undefined;
                     maxTokens?: number | undefined;
                 };
@@ -514,6 +520,7 @@ export declare function modelData(snapshot: Snapshot, config: TeamConfig): {
 } | {
     provider: string;
     model: string;
+    vision?: boolean | undefined;
     contextWindow?: number | undefined;
     maxTokens?: number | undefined;
 } | undefined;
