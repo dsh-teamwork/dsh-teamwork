@@ -133,6 +133,13 @@ Advanced profile configuration can override the inserted plugin entry:
 
 `syncIntervalMs` accepts integer milliseconds from 10000 to 86400000.
 `autoSync: false` disables login-triggered and periodic sync; manual sync remains.
+
+A host that signs DSH in itself, such as a DSH Teamwork cloud computer, sets
+`tokenFile` to the absolute path of a file holding a plugin token. The plugin
+reads it at start and follows every change, including an atomic replacement;
+an empty or missing file signs it out. In this mode sign-in, sign-out and
+changing servers are refused, `apiEndpoint` names the server, and the phone
+relay is never opened.
 Do not duplicate the package's `insert` entry in a profile.
 
 ## Data and phone access
