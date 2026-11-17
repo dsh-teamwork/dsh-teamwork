@@ -13,7 +13,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent';
 import type { PresetContext } from './preset-context.js';
 import { PresetStamps, presetStampPath, sameRevision, toolReport, assertBlank } from './preset-session.js';
 import { modelData, inheritsModel, pinnedPlugin, type TeamConfig } from './client.js';
-import { taskProjection, TaskActions, recoveryHint, retryInstruction, outcomeText } from './task-session.js';
+import { taskProjection, stepProjection, TaskActions, recoveryHint, retryInstruction, outcomeText } from './task-session.js';
 import { pluginState, stateText, type PluginState } from './plugin-status.js';
 import { panelRoutes, type FetchRoute, type PanelOps, type PanelPreset } from './panel.js';
 import { registerAssistantTools } from './assistant-tools.js';
@@ -40,6 +40,8 @@ export async function apply(ctx: Context, config: Config) {
   ctx.effect(() => ctx.llm.registerAdapter([platformProvider], platformAdapter(client)));
   const taskState = await ctx.sessionProjections.register(taskProjection);
   ctx.effect(() => () => taskState.dispose());
+  const stepState = await ctx.sessionProjections.register(stepProjection);
+  ctx.effect(() => () => stepState.dispose());
   const stamps = new PresetStamps(presetStampPath(config.cachePath));
   await stamps.load();
   const overlay = new TeamOverlay(async (id, item, team) => ctx.agentPresets.register({
