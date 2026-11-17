@@ -229,8 +229,10 @@ export async function apply(ctx: Context, config: Config) {
     onForward: (frame) => void security.handle(frame),
   });
   const readPhones = async () => {
-    try { phones = pairingSchema.array().parse(await relay.request({ t: 'pairings' })); }
-    catch (error) { ctx.logger.warn('Could not read the paired phones: %s', (error as Error).message); }
+    try {
+      phones = pairingSchema.array().parse(await relay.request({ t: 'pairings' }));
+      await security.reconcile(phones.map((phone) => phone.id));
+    } catch (error) { ctx.logger.warn('Could not read the paired phones: %s', (error as Error).message); }
   };
   const phoneError = (error: unknown): never => {
     if (error instanceof RelayError && error.code === 'not_found') throw new Error(say('phone.notFound'));

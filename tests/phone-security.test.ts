@@ -105,6 +105,28 @@ it('requires both local approvals, persists trust, and acknowledges durable remo
   }
 });
 
+it('forgets, from the relay’s list, a phone revoked while this computer was offline', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'phone-reconcile-'));
+  const keys = new PhoneKeys(join(directory, 'keys.json'));
+  const { publicKey } = await keys.identity();
+  await keys.trust('scope', 'kept', publicKey, 'phone');
+  await keys.trust('scope', 'revoked', publicKey, 'phone');
+  await keys.trust('other-account', 'revoked', publicKey, 'phone');
+  const sent: SecurePacket[] = [];
+  const host = new PhoneSecurity({keys, scope: async () => 'scope', send: value => sent.push(value), forward: () => {}, confirm: async () => {}, changed: () => {}, error: () => {}});
+  try {
+    await host.reconcile(['kept']);
+    expect(await keys.peer('scope', 'kept')).toBeDefined();
+    expect(await keys.peer('scope', 'revoked')).toBeUndefined();
+    // Another account's trust on this computer is not this list's to judge.
+    expect(await keys.peer('other-account', 'revoked')).toBeDefined();
+    // The forgotten phone cannot start over without a fresh pairing offer, nor with one.
+    host.offerCode(new Date(Date.now() + 60000).toISOString());
+    await host.handle({ t: 'sealed', pairingId: 'revoked', channelId: newChannelId(n => randomBytes(n)), kind: 'commit', data: base64(randomBytes(32)) });
+    expect(sent).toHaveLength(0);
+  } finally { host.reset(); await rm(directory, {recursive: true, force: true}); }
+});
+
 it('keeps a revoked identity blocked when durable trust removal fails', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'phone-revoke-'));
   const keys = new PhoneKeys(join(directory, 'keys.json'));
