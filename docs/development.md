@@ -24,6 +24,14 @@ versions are pinned to rc.3 and Zod to 4.6.6 to avoid recursive type expansion
 across mismatched versions. Never add `@deepseek-ai/dsh-*` to runtime dependencies:
 hoisted installations can shadow the upgraded host even when the plugin is disabled.
 
+For a live host, `pnpm dev` links this checkout into a `web` profile under the
+gitignored `.dsh-home/` (as `DSH_HOME`, so `~/.dsh` is untouched), watch-builds `lib/`
+with `dsh-hmr` reloading it, and boots `dsh web`; arguments after `pnpm dev` reach
+`dsh web`. Put local overrides such as `apiEndpoint` in the gitignored
+`cordis.local.patch.yml`, which outranks the generated `.dsh-home/cordis.patch.yml`.
+`DSH_CLI` selects a specific host. `pnpm dev:reset` deletes the dev home, including
+its sign-in cache. On exit the browser bundle is rebuilt without source maps.
+
 The real-host suites install the packed plugin in temporary profiles and use
 an isolated local fixture registry and package store:
 

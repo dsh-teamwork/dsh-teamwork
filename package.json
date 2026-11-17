@@ -32,6 +32,9 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json && pnpm --filter @dsh-teamwork/ui typecheck",
     "test": "vitest run && pnpm --filter @dsh-teamwork/ui test",
     "cli": "tsx src/cli.ts",
+    "dev": "node scripts/dev.mjs start",
+    "dev:setup": "node scripts/dev.mjs setup",
+    "dev:reset": "node scripts/dev.mjs reset",
     "test:host": "node tests/host/run.mjs",
     "test:presets": "node tests/host/run.mjs --presets",
     "test:assistant": "node tests/host/run.mjs --assistant"
