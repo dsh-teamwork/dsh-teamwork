@@ -11,7 +11,9 @@ and local default models remain independent.
 Use the desktop application's **Plugins → Add plugin** for a Desktop profile.
 For a CLI web profile use `dsh plugin --profile web add @dsh-teamwork/dsh-teamwork`.
 Use the same profile's plugin manager for updates, enabling and diagnostics.
-Follow its reload/restart prompts.
+Follow its reload/restart prompts. On the CLI, update with
+`dsh plugin --profile web update --latest @dsh-teamwork/dsh-teamwork`; without
+`--latest`, a new minor version (0.11 after 0.10) is not picked up.
 
 - **Version rejected:** check the installed plugin and DSH versions. The declared
   range is `>=0.2.2-rc.1 <0.3.0-0`; CI covers rc.1, rc.2 and rc.3. Install a
@@ -68,8 +70,8 @@ them. A member opens the link in the DSH Teamwork phone app, or pastes it under
 **Shared DSHs** in the team console.
 
 A shared DSH admits nobody until its admin sets the team's audit key. On their
-own computer the admin runs `dsh-teamwork-audit keygen` (installed with this
-package), which writes `audit-key.json` and prints
+own computer the admin runs `dsh-teamwork-audit keygen` (from
+`npm install -g @dsh-teamwork/dsh-teamwork`), which writes `audit-key.json` and prints
 `/teamwork share audit-key <public key>` to run here. From then on this DSH
 seals every exchange with a member's device to that key and uploads it; the
 server keeps it and cannot read it. The admin downloads it from the console and
@@ -82,8 +84,10 @@ and its **Shared DSH** page then sets the audit key, lists the members who may
 reach it with their devices, makes an invite (a link and a QR code), unlocks a
 member locked out by wrong PINs, and turns shared mode off.
 
-On a server with no browser, `dsh-teamwork` (installed with this package) does
-the same from a shell on that machine, while DSH runs there as the same user:
+On a server with no browser, `dsh-teamwork` does the same from a shell on that
+machine, while DSH runs there as the same user. The copy inside DSH's profile is
+not on your `PATH`, so install the commands once (and again after an update):
+`npm install -g @dsh-teamwork/dsh-teamwork`.
 
 ```sh
 dsh-teamwork server https://teamwork.example.com   # a self-hosted team only, before enabling
