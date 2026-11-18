@@ -264,6 +264,9 @@ export async function apply(ctx: Context, config: Config) {
       pendingInstalls.clear();
       await client.useToken(token);
       await overlay.apply(client.current());
+      // The relay started before this token was restored, and stopped for want of one: a DSH restarted in shared
+      // mode stayed off the relay, so no member could reach it. A renewal while connected changes nothing here.
+      if (token && relay.status === 'off') relay.refresh();
       if (token && config.autoSync !== false) await configSync.sync().catch(() => { /* status retains the failure */ });
     },
     log: message => ctx.logger.warn('%s', message),
