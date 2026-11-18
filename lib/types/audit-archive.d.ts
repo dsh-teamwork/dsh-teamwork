@@ -50,9 +50,11 @@ export declare class AuditArchive {
     private timer?;
     private sealing;
     private draining?;
+    private journaling;
     private publicKey?;
     constructor(options: AuditArchiveOptions);
     private get queue();
+    private get journal();
     private load;
     private save;
     /** Whether an audit key is set: a shared DSH admits no member until it is. */
@@ -63,8 +65,15 @@ export declare class AuditArchive {
     setKey(publicKey: string): Promise<string>;
     /** Records one frame of a member's; nothing is recorded before an audit key is set. */
     record(entry: Omit<AuditRecord, 'at'>): void;
+    /** Every record made so far is in the journal on disk. */
+    settled(): Promise<void>;
     /** Seals what has collected into the next segment, queues it on disk, and uploads the queue. */
     flush(): Promise<void>;
+    /**
+     * At start: seals what a process that stopped left in the journal, oldest batch first, unless the state says a batch
+     * was sealed already, then uploads the queue. A torn last line (the process died writing it) is dropped.
+     */
+    recover(): Promise<void>;
     private seal;
     /** Uploads queued segments in order; one the server refuses as out of order stops the queue and is said. */
     drain(): Promise<void>;

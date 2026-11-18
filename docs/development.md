@@ -177,7 +177,10 @@ it. Signing out, entering or leaving shared mode clears every PIN.
 `src/audit-archive.ts` is a shared DSH's audit archive (the server's ADR 0045):
 every frame between a member's device and this DSH, both ways, becomes a record
 (member, device, direction, time; a string over 64 KiB kept as its length and
-SHA-256). Records collect for a minute or 1 MiB, are HPKE-sealed (`@hpke/core`,
+SHA-256). Each record is appended as it is made to `<cache>.audit.json.journal`
+(mode 0600), so a crash loses none: the next start seals what the journal holds
+before anything else, and a batch the state names as sealed is never sealed
+twice. Records collect for a minute or 1 MiB, are HPKE-sealed (`@hpke/core`,
 exact version) to the admin's audit public key under a header the AEAD binds
 (host, sequence, the previous segment's SHA-256, the key's fingerprint), signed
 with the identity key the host key is bound to, written to
