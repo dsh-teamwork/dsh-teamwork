@@ -134,6 +134,63 @@ still clears the token until the file changes. In this mode the relay is never
 opened, and sign-in, sign-out and server changes are refused: the server reaches
 a cloud computer itself, and the token belongs to the host, not a member.
 
+## Shared mode
+
+`src/shared-mode.ts` makes a DSH its team's shared DSH (the server's
+`docs/tech/shared-dsh.md`, part of the community edition). `/teamwork share enable <key>` trades a team
+host key for a one-hour host token (platform ADR 0047): the server's nonce is
+signed with this DSH's identity key from `<cache>.phone-keys.json`, and the first
+exchange binds the key to that identity, so a copied key is refused elsewhere.
+The key is saved to `<cache>.shared.json` (mode 0600) only once accepted, the
+token reaches `TeamworkClient.useToken` like a host-provided one, and it is
+renewed ten minutes before it ends, or a minute after a failure that may pass;
+a key the server no longer accepts drops the token. Enabling signs a personal
+account out first, and while shared, sign-in and sign-out are refused and the
+relay connects with the host token. A host-provided token (`tokenFile`)
+excludes shared mode.
+
+`src/shared-roster.ts` is the DSH's own roster (`<cache>.shared-roster.json`,
+mode 0600): invites (a single-use secret per listed member, kept as a hash, a
+day long), each member's paired devices, and each session's starter. A member's
+handset joins through the relay, pins this DSH's key from the invite, and hands
+the secret over inside the channel; `PhoneSecurity` admits it through the
+roster instead of a safety code. The relay's `members` list prunes the roster.
+`src/shared-owner.ts` is what the bridge asks before any call or stream and
+after `session/create` and `session/list`: a member reaches only sessions they
+started, sees only their events, and answers only questions they were shown.
+
+`src/pin-lock.ts` is the PIN lock, on a shared DSH and on a personal computer
+alike (`<cache>.pins.json`, mode 0600): one four-digit PIN per member (`owner`
+on a personal computer), kept as scrypt, and a failure count that survives a
+restart. Once a channel is authorized, `PhoneSecurity` tells the phone
+`pinRequired` (with `set` when the member has none yet), answers `unlock` and
+`setPin` with `unlocked`, `pinWrong`, `pinLocked` or `pinInvalid`, and refuses
+every call (`teamwork/locked`) and stream until unlocked, and again after
+fifteen minutes with nothing sent. Five wrong PINs lock the member on every
+device until `/teamwork share unlock <email>` or `/teamwork pin reset` clears
+it. Signing out, entering or leaving shared mode clears every PIN.
+
+`src/audit-archive.ts` is a shared DSH's audit archive (the server's ADR 0045):
+every frame between a member's device and this DSH, both ways, becomes a record
+(member, device, direction, time; a string over 64 KiB kept as its length and
+SHA-256). Records collect for a minute or 1 MiB, are HPKE-sealed (`@hpke/core`,
+exact version) to the admin's audit public key under a header the AEAD binds
+(host, sequence, the previous segment's SHA-256, the key's fingerprint), signed
+with the identity key the host key is bound to, written to
+`<cache>.audit.json.queue/`, and uploaded in order to
+`POST /relay/shared/archive`; a segment leaves the queue only once the server
+holds it. `<cache>.audit.json` keeps the key and the chain's position. No
+member is admitted until `/teamwork share audit-key` sets a key; leaving
+shared mode flushes and forgets it. `src/audit-cli.ts` is the
+`dsh-teamwork-audit` bin the admin runs on their own machine: `keygen` writes
+a key pair (mode 0600, never overwriting), `read` opens an exported archive
+and reports a gap, an alteration or another key.
+
+The panel's **Shared DSH** page (`Shared` in `src/web/TeamworkPanel.tsx`, the
+`share-*` routes in `src/panel.ts`) runs the same functions as
+`/teamwork share`; in shared mode `PanelState.shared` is set, no profile is
+read, and the header offers that page in place of Phone and Account.
+
 ## Phone transport
 
 The hosted relay is optional and discovered through `GET /api/relay`. The host

@@ -23,6 +23,14 @@
 
 在网页控制台创建或加入团队。新团队会获得内置助理，已有团队不自动补建；重命名团队不会自动重命名助理。助理排在面板预设的最前面，点击“问问助理”即可用它新建会话。为助理选择可用模型后，要求它读取真实状态再操作。管理员浏览某个团队时，面板顶部会显示待审核的提交数量，点击即可在控制台打开。
 
+### 团队共享 DSH
+
+在托管服务上，团队管理员可以把一台 DSH 设为团队自己的：在团队控制台的**共享 DSH**里创建 key，再在那台 DSH 中运行 `/teamwork share enable <key>`。之后它以团队身份登录而不是个人：共享期间拒绝个人登录，只同步这一个团队，团队模型的调用计入团队。第一台使用 key 的机器会绑定它，同一个 key 换到其他机器上会被拒绝；管理员更换或删除 key 后它立即失效。`/teamwork share disable` 会删除 key。团队管理员在控制台决定谁可以访问它；对其中每个人，在这里运行 `/teamwork share invite <email>`，并当面或通过团队信任的渠道交给对方，不要经过 Teamwork 服务器。每个成员的会话只属于自己，其他人无法查看、跟随或回答。打开邀请链接的手机和网页客户端将在后续版本提供。
+
+共享 DSH 在管理员设置团队审计密钥之前不会接纳任何人。管理员在自己的电脑上运行 `dsh-teamwork-audit keygen`（随本插件包安装），它会写出 `audit-key.json` 并打印要在这里运行的 `/teamwork share audit-key <public key>`。此后这台 DSH 会把与成员设备之间的每次交互加密到这把密钥并上传，服务器保存它却无法读取。管理员在控制台下载归档，用 `dsh-teamwork-audit read <file> --key audit-key.json` 打开。丢失的密钥无法找回。
+
+以上操作也都可以在 Teamwork 面板中完成：在登录页或账号页选择**把这台 DSH 设为团队的共享 DSH** 即可开启共享模式；开启后的**共享 DSH** 页可以设置审计密钥、查看可访问的成员及其设备、生成邀请（链接和二维码）、为输错 PIN 被锁定的成员解锁，以及关闭共享模式。
+
 ## 选择模型或预设
 
 使用“新建会话”应用团队预设。“用于当前空白会话”仅适用于尚未开始对话的会话。已开始的会话保留原预设代次，使用新会话采用更新。跨重启不保证重建已删除的旧预设；发现版本不一致时会阻止团队推理并给出恢复指引。
@@ -51,6 +59,14 @@
 | --- | --- |
 | `/teamwork login` | 打开浏览器授权。 |
 | `/teamwork authorize <code>` | 兑换备用授权码。 |
+| `/teamwork share enable <key>` | 用团队授权 key 把这台 DSH 设为团队的共享 DSH（托管服务）。 |
+| `/teamwork share disable` | 关闭共享模式并删除 key。 |
+| `/teamwork share status` | 查看共享 DSH 的名称、团队和 token 状态。 |
+| `/teamwork share invite <email>` | 生成一次性邀请链接（一天内有效），让名单中的一位成员把设备配对到这台共享 DSH。 |
+| `/teamwork share members` | 查看可访问这台共享 DSH 的成员及其设备。 |
+| `/teamwork share unlock <email>` | 清除某个成员在这台共享 DSH 上的 PIN 和锁定，对方下次连接时重新设置。 |
+| `/teamwork share audit-key <key>` | 把这台共享 DSH 的归档加密到 `dsh-teamwork-audit keygen` 打印的密钥；设置之后才会接纳成员。 |
+| `/teamwork pin reset` | 清除你自己手机在这台计算机上的 PIN 和锁定，再从手机设置新的。 |
 | `/teamwork status` | 查看登录、同步和最近错误。 |
 | `/teamwork sync` | 刷新团队资源。 |
 | `/teamwork list` | 列出配置 ID。 |

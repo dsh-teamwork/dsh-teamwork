@@ -78,6 +78,20 @@ export interface PanelPairingOffer {
   link: string;
 }
 
+/**
+ * This DSH as its team's shared DSH (`src/shared-mode.ts`), for whoever runs it: null when shared mode is off. Its
+ * members are those the server lists as allowed to reach it, with the devices each has joined by invite here.
+ */
+export interface PanelShared {
+  name: string | null;
+  teamName: string | null;
+  /** Why the key stopped working, when it did; the machine is then not reachable. */
+  error: string | null;
+  /** The audit key's fingerprint, or null: no member is admitted until one is set (`src/audit-archive.ts`). */
+  auditKey: string | null;
+  members: Array<{ userId: string; email: string | null; devices: string[]; locked: boolean }>;
+}
+
 export interface PanelState {
   /** The language the panel speaks: the Teamwork account's once read, the system's before (`src/messages.ts`). */
   locale: Locale;
@@ -96,6 +110,7 @@ export interface PanelState {
   relay: RelayStatus;
   /** Phones paired with this computer; empty while the relay is not connected. */
   phones: PanelPhone[];
+  shared: PanelShared | null;
   /** The session the member has open, when the host has it loaded. */
   session: {
     id: string;
@@ -158,6 +173,15 @@ export interface PanelOps {
   decidePhone(id: string, accept: boolean): Promise<void>;
   /** Cuts a paired phone off. */
   revokePhone(id: string): Promise<void>;
+  /** Makes this DSH its team's shared DSH with a team host key; a personal sign-in ends first. */
+  shareEnable(key: string): Promise<void>;
+  shareDisable(): Promise<void>;
+  /** Seals the archive to the admin's audit public key; returns its fingerprint. */
+  shareAuditKey(key: string): Promise<{ fingerprint: string }>;
+  /** A single-use invite for one listed member, to hand over outside the server. */
+  shareInvite(email: string): Promise<{ link: string; expiresAt: string }>;
+  /** Clears a member's PIN and lock. */
+  shareUnlock(email: string): Promise<void>;
 }
 
 export const ROUTE_PREFIX = '/api/teamwork';
@@ -179,7 +203,7 @@ export interface RouteVoice {
   /** Runs one request in the panel's language. */
   speak<T>(answer: () => T): T;
 }
-type RouteField = 'field.team' | 'field.code' | 'field.server' | 'field.session' | 'field.config' | 'field.plugin' | 'field.version' | 'field.device';
+type RouteField = 'field.team' | 'field.code' | 'field.server' | 'field.session' | 'field.config' | 'field.plugin' | 'field.version' | 'field.device' | 'field.key' | 'field.email';
 
 
 export function panelRoutes(ops: PanelOps, voice: RouteVoice): FetchRoute[] {
@@ -227,5 +251,10 @@ export function panelRoutes(ops: PanelOps, voice: RouteVoice): FetchRoute[] {
     post('pair-phone', () => ops.pairPhone()),
     post('decide-phone', (body) => ops.decidePhone(text(body.id, 'field.device'), body.accept === true)),
     post('revoke-phone', (body) => ops.revokePhone(text(body.id, 'field.device'))),
+    post('share-enable', (body) => ops.shareEnable(text(body.key, 'field.key'))),
+    post('share-disable', () => ops.shareDisable()),
+    post('share-audit-key', (body) => ops.shareAuditKey(text(body.key, 'field.key'))),
+    post('share-invite', (body) => ops.shareInvite(text(body.email, 'field.email'))),
+    post('share-unlock', (body) => ops.shareUnlock(text(body.email, 'field.email'))),
   ];
 }

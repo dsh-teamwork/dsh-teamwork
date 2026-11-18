@@ -1,6 +1,6 @@
 /**
- * The phone's side of this DSH (dsh-teamwork-premium ADR 0009,
- * `premium/docs/tech/mobile-relay.md`, "The allow-list"). The relay hands this
+ * The phone's side of this DSH (the server's
+ * `docs/tech/relay.md`, "The allow-list"). The relay hands this
  * plugin a confirmed pairing's `call` and `mux` frames; the bridge checks each
  * against the allow-list and replays it against DSH's own Remote API on
  * loopback, as an answering identity of that pairing's own, then sends the
@@ -14,6 +14,7 @@
  */
 import { z } from 'zod';
 import { type PhoneSessionOps } from './phone-session.js';
+import type { OwnerFilter } from './shared-owner.js';
 /** Unary methods a phone may call. A test holds this list. */
 export declare const ALLOWED_CALLS: ReadonlySet<string>;
 /** Streams a phone may open on the mux. A test holds this list. */
@@ -50,6 +51,8 @@ export interface BridgeOptions {
     log?: (message: string, error?: unknown) => void;
     /** Only these session operations supplement DSH's native calls. */
     session?: PhoneSessionOps;
+    /** On a shared DSH, whose sessions each pairing's member may reach (src/shared-owner.ts); none on a personal computer. */
+    owners?: () => OwnerFilter | undefined;
 }
 export declare class Bridge {
     private readonly options;
@@ -57,13 +60,14 @@ export declare class Bridge {
     private uploads;
     private promptCalls;
     constructor(options: BridgeOptions);
-    handle(frame: Forwarded): void;
+    handle(frame: Forwarded): undefined;
     /** The relay connection ended: every phone is gone with it. */
     dropAll(): void;
     private link;
     private drop;
     private call;
     private mux;
+    private muxNow;
     private openMux;
     /** Every open stream of a pairing ends, as DSH itself would end it. */
     private closeStreams;

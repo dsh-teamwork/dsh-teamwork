@@ -51,6 +51,36 @@ with it. Give it a working model and ask it to inspect real state. While an
 administrator browses a team, the panel's header shows how many submissions wait
 for review and opens them in the console.
 
+### A team's shared DSH
+
+On the hosted service a team admin can make one DSH the team's own: create a
+key under **Shared DSHs** in the team's console, then run
+`/teamwork share enable <key>` in that DSH. It then signs in as the team, not as
+a person: personal sign-in is refused while it is shared, it syncs that one
+team, and its team-model calls are billed to the team. The first machine that
+uses a key keeps it; the same key on another machine is refused, and an admin
+who rotates or deletes the key cuts it off. `/teamwork share disable` deletes
+the key. A team admin chooses in the console who may reach it; for each of
+them, run `/teamwork share invite <email>` here and hand the link over in
+person or through a channel the team trusts, never through the Teamwork server.
+Each member's sessions are theirs alone: others cannot list, follow or answer
+them. Phone and web clients that open the link arrive in a later release.
+
+A shared DSH admits nobody until its admin sets the team's audit key. On their
+own computer the admin runs `dsh-teamwork-audit keygen` (installed with this
+package), which writes `audit-key.json` and prints
+`/teamwork share audit-key <public key>` to run here. From then on this DSH
+seals every exchange with a member's device to that key and uploads it; the
+server keeps it and cannot read it. The admin downloads it from the console and
+opens it with `dsh-teamwork-audit read <file> --key audit-key.json`. A lost key
+cannot be recovered.
+
+Everything above can also be done in the Teamwork panel: **Use this DSH as a
+team's shared DSH** on its sign-in screen or account page turns shared mode on,
+and its **Shared DSH** page then sets the audit key, lists the members who may
+reach it with their devices, makes an invite (a link and a QR code), unlocks a
+member locked out by wrong PINs, and turns shared mode off.
+
 ## Choose a model or preset
 
 Use **New session** for a team preset. **Use in this blank session** works only
@@ -97,6 +127,14 @@ Run these in DSH's command input, not your shell. IDs come from `/teamwork list`
 | --- | --- |
 | `/teamwork login` | Open browser authorization. |
 | `/teamwork authorize <code>` | Redeem a fallback authorization code. |
+| `/teamwork share enable <key>` | Make this DSH its team's shared DSH with a team host key (hosted service). |
+| `/teamwork share disable` | End shared mode and delete its key. |
+| `/teamwork share status` | Show the shared DSH's name, team and host token. |
+| `/teamwork share invite <email>` | A single-use link, valid a day, that pairs one listed member's device with this shared DSH. |
+| `/teamwork share members` | The members who may reach this shared DSH, and their devices. |
+| `/teamwork share unlock <email>` | Clear a member's PIN and lock on this shared DSH; they set a new PIN next time. |
+| `/teamwork share audit-key <key>` | Seal this shared DSH's archive to the key `dsh-teamwork-audit keygen` printed; members are admitted only once it is set. |
+| `/teamwork pin reset` | Clear your own phone PIN and lock on this computer; set a new one from your phone. |
 | `/teamwork status` | Show authentication, sync status and recent errors. |
 | `/teamwork sync` | Refresh the team's resources. |
 | `/teamwork list` | List configuration IDs. |

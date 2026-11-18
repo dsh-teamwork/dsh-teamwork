@@ -18,6 +18,8 @@ declare const en: {
     'field.plugin': string;
     'field.version': string;
     'field.device': string;
+    'field.key': string;
+    'field.email': string;
     'profile.nameTooLong': string;
     'profile.badLocale': string;
     'server.invalid': string;
@@ -25,6 +27,9 @@ declare const en: {
     'server.extra': string;
     'auth.signedOut': string;
     'auth.hostManaged': string;
+    'auth.shared': string;
+    'shared.off': string;
+    'shared.notListed': string;
     'auth.changed': string;
     'summary.team': string;
     'summary.unavailable': string;

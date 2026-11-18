@@ -1,5 +1,6 @@
 import { type Identity, type SecurePacket } from './secure-channel.js';
 import { type Forwarded } from './bridge.js';
+import { type PinStore } from './pin-lock.js';
 export declare class PhoneKeys {
     private readonly path;
     private state?;
@@ -34,6 +35,25 @@ export declare class PhoneSecurity {
         confirm(id: string): Promise<void>;
         changed(): void;
         error(error: Error): void;
+        /**
+         * On a shared DSH, the member a pending pairing belongs to, as the relay said when they joined; and whether their
+         * invite admits this device. Absent on a personal computer, which pairs by code alone.
+         */
+        joining?(pairingId: string): string | undefined;
+        admit?(input: {
+            pairingId: string;
+            userId: string;
+            inviteId: string;
+            secret: string;
+            name: string;
+        }): Promise<boolean>;
+        /**
+         * The PIN lock: every member's PINs, and whose PIN a pairing answers to (its member on a shared DSH, `owner` on a
+         * personal computer). Without them no channel is locked.
+         */
+        pins?: PinStore;
+        pinMember?(pairingId: string): Promise<string | undefined>;
+        now?(): number;
     });
     offerCode(expiresAt: string): void;
     publicKey(): Promise<string>;
@@ -62,6 +82,15 @@ export declare class PhoneSecurity {
      * trust goes now.
      */
     reconcile(listed: readonly string[]): Promise<void>;
+    private now;
+    /** Whether a channel may carry the member's work now: unlocked, and not idle past the limit. */
+    private open;
+    /** Tells the phone a PIN is needed: to set one, to enter it, or that the member is locked out. */
+    private askPin;
+    /** `unlock` with the PIN, or `setPin`: the first PIN, or a new one with the old. */
+    private pinMessage;
+    /** What a locked channel answers its member's work with: the call fails, the stream ends, and nothing reaches DSH. */
+    private refuseLocked;
     reset(): void;
 }
 //# sourceMappingURL=phone-security.d.ts.map
