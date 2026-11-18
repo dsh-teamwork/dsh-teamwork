@@ -25,7 +25,7 @@
 
 ### 团队 DSH
 
-团队管理员可以把一台 DSH 设为团队自己的：在团队控制台的**团队资产 → 团队 DSH**里创建 key，再在那台 DSH 中运行 `/teamwork share enable <key>`。之后它以团队身份登录而不是个人：作为团队 DSH 期间拒绝个人登录，只同步这一个团队，团队模型的调用计入团队。第一台使用 key 的机器会绑定它，同一个 key 换到其他机器上会被拒绝；管理员更换或删除 key 后它立即失效。`/teamwork share disable` 会删除 key。团队管理员在控制台决定谁可以访问它；对其中每个人，在这里运行 `/teamwork share invite <email>`，并当面或通过团队信任的渠道交给对方，不要经过 Teamwork 服务器。每个成员的会话只属于自己，其他人无法查看、跟随或回答。成员在 DSH Teamwork 手机 App 中打开链接，或在团队控制台的**工作区 → 团队 DSH**中粘贴。
+团队管理员可以把一台 DSH 设为团队自己的：在团队控制台的**团队资产 → 团队 DSH**里创建 key，再在那台 DSH 中运行 `/teamwork share enable <key>`。之后它以团队身份登录而不是个人：作为团队 DSH 期间拒绝个人登录，只同步这一个团队，团队模型的调用计入团队。第一台使用 key 的机器会绑定它，同一个 key 换到其他机器上会被拒绝；管理员更换或删除 key 后它立即失效。`/teamwork share disable` 会删除 key。团队管理员在控制台决定谁可以访问它；对其中每个人，在这里运行 `/teamwork share invite <email>`，并当面或通过团队信任的渠道交给对方，不要经过 Teamwork 服务器。每个成员的会话只属于自己，其他人无法查看、跟随或回答。成员在这台 DSH 启动时所在的目录、或它的某个工作区里开始会话，所以请在团队工作的项目目录里启动 DSH。成员在 DSH Teamwork 手机 App 中打开链接，或在团队控制台的**工作区 → 团队 DSH**中粘贴。
 
 团队 DSH 在管理员设置团队审计密钥之前不会接纳任何人。管理员在自己的电脑上运行 `dsh-teamwork-audit keygen`（由 `npm install -g @dsh-teamwork/dsh-teamwork` 安装），它会写出 `audit-key.json` 并打印要在这里运行的 `/teamwork share audit-key <public key>`。此后这台 DSH 会把与成员设备之间的每次交互加密到这把密钥并上传，服务器保存它却无法读取。管理员在控制台下载归档，用 `dsh-teamwork-audit read <file> --key audit-key.json` 打开。丢失的密钥无法找回。
 
