@@ -170,6 +170,22 @@ fifteen minutes with nothing sent. Five wrong PINs lock the member on every
 device until `/teamwork share unlock <email>` or `/teamwork pin reset` clears
 it. Signing out, entering or leaving shared mode clears every PIN.
 
+`src/audit-archive.ts` is a shared DSH's audit archive (the server's ADR 0045):
+every frame between a member's device and this DSH, both ways, becomes a record
+(member, device, direction, time; a string over 64 KiB kept as its length and
+SHA-256). Records collect for a minute or 1 MiB, are HPKE-sealed (`@hpke/core`,
+exact version) to the admin's audit public key under a header the AEAD binds
+(host, sequence, the previous segment's SHA-256, the key's fingerprint), signed
+with the identity key the host key is bound to, written to
+`<cache>.audit.json.queue/`, and uploaded in order to
+`POST /relay/shared/archive`; a segment leaves the queue only once the server
+holds it. `<cache>.audit.json` keeps the key and the chain's position. No
+member is admitted until `/teamwork share audit-key` sets a key; leaving
+shared mode flushes and forgets it. `src/audit-cli.ts` is the
+`dsh-teamwork-audit` bin the admin runs on their own machine: `keygen` writes
+a key pair (mode 0600, never overwriting), `read` opens an exported archive
+and reports a gap, an alteration or another key.
+
 ## Phone transport
 
 The hosted relay is optional and discovered through `GET /api/relay`. The host

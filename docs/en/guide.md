@@ -66,6 +66,15 @@ person or through a channel the team trusts, never through the Teamwork server.
 Each member's sessions are theirs alone: others cannot list, follow or answer
 them. Phone and web clients that open the link arrive in a later release.
 
+A shared DSH admits nobody until its admin sets the team's audit key. On their
+own computer the admin runs `dsh-teamwork-audit keygen` (installed with this
+package), which writes `audit-key.json` and prints
+`/teamwork share audit-key <public key>` to run here. From then on this DSH
+seals every exchange with a member's device to that key and uploads it; the
+server keeps it and cannot read it. The admin downloads it from the console and
+opens it with `dsh-teamwork-audit read <file> --key audit-key.json`. A lost key
+cannot be recovered.
+
 ## Choose a model or preset
 
 Use **New session** for a team preset. **Use in this blank session** works only
@@ -118,6 +127,7 @@ Run these in DSH's command input, not your shell. IDs come from `/teamwork list`
 | `/teamwork share invite <email>` | A single-use link, valid a day, that pairs one listed member's device with this shared DSH. |
 | `/teamwork share members` | The members who may reach this shared DSH, and their devices. |
 | `/teamwork share unlock <email>` | Clear a member's PIN and lock on this shared DSH; they set a new PIN next time. |
+| `/teamwork share audit-key <key>` | Seal this shared DSH's archive to the key `dsh-teamwork-audit keygen` printed; members are admitted only once it is set. |
 | `/teamwork pin reset` | Clear your own phone PIN and lock on this computer; set a new one from your phone. |
 | `/teamwork status` | Show authentication, sync status and recent errors. |
 | `/teamwork sync` | Refresh the team's resources. |

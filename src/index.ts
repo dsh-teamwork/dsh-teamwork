@@ -28,6 +28,7 @@ import { SharedMode, sharedKeyPath } from './shared-mode.js';
 import { SharedRoster, sharedRosterPath } from './shared-roster.js';
 import { OwnerFilter } from './shared-owner.js';
 import { PinStore, pinsPath } from './pin-lock.js';
+import { AuditArchive, auditArchivePath } from './audit-archive.js';
 import type { PanelPhone } from './panel.js';
 import { panelLocale, say, setLocale, speaking } from './messages.js';
 export const name = 'dsh-teamwork';
@@ -171,6 +172,24 @@ export async function apply(ctx: Context, config: Config) {
   const roster = new SharedRoster(sharedRosterPath(config.cachePath));
   // The PIN lock (src/pin-lock.ts): per member on a shared DSH, the one `owner` on a personal computer.
   const pins = new PinStore(pinsPath(config.cachePath));
+  // The audit archive (src/audit-archive.ts): every frame of a member's, sealed to the team admin's key.
+  const archive = new AuditArchive({
+    path: auditArchivePath(config.cachePath),
+    hostId: () => shared?.status().hostId,
+    identity: () => phoneKeys.identity(),
+    upload: async (body) => {
+      const response = await fetch(`${client.endpoint}/relay/shared/archive`, { method: 'POST', headers: { Authorization: `Bearer ${client.platformCredential()}`, 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(30000) });
+      return { status: response.status };
+    },
+    log: (message) => ctx.logger.warn('%s', message),
+  });
+  ctx.effect(() => () => archive.stop());
+  /** Records a frame between a member's device and this shared DSH, in either direction. */
+  const audit = (frame: unknown, dir: 'in' | 'out') => {
+    const pairingId = (frame as { pairingId?: unknown } | null)?.pairingId;
+    if (!shared?.enabled || typeof pairingId !== 'string') return;
+    void roster.memberOf(pairingId).then((member) => { if (member) archive.record({ member, device: pairingId, dir, frame }); });
+  };
   const owners = new OwnerFilter(roster, (pairingId) => roster.memberOf(pairingId));
   /** Who the server lets reach this shared DSH, as the relay last said; and members whose handsets wait to join. */
   let sharedMembers: SharedMember[] = [];
@@ -178,7 +197,7 @@ export async function apply(ctx: Context, config: Config) {
   const bridge = new Bridge({
     launchUrl: () => launchUrl?.(),
     owners: () => shared?.enabled ? owners : undefined,
-    send: (frame) => security.send(frame),
+    send: (frame) => { audit(frame, 'out'); security.send(frame); },
     log: (message, error) => ctx.logger.warn('%s: %s', message, (error as Error | undefined)?.message ?? ''),
     session: {
       async configuration(sessionId) {
@@ -250,7 +269,7 @@ export async function apply(ctx: Context, config: Config) {
       }
       return keyScope.value;
     },
-    send: frame => relay.send(frame), forward: frame => bridge.handle(frame),
+    send: frame => relay.send(frame), forward: frame => { audit(frame, 'in'); bridge.handle(frame); },
     confirm: async id => { await relay.request({ t: 'decide', pairingId: id, accept: true }); },
     changed: () => {},
     error: error => ctx.logger.warn('phone security: %s', error.message),
@@ -258,6 +277,8 @@ export async function apply(ctx: Context, config: Config) {
     pins,
     pinMember: async (pairingId) => shared?.enabled ? roster.memberOf(pairingId) : 'owner',
     admit: async (input) => {
+      // No member joins before the admin's audit key is set: nothing they do would be archived.
+      if (!(await archive.ready())) { ctx.logger.warn('A member tried to join before the audit key was set (/teamwork share audit-key).'); return false; }
       if (!sharedMembers.some((m) => m.userId === input.userId)) return false;
       const admitted = await roster.accept({ inviteId: input.inviteId, secret: input.secret, userId: input.userId, pairingId: input.pairingId, deviceName: input.name });
       if (admitted) joining.delete(input.pairingId);
@@ -330,7 +351,7 @@ export async function apply(ctx: Context, config: Config) {
   };
   const shareDisable = async () => {
     if (!shared?.enabled) throw new Error(say('shared.off'));
-    await shared.disable(); await roster.clear(); await pins.reset(); sharedMembers = []; joining.clear(); relay.refresh();
+    await archive.clear(); await shared.disable(); await roster.clear(); await pins.reset(); sharedMembers = []; joining.clear(); relay.refresh();
   };
   /** `/teamwork share invite <email>`: a single-use link for one member the server lists, to hand over outside it. */
   const shareInvite = async (email: string) => {
@@ -536,7 +557,7 @@ export async function apply(ctx: Context, config: Config) {
   ctx.inject(['commands'], (child) => {
     child.effect(() => child.commands.register({
       name: 'teamwork', description: 'Team sign-in, configuration sync and model selection',
-      input: { hint: 'login | authorize <code> | share enable <key> | share disable | share status | share invite <email> | share members | share unlock <email> | pin reset | sync | status | session [check] | continue <instruction> | cancel | retry [confirm] | list | tools | plugins [presetId] | info [id] | new <id> | use <id> | install <id> confirm | logout' },
+      input: { hint: 'login | authorize <code> | share enable <key> | share disable | share status | share invite <email> | share members | share unlock <email> | share audit-key <key> | pin reset | sync | status | session [check] | continue <instruction> | cancel | retry [confirm] | list | tools | plugins [presetId] | info [id] | new <id> | use <id> | install <id> confirm | logout' },
       handler: async ({ agent, rawInput }) => {
         const [action, requestedId, confirmation] = rawInput.trim().split(/\s+/);
         const [id,pinVersion]=requestedId?.split('@') ?? [];
@@ -566,6 +587,11 @@ export async function apply(ctx: Context, config: Config) {
             if (requestedId === 'invite') {
               const invite = await shareInvite(confirmation ?? '');
               return { kind: 'success', text: [`Invite for ${confirmation}, single use, valid until ${invite.expiresAt}:`, invite.link, 'Hand it over yourself, in person or through a channel your team trusts, never through the Teamwork server. Whoever opens it signed in as that member pairs a device with this DSH.'].join('\n') };
+            }
+            if (requestedId === 'audit-key') {
+              if (!shared?.enabled) throw new Error(say('shared.off'));
+              const fingerprint = await archive.setKey(confirmation ?? '');
+              return { kind: 'success', text: `Audit key set (fingerprint ${fingerprint}). Every member's session on this DSH is now archived, sealed to it; members can join.` };
             }
             if (requestedId === 'unlock') {
               const member = sharedMembers.find((m) => m.email?.toLowerCase() === (confirmation ?? '').trim().toLowerCase());
@@ -646,7 +672,7 @@ export async function apply(ctx: Context, config: Config) {
     }));
   });
   try { await restore(); } catch { ctx.logger.warn('The team cache could not be restored; sign in and sync again.'); }
-  try { await shared?.restore(); } catch (error) { ctx.logger.warn('Shared mode could not resume: %s', (error as Error).message); }
+  try { await shared?.restore(); if (shared?.enabled) void archive.drain(); } catch (error) { ctx.logger.warn('Shared mode could not resume: %s', (error as Error).message); }
   if (config.tokenFile) {
     const watcher = watchTokenFile(config.tokenFile, async (token) => {
       pendingInstalls.clear();
