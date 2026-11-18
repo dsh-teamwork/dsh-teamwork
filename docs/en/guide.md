@@ -53,12 +53,12 @@ with it. Give it a working model and ask it to inspect real state. While an
 administrator browses a team, the panel's header shows how many submissions wait
 for review and opens them in the console.
 
-### A team's shared DSH
+### A Team DSH
 
-On the hosted service a team admin can make one DSH the team's own: create a
-key under **Shared DSHs** in the team's console, then run
+A team admin can make one DSH the team's own: create a
+key under **Team assets → Team DSH** in the team's console, then run
 `/teamwork share enable <key>` in that DSH. It then signs in as the team, not as
-a person: personal sign-in is refused while it is shared, it syncs that one
+a person: personal sign-in is refused while it is one, it syncs that one
 team, and its team-model calls are billed to the team. The first machine that
 uses a key keeps it; the same key on another machine is refused, and an admin
 who rotates or deletes the key cuts it off. `/teamwork share disable` deletes
@@ -67,9 +67,9 @@ them, run `/teamwork share invite <email>` here and hand the link over in
 person or through a channel the team trusts, never through the Teamwork server.
 Each member's sessions are theirs alone: others cannot list, follow or answer
 them. A member opens the link in the DSH Teamwork phone app, or pastes it under
-**Shared DSHs** in the team console.
+**Workspace → Team DSH** in the team console.
 
-A shared DSH admits nobody until its admin sets the team's audit key. On their
+A Team DSH admits nobody until its admin sets the team's audit key. On their
 own computer the admin runs `dsh-teamwork-audit keygen` (from
 `npm install -g @dsh-teamwork/dsh-teamwork`), which writes `audit-key.json` and prints
 `/teamwork share audit-key <public key>` to run here. From then on this DSH
@@ -79,10 +79,10 @@ opens it with `dsh-teamwork-audit read <file> --key audit-key.json`. A lost key
 cannot be recovered.
 
 Everything above can also be done in the Teamwork panel: **Use this DSH as a
-team's shared DSH** on its sign-in screen or account page turns shared mode on,
-and its **Shared DSH** page then sets the audit key, lists the members who may
+Team DSH** on its sign-in screen or account page turns it into one,
+and its **Team DSH** page then sets the audit key, lists the members who may
 reach it with their devices, makes an invite (a link and a QR code), unlocks a
-member locked out by wrong PINs, and turns shared mode off.
+member locked out by wrong PINs, and stops it being a Team DSH.
 
 On a server with no browser, `dsh-teamwork` does the same from a shell on that
 machine, while DSH runs there as the same user. The copy inside DSH's profile is
@@ -155,13 +155,13 @@ Run these in DSH's command input, not your shell. IDs come from `/teamwork list`
 | --- | --- |
 | `/teamwork login` | Open browser authorization. |
 | `/teamwork authorize <code>` | Redeem a fallback authorization code. |
-| `/teamwork share enable <key>` | Make this DSH its team's shared DSH with a team host key (hosted service). |
+| `/teamwork share enable <key>` | Make this DSH a Team DSH of its team with a team host key. |
 | `/teamwork share disable` | End shared mode and delete its key. |
-| `/teamwork share status` | Show the shared DSH's name, team and host token. |
-| `/teamwork share invite <email>` | A single-use link, valid a day, that pairs one listed member's device with this shared DSH. |
-| `/teamwork share members` | The members who may reach this shared DSH, and their devices. |
-| `/teamwork share unlock <email>` | Clear a member's PIN and lock on this shared DSH; they set a new PIN next time. |
-| `/teamwork share audit-key <key>` | Seal this shared DSH's archive to the key `dsh-teamwork-audit keygen` printed; members are admitted only once it is set. |
+| `/teamwork share status` | Show the Team DSH's name, team and host token. |
+| `/teamwork share invite <email>` | A single-use link, valid a day, that pairs one listed member's device with this Team DSH. |
+| `/teamwork share members` | The members who may reach this Team DSH, and their devices. |
+| `/teamwork share unlock <email>` | Clear a member's PIN and lock on this Team DSH; they set a new PIN next time. |
+| `/teamwork share audit-key <key>` | Seal this Team DSH's archive to the key `dsh-teamwork-audit keygen` printed; members are admitted only once it is set. |
 | `/teamwork pin reset` | Clear your own phone PIN and lock on this computer; set a new one from your phone. |
 | `/teamwork status` | Show authentication, sync status and recent errors. |
 | `/teamwork sync` | Refresh the team's resources. |
@@ -189,7 +189,7 @@ The default server is `https://www.dshteamwork.com`. Change it on the sign-in
 screen to a self-hosted server. HTTPS is required except on loopback. Changing
 servers signs you out and clears the previous server's team resources.
 
-The plugin keeps its sign-in, team cache and, on a shared DSH, its key, member
+The plugin keeps its sign-in, team cache and, on a Team DSH, its key, member
 list, PIN locks and archive queue in `dsh-teamwork/` in the DSH home
 (`$DSH_HOME`, else `~/.dsh`), wherever DSH was started.
 

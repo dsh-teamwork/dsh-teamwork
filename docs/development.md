@@ -186,7 +186,7 @@ shared mode flushes and forgets it. `src/audit-cli.ts` is the
 a key pair (mode 0600, never overwriting), `read` opens an exported archive
 and reports a gap, an alteration or another key.
 
-The panel's **Shared DSH** page (`Shared` in `src/web/TeamworkPanel.tsx`, the
+The panel's **Team DSH** page (`Shared` in `src/web/TeamworkPanel.tsx`, the
 `share-*` routes in `src/panel.ts`) runs the same functions as
 `/teamwork share`; in shared mode `PanelState.shared` is set, no profile is
 read, and the header offers that page in place of Phone and Account.

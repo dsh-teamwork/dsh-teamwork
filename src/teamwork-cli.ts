@@ -123,7 +123,7 @@ async function phone(action: string | undefined, id: string | undefined, socketP
 function describeState(s: PanelState) {
   return [
     `Teamwork server: ${s.server}`,
-    s.shared ? 'Signed in: as this shared DSH (dsh-teamwork share status)' : `Signed in: ${s.authenticated ? 'yes' : 'no — dsh-teamwork login'}`,
+    s.shared ? 'Signed in: as this Team DSH (dsh-teamwork share status)' : `Signed in: ${s.authenticated ? 'yes' : 'no — dsh-teamwork login'}`,
     ...(s.teams.length ? [`Teams: ${s.teams.map((t) => `${t.name} (${t.role})`).join(', ')}`] : []),
     `Sync: ${s.sync.running ? 'running' : s.sync.lastSuccess ? `last ${s.sync.lastSuccess}` : 'not yet'}${s.sync.auto ? ', automatic' : ''}`,
     ...(s.sync.lastError ? [`Sync error: ${s.sync.lastError}`] : []),
@@ -133,7 +133,7 @@ function describeState(s: PanelState) {
 }
 
 const describe = (s: PanelShared) => [
-  `Shared DSH: ${s.name ?? 'not yet confirmed'}`,
+  `Team DSH: ${s.name ?? 'not yet confirmed'}`,
   `Team: ${s.teamName ?? 'unknown'}`,
   `Audit key: ${s.auditKey ?? 'not set — no member is admitted until dsh-teamwork share audit-key <key>'}`,
   ...(s.error ? [`Error: ${s.error}`] : []),
@@ -186,7 +186,7 @@ export async function run(args: string[], socketPath: string, out: (line: string
       if (!needs('the key')) return 2;
       await call(socketPath, 'share-enable', { key: value });
       const now = await shared(socketPath);
-      out(now ? describe(now) : 'Shared mode is on.');
+      out(now ? describe(now) : 'This DSH is now a Team DSH.');
       out('Personal sign-in is off while it is shared. Next: dsh-teamwork share audit-key <key>.');
       return 0;
     }
@@ -198,13 +198,13 @@ export async function run(args: string[], socketPath: string, out: (line: string
     }
     case 'status': {
       const now = await shared(socketPath);
-      out(now ? describe(now) : 'Shared mode is off. Run dsh-teamwork share enable <key> with the key from the team console.');
+      out(now ? describe(now) : 'This DSH is not a Team DSH. Run dsh-teamwork share enable <key> with the key from Team assets → Team DSH in the team console.');
       return 0;
     }
     case 'members': {
       const now = await shared(socketPath);
-      if (!now) { out('Shared mode is off.'); return 0; }
-      if (!now.members.length) { out('Nobody is listed yet: choose who may reach it in the team console, under Shared DSHs.'); return 0; }
+      if (!now) { out('This DSH is not a Team DSH.'); return 0; }
+      if (!now.members.length) { out('Nobody is listed yet: choose who may reach it in the team console, under Team assets → Team DSH.'); return 0; }
       for (const m of now.members) out(`${m.email ?? m.userId}${m.locked ? ' (locked)' : ''}: ${m.devices.join(', ') || 'no device yet'}`);
       return 0;
     }
@@ -224,7 +224,7 @@ export async function run(args: string[], socketPath: string, out: (line: string
     }
     case 'disable':
       await call(socketPath, 'share-disable');
-      out('Shared mode is off and its key deleted.');
+      out('This DSH is no longer a Team DSH, and its key is deleted.');
       return 0;
     default:
       err(usage);
