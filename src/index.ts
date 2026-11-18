@@ -31,6 +31,7 @@ import { PinStore, pinsPath } from './pin-lock.js';
 import { AuditArchive, auditArchivePath } from './audit-archive.js';
 import type { PanelPhone } from './panel.js';
 import { panelLocale, say, setLocale, speaking } from './messages.js';
+import { controlSocketPath, serveControlSocket } from './control-socket.js';
 export const name = 'dsh-teamwork';
 export const inject = ['agentPresets', 'agents', 'llm', 'sessionProjections'];
 export interface Config { apiEndpoint: string; cachePath: string; autoSync?: boolean; syncIntervalMs?: number; tokenFile?: string; }
@@ -574,10 +575,11 @@ export async function apply(ctx: Context, config: Config) {
       return installPlugin(item);
     },
   };
+  const routes = panelRoutes(panel, { say, speak: answer => speaking(panelLocale(), answer) });
   // The panel's routes exist only where a browser reaches the host (DSH web and desktop), like the panel itself.
   ctx.inject(['connection'], (scoped) => {
     const { connection } = scoped as unknown as { connection: { fetch: { register(route: FetchRoute): () => Promise<void> } } };
-    for (const route of panelRoutes(panel, { say, speak: answer => speaking(panelLocale(), answer) })) scoped.effect(() => { const dispose = connection.fetch.register(route); return () => { void dispose(); }; });
+    for (const route of routes) scoped.effect(() => { const dispose = connection.fetch.register(route); return () => { void dispose(); }; });
   });
   ctx.inject(['connection', 'webServer'], (scoped) => {
     const { connection, webServer } = scoped as unknown as { connection: { authenticatedUrl(base: string): string }; webServer: { getOrigin(): string } };
@@ -702,6 +704,9 @@ export async function apply(ctx: Context, config: Config) {
   });
   try { await restore(); } catch { ctx.logger.warn('The team cache could not be restored; sign in and sync again.'); }
   try { await shared?.restore(); if (shared?.enabled) void archive.drain(); } catch (error) { ctx.logger.warn('Shared mode could not resume: %s', (error as Error).message); }
+  // The same routes for `dsh-teamwork` on this machine, once restored state answers them (src/control-socket.ts).
+  const closeSocket = await serveControlSocket(controlSocketPath(config.cachePath), routes, message => ctx.logger.warn('%s', message));
+  ctx.effect(() => () => { void closeSocket(); });
   if (config.tokenFile) {
     const watcher = watchTokenFile(config.tokenFile, async (token) => {
       pendingInstalls.clear();

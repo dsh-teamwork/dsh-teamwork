@@ -4,4 +4,5 @@
     - id: dsh-teamwork
       name: '@dsh-teamwork/dsh-teamwork'
       config:
-        cachePath: ./teamwork-cache.json
+        # In the DSH home ($DSH_HOME, else ~/.dsh), wherever DSH was started; dsh-teamwork finds its socket there too.
+        cachePath: !!js dshHomePath('dsh-teamwork/cache.json')

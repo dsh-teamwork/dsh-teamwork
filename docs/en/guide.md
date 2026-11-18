@@ -64,7 +64,8 @@ the key. A team admin chooses in the console who may reach it; for each of
 them, run `/teamwork share invite <email>` here and hand the link over in
 person or through a channel the team trusts, never through the Teamwork server.
 Each member's sessions are theirs alone: others cannot list, follow or answer
-them. Phone and web clients that open the link arrive in a later release.
+them. A member opens the link in the DSH Teamwork phone app, or pastes it under
+**Shared DSHs** in the team console.
 
 A shared DSH admits nobody until its admin sets the team's audit key. On their
 own computer the admin runs `dsh-teamwork-audit keygen` (installed with this
@@ -80,6 +81,20 @@ team's shared DSH** on its sign-in screen or account page turns shared mode on,
 and its **Shared DSH** page then sets the audit key, lists the members who may
 reach it with their devices, makes an invite (a link and a QR code), unlocks a
 member locked out by wrong PINs, and turns shared mode off.
+
+On a server with no browser, `dsh-teamwork` (installed with this package) does
+the same from a shell on that machine, while DSH runs there as the same user:
+
+```sh
+dsh-teamwork server https://teamwork.example.com   # a self-hosted team only, before enabling
+dsh-teamwork share enable <key>
+dsh-teamwork share audit-key <public key>
+dsh-teamwork share invite alice@example.com
+dsh-teamwork share members        # also: status, unlock <email>, disable
+```
+
+It reaches the running DSH through a socket in the plugin's directory in the DSH
+home (below), which only that user can open. It runs on Linux and macOS.
 
 ## Choose a model or preset
 
@@ -160,6 +175,10 @@ server on their next request.
 The default server is `https://www.dshteamwork.com`. Change it on the sign-in
 screen to a self-hosted server. HTTPS is required except on loopback. Changing
 servers signs you out and clears the previous server's team resources.
+
+The plugin keeps its sign-in, team cache and, on a shared DSH, its key, member
+list, PIN locks and archive queue in `dsh-teamwork/` in the DSH home
+(`$DSH_HOME`, else `~/.dsh`), wherever DSH was started.
 
 Advanced profile configuration can override the inserted plugin entry:
 

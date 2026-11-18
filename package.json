@@ -15,6 +15,7 @@
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "bin": {
+    "dsh-teamwork": "lib/share-cli.js",
     "dsh-teamwork-audit": "lib/audit-cli.js"
   },
   "files": [
