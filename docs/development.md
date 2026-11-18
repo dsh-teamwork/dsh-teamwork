@@ -138,7 +138,7 @@ a cloud computer itself, and the token belongs to the host, not a member.
 
 `src/shared-mode.ts` makes a DSH its team's shared DSH (the server's
 `docs/tech/shared-dsh.md`, part of the community edition). `/teamwork share enable <key>` trades a team
-host key for a one-hour host token (platform ADR 0042): the server's nonce is
+host key for a one-hour host token (platform ADR 0047): the server's nonce is
 signed with this DSH's identity key from `<cache>.phone-keys.json`, and the first
 exchange binds the key to that identity, so a copied key is refused elsewhere.
 The key is saved to `<cache>.shared.json` (mode 0600) only once accepted, the
