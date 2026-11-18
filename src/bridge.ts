@@ -11,11 +11,14 @@
  * - A `mux` frame is one frame of DSH's `/api/remote.mux`. An `open` must name
  *   an allowed stream; `item`, `end` and `cancel` are accepted only for a
  *   stream that pairing opened. Each pairing has its own loopback mux.
+ * - Whatever goes back fits one message of the encrypted channel
+ *   (`fitFrame`): a frame too large for it would close the channel.
  */
 import { z } from 'zod';
 import { PhoneSessionError, type PhoneSessionOps } from './phone-session.js';
 import { PhoneUploads, uploadLimits, uploadSchemas } from './phone-uploads.js';
 import type { OwnerFilter } from './shared-owner.js';
+import { MAX_MESSAGE } from './secure-channel.js';
 
 /** Unary methods a phone may call. A test holds this list. */
 export const ALLOWED_CALLS: ReadonlySet<string> = new Set([
@@ -110,7 +113,10 @@ export class Bridge {
   }
 
   private async call(frame: z.infer<typeof callSchema>) {
-    const output = (status: number, body: unknown) => this.options.send({ t: 'result', pairingId: frame.pairingId, id: frame.id, status, body });
+    const output = (status: number, body: unknown) => {
+      const result = { t: 'result', pairingId: frame.pairingId, id: frame.id, status, body };
+      this.options.send(fitFrame(result) ?? { ...result, status: 502, body: { error: 'too_large' } });
+    };
     const candidate = (frame.body as { args?: { request?: unknown } } | null)?.args?.request;
     const identity = frame.method === 'session/prompt' ? z.object({ sessionId: z.string().min(1).max(256), requestId: z.string().min(1).max(256) }).safeParse(candidate) : null;
     const key = identity?.success ? JSON.stringify([frame.pairingId, identity.data.sessionId, identity.data.requestId]) : null;
@@ -276,11 +282,11 @@ export class Bridge {
       const endpoint = link.streams.get(message.data.streamId);
       if (message.data.type === 'end' || message.data.type === 'error') link.streams.delete(message.data.streamId);
       const owners = this.options.owners?.();
-      if (!owners || endpoint !== '$events' || message.data.type !== 'item') return void this.options.send({ t: 'mux', pairingId, body: message.data });
+      if (!owners || endpoint !== '$events' || message.data.type !== 'item') return void this.deliver(pairingId, link, message.data);
       const data = message.data;
       link.outbound = link.outbound.then(async () => {
         const value = await owners.eventFor(pairingId, data.value);
-        if (value !== undefined) this.options.send({ t: 'mux', pairingId, body: data });
+        if (value !== undefined) this.deliver(pairingId, link, data);
       }).catch((error) => this.options.log?.('A phone event could not be filtered', error));
     });
     mux.addEventListener('close', () => {
@@ -288,6 +294,19 @@ export class Bridge {
       link.mux = undefined;
       if (this.links.get(pairingId) === link) this.closeStreams(pairingId, link, 'dsh_closed');
     });
+  }
+
+  /**
+   * Passes one of DSH's mux frames to the phone, made to fit the channel. One
+   * that cannot fit ends its stream at both ends instead: a stream with a
+   * frame missing would show the phone a different session.
+   */
+  private deliver(pairingId: string, link: Link, body: z.infer<typeof serverMuxSchema>) {
+    const frame = fitFrame({ t: 'mux', pairingId, body });
+    if (frame) return this.options.send(frame);
+    link.streams.delete(body.streamId);
+    if (link.mux?.readyState === 1) link.mux.send(JSON.stringify({ type: 'cancel', streamId: body.streamId }));
+    this.fail(pairingId, body.streamId, 'too_large');
   }
 
   /** Every open stream of a pairing ends, as DSH itself would end it. */
@@ -328,4 +347,53 @@ function parseJson(text: string): unknown {
   } catch {
     return undefined;
   }
+}
+
+/** What a frame may take of the channel's message, leaving room for nothing else; JSON as the channel encodes it. */
+const FRAME_BYTES = MAX_MESSAGE;
+const bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value));
+/** The longest a string stays when a frame is too large, tried in turn; ids and names are far shorter. */
+const STRING_CAPS = [64 * 1024, 16 * 1024, 4 * 1024, 1024];
+
+/**
+ * A frame for the phone that fits one message of the encrypted channel, or
+ * undefined when nothing can make it fit. A frame that fits is passed as it
+ * is. A larger one has its long strings (a tool's output, a file written) cut
+ * short, which the phone shows only in part anyway; a follow's opening
+ * snapshot then keeps its newest records and says it has more, which
+ * `session/page` reads back.
+ */
+export function fitFrame<T>(frame: T): T | undefined {
+  if (bytes(frame) <= FRAME_BYTES) return frame;
+  let short = frame;
+  for (const cap of STRING_CAPS) {
+    short = shorten(frame, cap) as T;
+    if (bytes(short) <= FRAME_BYTES) return short;
+  }
+  // A window of history: a follow's snapshot, or a call's `session/page`.
+  const body = (short as { body?: { value?: History; result?: { value?: History } } }).body;
+  const history = body?.value?.type === 'snapshot' ? body.value : body?.result?.value;
+  if (!body || !Array.isArray(history?.records)) return undefined;
+  const records = history.records;
+  let over = bytes(short) - FRAME_BYTES;
+  let first = 0;
+  // Each record dropped takes its JSON and the comma before the next.
+  while (over > 0 && first < records.length) over -= bytes(records[first++]) + 1;
+  if (over > 0) return undefined;
+  const kept = { ...history, records: records.slice(first), hasMore: true };
+  return { ...short, body: history === body.value ? { ...body, value: kept } : { ...body, result: { ...body.result, value: kept } } };
+}
+
+type History = { type?: unknown; records?: unknown[] };
+
+function shorten(value: unknown, cap: number): unknown {
+  if (typeof value === 'string') {
+    if (value.length <= cap) return value;
+    // Never end on half of a surrogate pair.
+    const end = /[\uD800-\uDBFF]/.test(value[cap - 1]!) ? cap - 1 : cap;
+    return value.slice(0, end) + '…';
+  }
+  if (Array.isArray(value)) return value.map(item => shorten(item, cap));
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, shorten(item, cap)]));
+  return value;
 }

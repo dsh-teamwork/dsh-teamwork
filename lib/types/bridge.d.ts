@@ -11,6 +11,8 @@
  * - A `mux` frame is one frame of DSH's `/api/remote.mux`. An `open` must name
  *   an allowed stream; `item`, `end` and `cancel` are accepted only for a
  *   stream that pairing opened. Each pairing has its own loopback mux.
+ * - Whatever goes back fits one message of the encrypted channel
+ *   (`fitFrame`): a frame too large for it would close the channel.
  */
 import { z } from 'zod';
 import { type PhoneSessionOps } from './phone-session.js';
@@ -69,6 +71,12 @@ export declare class Bridge {
     private mux;
     private muxNow;
     private openMux;
+    /**
+     * Passes one of DSH's mux frames to the phone, made to fit the channel. One
+     * that cannot fit ends its stream at both ends instead: a stream with a
+     * frame missing would show the phone a different session.
+     */
+    private deliver;
     /** Every open stream of a pairing ends, as DSH itself would end it. */
     private closeStreams;
     private fail;
@@ -76,4 +84,13 @@ export declare class Bridge {
     /** `/connect` with DSH's launch token and `interactions=answer`: an identity that may answer questions and approvals. */
     private cookie;
 }
+/**
+ * A frame for the phone that fits one message of the encrypted channel, or
+ * undefined when nothing can make it fit. A frame that fits is passed as it
+ * is. A larger one has its long strings (a tool's output, a file written) cut
+ * short, which the phone shows only in part anyway; a follow's opening
+ * snapshot then keeps its newest records and says it has more, which
+ * `session/page` reads back.
+ */
+export declare function fitFrame<T>(frame: T): T | undefined;
 //# sourceMappingURL=bridge.d.ts.map
