@@ -7,7 +7,7 @@
 ## 安装与更新
 
 桌面版从应用内 **Plugins → Add plugin** 安装；CLI web profile 使用
-`dsh plugin --profile web add @dsh-teamwork/dsh-teamwork`。更新、启用及诊断也应通过同一个 profile 的插件管理器，遵循宿主的重载／重启提示。
+`dsh plugin --profile web add @dsh-teamwork/dsh-teamwork`。更新、启用及诊断也应通过同一个 profile 的插件管理器，遵循宿主的重载／重启提示。CLI 用 `dsh plugin --profile web update --latest @dsh-teamwork/dsh-teamwork` 更新；不加 `--latest` 时，0.10 之后的 0.11 这样的新版本不会被装上。
 
 - **版本被拒绝：**核对 DSH 与插件版本。声明范围为 `>=0.2.2-rc.1 <0.3.0-0`，CI 覆盖 rc.1、rc.2、rc.3。选择兼容且已发布的插件版本；范围声明不代表实测过所有未来版本。
 - **没有选到刚发布的版本：**部分宿主应用最短发布时间策略。可在 [npm 版本页](https://www.npmjs.com/package/@dsh-teamwork/dsh-teamwork?activeTab=versions)核实后指定精确版本。GitHub main 中的版本可能仍在等待 npm 发布。
@@ -27,11 +27,11 @@
 
 在托管服务上，团队管理员可以把一台 DSH 设为团队自己的：在团队控制台的**共享 DSH**里创建 key，再在那台 DSH 中运行 `/teamwork share enable <key>`。之后它以团队身份登录而不是个人：共享期间拒绝个人登录，只同步这一个团队，团队模型的调用计入团队。第一台使用 key 的机器会绑定它，同一个 key 换到其他机器上会被拒绝；管理员更换或删除 key 后它立即失效。`/teamwork share disable` 会删除 key。团队管理员在控制台决定谁可以访问它；对其中每个人，在这里运行 `/teamwork share invite <email>`，并当面或通过团队信任的渠道交给对方，不要经过 Teamwork 服务器。每个成员的会话只属于自己，其他人无法查看、跟随或回答。成员在 DSH Teamwork 手机 App 中打开链接，或粘贴到团队控制台的**共享 DSH**页。
 
-共享 DSH 在管理员设置团队审计密钥之前不会接纳任何人。管理员在自己的电脑上运行 `dsh-teamwork-audit keygen`（随本插件包安装），它会写出 `audit-key.json` 并打印要在这里运行的 `/teamwork share audit-key <public key>`。此后这台 DSH 会把与成员设备之间的每次交互加密到这把密钥并上传，服务器保存它却无法读取。管理员在控制台下载归档，用 `dsh-teamwork-audit read <file> --key audit-key.json` 打开。丢失的密钥无法找回。
+共享 DSH 在管理员设置团队审计密钥之前不会接纳任何人。管理员在自己的电脑上运行 `dsh-teamwork-audit keygen`（由 `npm install -g @dsh-teamwork/dsh-teamwork` 安装），它会写出 `audit-key.json` 并打印要在这里运行的 `/teamwork share audit-key <public key>`。此后这台 DSH 会把与成员设备之间的每次交互加密到这把密钥并上传，服务器保存它却无法读取。管理员在控制台下载归档，用 `dsh-teamwork-audit read <file> --key audit-key.json` 打开。丢失的密钥无法找回。
 
 以上操作也都可以在 Teamwork 面板中完成：在登录页或账号页选择**把这台 DSH 设为团队的共享 DSH** 即可开启共享模式；开启后的**共享 DSH** 页可以设置审计密钥、查看可访问的成员及其设备、生成邀请（链接和二维码）、为输错 PIN 被锁定的成员解锁，以及关闭共享模式。
 
-在没有浏览器的服务器上，可以用 `dsh-teamwork`（随本插件包安装）在那台机器的终端里完成同样的操作，前提是 DSH 正以同一个用户在那里运行：
+在没有浏览器的服务器上，可以用 `dsh-teamwork` 在那台机器的终端里完成同样的操作，前提是 DSH 正以同一个用户在那里运行。DSH profile 里的那一份不在 `PATH` 上，所以先安装一次命令（更新插件后再装一次）：`npm install -g @dsh-teamwork/dsh-teamwork`。
 
 ```sh
 dsh-teamwork server https://teamwork.example.com   # 仅自托管团队，在开启前设置
