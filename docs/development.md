@@ -139,6 +139,11 @@ The server reaches it through DSH's own web server: streams on DSH's
 relay `call` frame's `{ id, method, body }` and its answer the `result`'s
 `{ status, body }`, through the same allow-list and session operations, under
 the one pairing `cloud`; DSH's sign-in guards it as it guards `/api/`.
+A host in this mode may also name local MCP servers in `mcpServers`
+(`{ <name>: { command, args } }`, stdio): the plugin registers each with DSH's
+MCP manager (`ctx.mcpManager.register`) for its own lifetime, so they never
+replace the servers the owner configured in Settings. A cloud computer names
+its desktop's browser this way, Playwright's MCP server over CDP.
 
 ## Shared mode
 

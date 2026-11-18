@@ -34,10 +34,12 @@ import { panelLocale, say, setLocale, speaking } from './messages.js';
 import { controlSocketPath, serveControlSocket } from './control-socket.js';
 export const name = 'dsh-teamwork';
 export const inject = ['agentPresets', 'agents', 'llm', 'sessionProjections'];
-export interface Config { apiEndpoint: string; cachePath: string; autoSync?: boolean; syncIntervalMs?: number; tokenFile?: string; }
+export interface Config { apiEndpoint: string; cachePath: string; autoSync?: boolean; syncIntervalMs?: number; tokenFile?: string; mcpServers?: Record<string, { command: string; args: string[] }>; }
 /** The hosted service. A member can pick another server in the panel; the profile's `apiEndpoint` sets the default. */
 export const DEFAULT_SERVER = 'https://www.dshteamwork.com';
-export const Config = z.object({ apiEndpoint: z.string().default(DEFAULT_SERVER), cachePath: z.string().required(), autoSync: z.boolean().default(true), syncIntervalMs: z.number().default(60000), tokenFile: z.string() });
+export const Config: z<Config> = z.object({ apiEndpoint: z.string().default(DEFAULT_SERVER), cachePath: z.string().required(), autoSync: z.boolean().default(true), syncIntervalMs: z.number().default(60000), tokenFile: z.string(),
+  // A host that provides the token (a cloud computer) may also provide local MCP servers, such as its desktop's browser.
+  mcpServers: z.dict(z.object({ command: z.string().required(), args: z.array(z.string()).default([]) })).default({}) });
 export async function apply(ctx: Context, config: Config) {
   const client = new TeamworkClient(config.apiEndpoint, config.cachePath);
   const serverChoice = ServerChoice.beside(config.cachePath);
@@ -597,6 +599,18 @@ export async function apply(ctx: Context, config: Config) {
     // A cloud computer's server makes a phone's calls here instead of through the relay (src/bridge.ts).
     for (const route of config.tokenFile ? [...routes, bridgeRoute(bridge)] : routes) scoped.effect(() => { const dispose = connection.fetch.register(route); return () => { void dispose(); }; });
   });
+  // The host's own MCP servers (a cloud computer's browser, over CDP), registered with DSH's MCP manager for as long as
+  // this plugin runs; the owner's own servers in Settings are left as they are. Only a host that provides the token
+  // provides them.
+  if (config.tokenFile && Object.keys(config.mcpServers ?? {}).length) {
+    ctx.inject(['mcpManager'], (scoped) => {
+      const { mcpManager } = scoped as unknown as { mcpManager: { register(name: string, entry: { transport: 'stdio'; command: string; args: string[] }): void } };
+      for (const [name, server] of Object.entries(config.mcpServers ?? {})) {
+        try { mcpManager.register(name, { transport: 'stdio', command: server.command, args: server.args }); }
+        catch (error) { ctx.logger.warn('The host MCP server %s could not be registered: %s', name, (error as Error).message); }
+      }
+    });
+  }
   ctx.inject(['connection', 'webServer'], (scoped) => {
     const { connection, webServer } = scoped as unknown as { connection: { authenticatedUrl(base: string): string }; webServer: { getOrigin(): string } };
     scoped.effect(() => {
