@@ -4,7 +4,8 @@
  * client may answer any question. So the bridge, which knows which member each pairing is, decides here what a call
  * may touch and what an event may reach:
  *
- * - `session/create` records the new session as the member's;
+ * - `session/create` must start in one of the DSH's directories (the one it was started in, or one of its
+ *   workspaces), and records the new session as the member's;
  * - `session/list` keeps the member's own sessions and drops sub-agents, which stay under their parent;
  * - a call or stream that names a session must name one of the member's, else DSH is never asked and the answer is
  *   `not_found`;
@@ -14,6 +15,7 @@
  *
  * A personal computer has no filter: its one member owns everything.
  */
+import { realpathSync } from 'node:fs';
 
 export interface Owners {
   ownerOf(sessionId: string): Promise<string | undefined>;
@@ -49,7 +51,11 @@ export function eventSession(item: unknown): string | undefined {
 export class OwnerFilter {
   /** Per pairing, the events it was shown that can be answered: event id → session. */
   private shown = new Map<string, Map<string, string>>();
-  constructor(private readonly owners: Owners, private readonly memberOf: (pairingId: string) => Promise<string | undefined>) {}
+  constructor(
+    private readonly owners: Owners,
+    private readonly memberOf: (pairingId: string) => Promise<string | undefined>,
+    private readonly directories: () => string[] = () => [],
+  ) {}
 
   private async owns(pairingId: string, sessionId: string | undefined) {
     if (!sessionId) return false;
@@ -66,6 +72,10 @@ export class OwnerFilter {
     }
     if (SESSION_CALLS.has(method)) return this.owns(pairingId, namedSession(body));
     if (method === 'teamwork/configuration') { const id = namedSession(body); return !id || this.owns(pairingId, id); }
+    if (method === 'session/create') {
+      const cwd = record(record(record(body)?.args)?.request)?.cwd;
+      return typeof cwd === 'string' && this.directories().includes(cwd);
+    }
     return true;
   }
 
@@ -113,4 +123,10 @@ export class OwnerFilter {
   }
 
   drop(pairingId: string) { this.shown.delete(pairingId); }
+}
+
+/** The directories a session may start in: where DSH was started, then its workspaces, each once and in that order. */
+export function startDirectories(started: string, workspaces: { path: string }[]) {
+  const canonical = (path: string) => { try { return realpathSync(path); } catch { return path; } };
+  return [...new Set([canonical(started), ...workspaces.map((workspace) => workspace.path)])];
 }
