@@ -5,13 +5,13 @@ import {
 } from '@dsh-teamwork/ui';
 import qrcode from 'qrcode-generator';
 import type { Locale } from '../locale.js';
-import type { PanelPairingOffer, PanelPhone, PanelPlugin, PanelPreset, PanelState, PanelProfile, PanelSummary, PluginState, ToolState } from '../panel.js';
+import type { PanelPairingOffer, PanelPhone, PanelPlugin, PanelPreset, PanelShared, PanelState, PanelProfile, PanelSummary, PluginState, ToolState } from '../panel.js';
 import { api, HostUnreachable } from './api.js';
 import { currentSessionTracker, type Host } from './host.js';
 import { useT, Words, words, type PanelMessage, type Translate } from './messages.js';
 
 type Tab = 'presets' | 'models' | 'plugins';
-type Page = 'resources' | 'devices' | 'profile' | 'teams' | 'choose';
+type Page = 'resources' | 'devices' | 'profile' | 'teams' | 'choose' | 'shared';
 type Run = (action: () => Promise<unknown>, done?: string | ((result: any) => string)) => Promise<boolean>;
 
 const REFRESH_MS = 5000;
@@ -132,7 +132,8 @@ export function TeamworkPanel({ host: dsh }: { host: Host }) {
     return () => { disposed = true; clearTimeout(timer); };
   }, [refresh, sessionId]);
 
-  const authenticated = state?.authenticated, server = state?.server;
+  // A shared DSH signs in as its team, no person: there is no profile to read.
+  const authenticated = state?.authenticated && !state.shared, server = state?.server;
   useEffect(() => {
     identity.current = undefined;
     touched.current = false;
@@ -224,6 +225,16 @@ export function TeamworkPanel({ host: dsh }: { host: Host }) {
       </Words.Provider>
     );
   }
+  if (state.shared && !state.authenticated) {
+    return (
+      <Words.Provider value={t}>
+        <Panel label="Teamwork">
+          <Shared shared={state.shared} run={run} />
+          {toastNode}
+        </Panel>
+      </Words.Provider>
+    );
+  }
   if (!state.authenticated) {
     return (
       <Words.Provider value={t}>
@@ -270,6 +281,7 @@ export function TeamworkPanel({ host: dsh }: { host: Host }) {
           </>}
         </>}
         {page === 'devices' && <><PageTitle title={t('phones.title')}>{t('phones.body')}</PageTitle><Phones state={state} run={run} /></>}
+        {page === 'shared' && state.shared && <Shared shared={state.shared} run={run} />}
         {page === 'teams' && <><PageTitle title={t('teams.title')}>{t('teams.body')}</PageTitle>{state.teams.map(x => <Item key={x.id} icon="layers" title={x.name} tags={<Badge tone={x.role === 'admin' ? 'brand' : 'neutral'}>{role(t, x.role)}</Badge>} actions={<><Button onClick={() => selectTeam(x.id)}>{t('teams.browse')}</Button><Button variant="ghost" trailingIcon="external" onClick={() => open(x.consoleUrl)}>{t(x.role === 'admin' ? 'teams.manage' : 'teams.view')}</Button></>} />)}<div><Button trailingIcon="external" onClick={() => open(`${state.server}/teams`)}>{t('teams.joinOrCreate')}</Button></div></>}
         {page === 'profile' && <Account state={state} profile={profile} error={profileError} retry={() => setProfileAttempt(n => n + 1)} updated={next => { if (identity.current === `teamwork:team:${state.server}:${next.id}`) { setProfile(next); void refresh(); } }} run={run} />}
         {toastNode}
@@ -339,6 +351,7 @@ function Account({ state, profile, error, retry, updated, run }: {
         <h3>{t('account.connection')}</h3><ServerSetting state={state} run={run} />
         <p className="twui-muted">{t('account.restartNote')}</p>
         <div><Button variant="ghost" icon="logout" onClick={() => setLogoutConfirm(true)}>{t('account.signOut')}</Button></div>
+        <ShareEnable run={run} signedIn />
         {logoutConfirm && <Confirm title={t('account.signOutTitle')} description={t('account.signOutBody')} confirmLabel={t('account.signOutConfirm')} cancelLabel={t('common.cancel')} busy={busy} onCancel={() => setLogoutConfirm(false)} onConfirm={async () => { setBusy(true); await run(() => api.logout(), t('account.signedOut')); setBusy(false); }} />}
       </section>
     </div>
@@ -429,6 +442,7 @@ function SignIn({ state, run }: { state: PanelState; run: Run }) {
       </ul>
 
       <ServerSetting state={state} run={run} />
+      <ShareEnable run={run} signedIn={false} />
     </div>
   );
 }
@@ -533,8 +547,13 @@ function Header({ state, page, team, reviews, reviewUrl, selectTeam, navigate }:
     <div className="twui-row twui-header-actions">
       {/* Amber marks what waits on the reader (docs/design.md): an admin's reviews, a phone's pairing. */}
       {reviews > 0 && <Button variant="ghost" trailingIcon="external" title={t('nav.reviewsHint')} onClick={() => open(reviewUrl)}><span className="twui-signal-dot" aria-hidden="true" />{t('nav.reviews', { count: reviews })}</Button>}
-      <Button variant="ghost" icon="smartphone" aria-current={page === 'devices' ? 'page' : undefined} onClick={() => navigate('devices')}>{t('nav.phones')}{pending ? <>{` · ${pending}`}<span className="twui-signal-dot" aria-hidden="true" /></> : null}</Button>
-      <Button variant="ghost" icon="settings" aria-current={page === 'profile' ? 'page' : undefined} onClick={() => navigate('profile')}>{t('nav.account')}</Button>
+      {state.shared ? (
+        // A shared DSH has no person signed in and no phones of its own: its members, invites and key are on one page.
+        <Button variant="ghost" icon="server" aria-current={page === 'shared' ? 'page' : undefined} onClick={() => navigate('shared')}>{t('nav.shared')}{state.shared.auditKey ? null : <span className="twui-signal-dot" aria-hidden="true" />}</Button>
+      ) : <>
+        <Button variant="ghost" icon="smartphone" aria-current={page === 'devices' ? 'page' : undefined} onClick={() => navigate('devices')}>{t('nav.phones')}{pending ? <>{` · ${pending}`}<span className="twui-signal-dot" aria-hidden="true" /></> : null}</Button>
+        <Button variant="ghost" icon="settings" aria-current={page === 'profile' ? 'page' : undefined} onClick={() => navigate('profile')}>{t('nav.account')}</Button>
+      </>}
     </div>
   </>;
 }
@@ -855,6 +874,96 @@ function PairingCode({ offer, onDone, onExpire }: { offer: PanelPairingOffer; on
 }
 
 /** A QR code drawn as one SVG path, dark on a light quiet zone so any camera reads it in either theme. */
+/* ── Shared DSH ──────────────────────────────────────────────────────────── */
+
+/** Turns this DSH into its team's shared DSH with a team host key; a person signed in here is signed out first. */
+function ShareEnable({ run, signedIn }: { run: Run; signedIn: boolean }) {
+  const t = useT();
+  const [key, setKey] = useState('');
+  const [busy, setBusy] = useState(false);
+  return (
+    <details>
+      <summary className="twui-link">{t('shared.enableTitle')}</summary>
+      <form className="twui-stack" style={{ paddingTop: 12 }} onSubmit={async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        if (await run(() => api.shareEnable(key.trim()), t('shared.enabled'))) setKey('');
+        setBusy(false);
+      }}>
+        <p className="twui-muted">{t(signedIn ? 'shared.enableBodySignedIn' : 'shared.enableBody')}</p>
+        <Field label={t('shared.hostKey')} htmlFor="teamwork-host-key">
+          <Input id="teamwork-host-key" className="twui-mono" value={key} onChange={(e) => setKey(e.target.value)} placeholder="dshh_…" autoComplete="off" spellCheck={false} />
+        </Field>
+        <div><Button type="submit" busy={busy} disabled={!key.trim()}>{t('shared.enable')}</Button></div>
+      </form>
+    </details>
+  );
+}
+
+/** This DSH as its team's shared DSH: the audit key members wait for, who may reach it, their devices and invites. */
+function Shared({ shared, run }: { shared: PanelShared; run: Run }) {
+  const t = useT();
+  const [auditKey, setAuditKey] = useState('');
+  const [busy, setBusy] = useState<string>();
+  const [invite, setInvite] = useState<{ email: string; link: string; expiresAt: string }>();
+  const [disabling, setDisabling] = useState(false);
+  const perform = async (id: string, action: () => Promise<unknown>, done?: string) => {
+    setBusy(id);
+    try { return await run(action, done); } finally { setBusy(undefined); }
+  };
+  return <>
+    <PageTitle title={shared.name ?? t('shared.title')}>{shared.teamName ? t('shared.bodyTeam', { team: shared.teamName }) : t('shared.body')}</PageTitle>
+    {shared.error && <Banner tone="danger" title={t('shared.keyFailed')}>{shared.error}</Banner>}
+    <section className="twui-stack" aria-label={t('shared.auditTitle')}>
+      <h3>{t('shared.auditTitle')}</h3>
+      {shared.auditKey
+        ? <p className="twui-muted">{t('shared.auditSet')} <span className="twui-mono">{shared.auditKey.slice(0, 16)}…</span></p>
+        : <Banner tone="warning" title={t('shared.auditMissingTitle')}>{t('shared.auditMissingBody')}</Banner>}
+      <form className="twui-row" onSubmit={async (e) => {
+        e.preventDefault();
+        if (await perform('audit', () => api.shareAuditKey(auditKey.trim()), t('shared.auditSaved'))) setAuditKey('');
+      }}>
+        <Input aria-label={t('shared.auditKey')} className="twui-mono" value={auditKey} onChange={(e) => setAuditKey(e.target.value)} placeholder={t('shared.auditPlaceholder')} autoComplete="off" spellCheck={false} />
+        <Button type="submit" busy={busy === 'audit'} disabled={!!busy || !auditKey.trim()}>{shared.auditKey ? t('shared.auditReplace') : t('shared.auditSave')}</Button>
+      </form>
+    </section>
+    <section className="twui-stack" aria-label={t('shared.membersTitle')}>
+      <h3>{t('shared.membersTitle')}</h3>
+      {!shared.members.length && <p className="twui-muted">{t('shared.noMembers')}</p>}
+      {shared.members.map((m) => (
+        <Item key={m.userId} icon="smartphone" title={m.email ?? m.userId}
+          subtitle={m.devices.length ? m.devices.join(', ') : t('shared.noDevice')}
+          tags={m.locked ? <Badge tone="warning" dot>{t('shared.locked')}</Badge> : undefined}
+          actions={<>
+            {m.locked && m.email && <Button size="sm" variant="ghost" busy={busy === `unlock:${m.userId}`} disabled={!!busy} onClick={() => void perform(`unlock:${m.userId}`, () => api.shareUnlock(m.email!), t('shared.unlocked', { email: m.email! }))}>{t('shared.unlock')}</Button>}
+            {m.email && <Button size="sm" busy={busy === `invite:${m.userId}`} disabled={!!busy || !shared.auditKey} onClick={() => void perform(`invite:${m.userId}`, async () => setInvite({ email: m.email!, ...await api.shareInvite(m.email!) }))}>{t('shared.invite')}</Button>}
+          </>} />
+      ))}
+    </section>
+    {invite && (
+      <Card padding={16}>
+        <div className="twui-row" style={{ alignItems: 'flex-start', gap: 16 }}>
+          <QrCode value={invite.link} size={168} label={t('shared.inviteQr')} />
+          <div className="twui-stack">
+            <h3>{t('shared.inviteTitle', { email: invite.email })}</h3>
+            <p className="twui-muted">{t('shared.inviteBody')}</p>
+            <code className="twui-mono" style={{ wordBreak: 'break-all', fontSize: 12 }}>{invite.link}</code>
+            <div className="twui-row">
+              <Button size="sm" onClick={() => void navigator.clipboard?.writeText(invite.link).then(() => run(async () => undefined, t('shared.copied')))}>{t('shared.copy')}</Button>
+              <Button size="sm" variant="ghost" onClick={() => setInvite(undefined)}>{t('phones.hide')}</Button>
+            </div>
+          </div>
+        </div>
+      </Card>
+    )}
+    <section className="twui-stack">
+      <div><Button variant="ghost" icon="logout" disabled={!!busy} onClick={() => setDisabling(true)}>{t('shared.disable')}</Button></div>
+      {disabling && <Confirm title={t('shared.disableTitle')} description={t('shared.disableBody')} confirmLabel={t('shared.disable')} cancelLabel={t('common.cancel')} busy={busy === 'disable'}
+        onCancel={() => setDisabling(false)} onConfirm={async () => { if (await perform('disable', () => api.shareDisable(), t('shared.disabled'))) setDisabling(false); }} />}
+    </section>
+  </>;
+}
+
 function QrCode({ value, size, label }: { value: string; size: number; label: string }) {
   const qr = qrcode(0, 'M');
   qr.addData(value);

@@ -57,6 +57,8 @@ export declare class AuditArchive {
     private save;
     /** Whether an audit key is set: a shared DSH admits no member until it is. */
     ready(): Promise<boolean>;
+    /** The audit key's fingerprint, or undefined before one is set. */
+    fingerprint(): Promise<string | undefined>;
     /** The admin's audit public key (raw X25519, base64, from `dsh-teamwork-audit keygen`). New segments are sealed to it. */
     setKey(publicKey: string): Promise<string>;
     /** Records one frame of a member's; nothing is recorded before an audit key is set. */

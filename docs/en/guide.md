@@ -75,6 +75,12 @@ server keeps it and cannot read it. The admin downloads it from the console and
 opens it with `dsh-teamwork-audit read <file> --key audit-key.json`. A lost key
 cannot be recovered.
 
+Everything above can also be done in the Teamwork panel: **Use this DSH as a
+team's shared DSH** on its sign-in screen or account page turns shared mode on,
+and its **Shared DSH** page then sets the audit key, lists the members who may
+reach it with their devices, makes an invite (a link and a QR code), unlocks a
+member locked out by wrong PINs, and turns shared mode off.
+
 ## Choose a model or preset
 
 Use **New session** for a team preset. **Use in this blank session** works only

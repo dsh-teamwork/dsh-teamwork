@@ -46,4 +46,9 @@ export const api = {
   pairPhone: () => call<PanelPairingOffer>('pair-phone', {}),
   decidePhone: (id: string, accept: boolean) => call<void>('decide-phone', { id, accept }),
   revokePhone: (id: string) => call<void>('revoke-phone', { id }),
+  shareEnable: (key: string) => call<void>('share-enable', { key }),
+  shareDisable: () => call<void>('share-disable'),
+  shareAuditKey: (key: string) => call<{ fingerprint: string }>('share-audit-key', { key }),
+  shareInvite: (email: string) => call<{ link: string; expiresAt: string }>('share-invite', { email }),
+  shareUnlock: (email: string) => call<void>('share-unlock', { email }),
 };

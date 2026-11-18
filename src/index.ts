@@ -353,12 +353,38 @@ export async function apply(ctx: Context, config: Config) {
     if (!shared?.enabled) throw new Error(say('shared.off'));
     await archive.clear(); await shared.disable(); await roster.clear(); await pins.reset(); sharedMembers = []; joining.clear(); relay.refresh();
   };
+  /** The listed member with that email, or the reason there is none, in the member's words. */
+  const listedMember = (email: string) => {
+    if (!shared?.enabled) throw new Error(say('shared.off'));
+    const member = sharedMembers.find((m) => m.email?.toLowerCase() === email.trim().toLowerCase());
+    if (!member?.email) throw new Error(say('shared.notListed', { email }));
+    return { userId: member.userId, email: member.email };
+  };
+  /** `/teamwork share unlock <email>`: clears one member's PIN and lock. */
+  const shareUnlock = async (email: string) => { await pins.clear(listedMember(email).userId); };
+  /** `/teamwork share audit-key <key>`: seals the archive to the admin's key; members are admitted from then on. */
+  const shareAuditKey = async (key: string) => {
+    if (!shared?.enabled) throw new Error(say('shared.off'));
+    return archive.setKey(key);
+  };
+  /** What the panel shows of shared mode: the machine, its audit key, and its members with their devices. */
+  const sharedView = async () => {
+    const status = shared?.status();
+    if (!status?.enabled) return null;
+    const devices = Object.values(await roster.devices());
+    return {
+      name: status.name ?? null, teamName: client.current()?.teams[0]?.teamName ?? null, error: status.error ?? null,
+      auditKey: (await archive.fingerprint()) ?? null,
+      members: await Promise.all(sharedMembers.map(async (m) => ({
+        userId: m.userId, email: m.email ?? null, devices: devices.filter((d) => d.userId === m.userId).map((d) => d.name), locked: await pins.locked(m.userId),
+      }))),
+    };
+  };
   /** `/teamwork share invite <email>`: a single-use link for one member the server lists, to hand over outside it. */
   const shareInvite = async (email: string) => {
     const status = shared?.status();
     if (!status?.enabled || !status.hostId) throw new Error(say('shared.off'));
-    const member = sharedMembers.find((m) => m.email?.toLowerCase() === email.trim().toLowerCase());
-    if (!member?.email) throw new Error(`${email} is not on this shared DSH's access list. A team admin manages it in the console.`);
+    const member = listedMember(email);
     const { id, secret, expiresAt } = await roster.invite({ userId: member.userId, email: member.email });
     const query = new URLSearchParams({ server: client.endpoint, host: status.hostId, key: await security.publicKey(), invite: id, secret });
     return { link: `dshteamwork://join?${query}`, expiresAt: new Date(expiresAt).toISOString() };
@@ -484,6 +510,7 @@ export async function apply(ctx: Context, config: Config) {
         sync: { auto: status.autoSync, running: status.syncing, lastSuccess: status.lastSuccess, lastError: status.lastError },
         relay: relay.status,
         phones: await Promise.all(phones.map(async phone => ({ ...phone, ...await security.details(phone.id) }))),
+        shared: await sharedView(),
         session: agent ? {
           id: String(agent.id),
           model: selection ? { provider: selection.provider, model: selection.model, team: selection.provider === platformProvider } : null,
@@ -529,6 +556,11 @@ export async function apply(ctx: Context, config: Config) {
       await relay.request({ t: 'revoke', pairingId: id }).catch(phoneError);
       await readPhones();
     },
+    shareEnable,
+    shareDisable,
+    shareAuditKey: async (key) => ({ fingerprint: await shareAuditKey(key) }),
+    shareInvite,
+    shareUnlock,
     async use(sessionId, id) {
       const agent = sessionAgent(sessionId);
       if (!agent) throw new Error(say('use.notLoaded'));
@@ -589,14 +621,11 @@ export async function apply(ctx: Context, config: Config) {
               return { kind: 'success', text: [`Invite for ${confirmation}, single use, valid until ${invite.expiresAt}:`, invite.link, 'Hand it over yourself, in person or through a channel your team trusts, never through the Teamwork server. Whoever opens it signed in as that member pairs a device with this DSH.'].join('\n') };
             }
             if (requestedId === 'audit-key') {
-              if (!shared?.enabled) throw new Error(say('shared.off'));
-              const fingerprint = await archive.setKey(confirmation ?? '');
+              const fingerprint = await shareAuditKey(confirmation ?? '');
               return { kind: 'success', text: `Audit key set (fingerprint ${fingerprint}). Every member's session on this DSH is now archived, sealed to it; members can join.` };
             }
             if (requestedId === 'unlock') {
-              const member = sharedMembers.find((m) => m.email?.toLowerCase() === (confirmation ?? '').trim().toLowerCase());
-              if (!shared?.enabled || !member) throw new Error(`${confirmation ?? ''} is not on this shared DSH's access list.`);
-              await pins.clear(member.userId);
+              await shareUnlock(confirmation ?? '');
               return { kind: 'success', text: `${confirmation}'s PIN and lock are cleared; they set a new PIN on their next connection.` };
             }
             if (requestedId === 'members') {
