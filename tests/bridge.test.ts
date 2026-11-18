@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ALLOWED_CALLS, ALLOWED_STREAMS, Bridge } from '../src/bridge';
+import { MAX_MESSAGE } from '../src/secure-channel';
 import { PhoneSessionError, type PhoneSessionOps } from '../src/phone-session';
 
 /** A loopback mux the test drives by hand. */
@@ -221,5 +222,74 @@ describe('the phone bridge', () => {
     const second = FakeSocket.made[1]!;
     b.handle({ t: 'detach', pairingId: 'p' });
     expect(second.closed).toBe(true);
+  });
+
+  describe('keeps every frame within the encrypted channel’s message limit', () => {
+    const bytes = (frame: unknown) => new TextEncoder().encode(JSON.stringify(frame)).length;
+    const big = (n: number) => 'x'.repeat(n);
+    async function follow() {
+      const { b, sent } = bridge();
+      b.handle({ t: 'mux', pairingId: 'p', body: { type: 'open', streamId: 'f', endpoint: 'session/follow', payload: {} } });
+      for (let i = 0; i < 4; i++) await tick();
+      const mux = FakeSocket.made[0]!;
+      mux.emit('open');
+      return { b, sent, mux };
+    }
+    const userMessage = (seq: number, text: string) => ({ seq, event: { type: 'user/message', seq, data: { source: { kind: 'user' }, content: [{ type: 'text', text }] } } });
+    const toolResult = (seq: number, output: string) => ({ seq, event: { type: 'tool/result', seq, data: { message: { toolCallId: `call-${seq}`, content: [{ type: 'text', text: output }] } } } });
+
+    it('shortens a snapshot of large tool output, keeping what the phone draws', async () => {
+      const { sent, mux } = await follow();
+      const records = Array.from({ length: 10 }, (_, i) => i % 2 ? toolResult(i, big(300_000)) : userMessage(i, `question ${i}`));
+      mux.emit('message', { data: JSON.stringify({ type: 'item', streamId: 'f', value: { type: 'snapshot', cursor: 9, hasMore: false, records } }) });
+      const frame = sent.at(-1);
+      expect(bytes(frame)).toBeLessThanOrEqual(MAX_MESSAGE);
+      expect(frame.body.value.type).toBe('snapshot');
+      expect(frame.body.value.records.map((r: { seq: number }) => r.seq)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+      expect(frame.body.value.records[8].event.data.content[0].text).toBe('question 8');
+    });
+
+    it('keeps a snapshot’s newest records when shortening is not enough, and says there is more', async () => {
+      const { sent, mux } = await follow();
+      const records = Array.from({ length: 3000 }, (_, i) => userMessage(i, `question ${i} ${big(900)}`));
+      mux.emit('message', { data: JSON.stringify({ type: 'item', streamId: 'f', value: { type: 'snapshot', cursor: 2999, hasMore: false, records } }) });
+      const frame = sent.at(-1);
+      expect(bytes(frame)).toBeLessThanOrEqual(MAX_MESSAGE);
+      const kept = frame.body.value.records as Array<{ seq: number }>;
+      expect(kept.at(-1)!.seq).toBe(2999);
+      expect(kept[0]!.seq).toBeGreaterThan(0);
+      expect(frame.body.value.hasMore).toBe(true);
+    });
+
+    it('shortens a live event and a call’s result', async () => {
+      const { b, sent, mux } = await follow();
+      mux.emit('message', { data: JSON.stringify({ type: 'item', streamId: 'f', value: { type: 'event', event: toolResult(5, big(2_000_000)).event } }) });
+      expect(bytes(sent.at(-1))).toBeLessThanOrEqual(MAX_MESSAGE);
+      expect(sent.at(-1).body.value.event.data.message.toolCallId).toBe('call-5');
+
+      const request = (async () => new Response(JSON.stringify({ result: { ok: true, value: { records: [toolResult(1, big(3_000_000))], hasMore: false } } }))) as typeof fetch;
+      const paged = new Bridge({ launchUrl: () => 'http://127.0.0.1:3080/?token=t', send: frame => sent.push(frame), request: (async (url: string, init?: RequestInit) => url.includes('/connect?') ? new Response(null, { status: 302, headers: { 'set-cookie': 'dsh=a' } }) : request(url, init)) as typeof fetch });
+      paged.handle({ t: 'call', pairingId: 'p', id: 'page', method: 'session/page', body: { args: { request: {} } } });
+      for (let i = 0; i < 6; i++) await tick();
+      const result = sent.at(-1);
+      expect(result).toMatchObject({ t: 'result', id: 'page', status: 200, body: { result: { ok: true } } });
+      expect(bytes(result)).toBeLessThanOrEqual(MAX_MESSAGE);
+      void b;
+    });
+
+    it('keeps a page’s newest records when shortening is not enough', async () => {
+      const sent: any[] = [];
+      const records = Array.from({ length: 3000 }, (_, i) => userMessage(i, `question ${i} ${big(900)}`));
+      const request = (async (url: string) => url.includes('/connect?')
+        ? new Response(null, { status: 302, headers: { 'set-cookie': 'dsh=a' } })
+        : new Response(JSON.stringify({ result: { ok: true, value: { records, hasMore: false, cursor: 2999 } } }))) as typeof fetch;
+      const paged = new Bridge({ launchUrl: () => 'http://127.0.0.1:3080/?token=t', send: frame => sent.push(frame), request });
+      paged.handle({ t: 'call', pairingId: 'p', id: 'page', method: 'session/page', body: { args: { request: {} } } });
+      for (let i = 0; i < 6; i++) await tick();
+      const result = sent.at(-1);
+      expect(bytes(result)).toBeLessThanOrEqual(MAX_MESSAGE);
+      expect(result.body.result.value.hasMore).toBe(true);
+      expect(result.body.result.value.records.at(-1).seq).toBe(2999);
+    });
   });
 });

@@ -158,6 +158,10 @@ roster instead of a safety code. The relay's `members` list prunes the roster.
 `src/shared-owner.ts` is what the bridge asks before any call or stream and
 after `session/create` and `session/list`: a member reaches only sessions they
 started, sees only their events, and answers only questions they were shown.
+Whatever the bridge sends back fits one 1 MiB message of the encrypted channel
+(`fitFrame`): long strings are cut short, a snapshot or a page keeps its newest
+records and says `hasMore`, and a stream frame that still cannot fit ends its
+stream with `too_large` rather than closing the channel.
 
 `src/pin-lock.ts` is the PIN lock, on a shared DSH and on a personal computer
 alike (`<cache>.pins.json`, mode 0600): one four-digit PIN per member (`owner`
