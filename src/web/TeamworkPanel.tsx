@@ -780,6 +780,9 @@ const relayText: Record<Exclude<PanelState['relay'], 'connected'>, [PanelMessage
   refused: ['relay.refusedTitle', 'relay.refusedBody'],
 };
 
+/** A paired device's kind, as it said when it paired; one paired before devices said shows none. */
+const deviceIcon = (device: PanelPhone) => (device.deviceKind === 'web' ? 'monitor' : 'smartphone');
+const withKind = (t: Translate, device: PanelPhone, rest: string) => (device.deviceKind ? `${t(`devices.kind.${device.deviceKind}`)} · ${rest}` : rest);
 const shortTime = (t: Translate, iso: string) => new Date(iso).toLocaleString(t.locale, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 function Phones({ state, run }: { state: PanelState; run: Run }) {
@@ -825,7 +828,7 @@ function Phones({ state, run }: { state: PanelState; run: Run }) {
             </EmptyState>}
       </Card>
       {pending.map((phone) => (
-        <Item key={phone.id} icon="smartphone" title={phone.deviceName} subtitle={t('phones.requested', { time: shortTime(t, phone.createdAt) })}
+        <Item key={phone.id} icon={deviceIcon(phone)} title={phone.deviceName} subtitle={withKind(t, phone, t('phones.requested', { time: shortTime(t, phone.createdAt) }))}
           tags={<Badge tone="warning" dot>{t('phones.waiting')}</Badge>}
           description={`${phone.safetyCode ? t('phones.safetyCode', { code: phone.safetyCode }) : t('phones.handshake')} ${t('phones.grant')}`}
           actions={<>
@@ -836,8 +839,8 @@ function Phones({ state, run }: { state: PanelState; run: Run }) {
       <h3 style={{ fontSize: 15, fontWeight: 500 }}>{t('phones.paired')}</h3>
       {!paired.length && <p className="twui-muted">{t('phones.none')}</p>}
       {paired.map((phone) => (
-        <Item key={phone.id} icon="smartphone" title={phone.deviceName}
-          subtitle={phone.lastUsedAt ? t('phones.lastUsed', { time: shortTime(t, phone.lastUsedAt) }) : t('phones.pairedAt', { time: shortTime(t, phone.createdAt) })}
+        <Item key={phone.id} icon={deviceIcon(phone)} title={phone.deviceName}
+          subtitle={withKind(t, phone, phone.lastUsedAt ? t('phones.lastUsed', { time: shortTime(t, phone.lastUsedAt) }) : t('phones.pairedAt', { time: shortTime(t, phone.createdAt) }))}
           tags={<Badge tone={phone.verified ? 'success' : 'warning'} dot>{phone.verified ? t('phones.verified') : t('phones.repair')}</Badge>}
           actions={<Button size="sm" variant="ghost" disabled={!!busy} onClick={() => setRevoking(phone)}>{t('phones.unpair')}</Button>} />
       ))}

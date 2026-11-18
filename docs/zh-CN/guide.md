@@ -46,7 +46,7 @@ dsh-teamwork share members        # 另有 status、unlock <email>、disable
 服务器上的个人 DSH 也一样：
 - **登录**：`dsh-teamwork login` 打印登录链接，在任意浏览器中打开，再用 `dsh-teamwork authorize <code>` 填入页面上显示的授权码。
 - **同步**：`dsh-teamwork status` 和 `dsh-teamwork sync` 查看并同步团队配置。
-- **配对手机**：`dsh-teamwork phone pair` 在终端里画出手机 App 的配对二维码，`dsh-teamwork phone list` 显示等待中手机的安全码，与手机上的一致时用 `dsh-teamwork phone accept <id>` 确认；`reject` 和 `revoke` 用于拒绝或移除。
+- **配对设备**：`dsh-teamwork device pair` 打印配对码，并在终端里画出手机 App 的配对二维码；浏览器在 Teamwork 网页的**我的 DSH**里输入配对码。`dsh-teamwork device list` 显示等待中设备的安全码和设备类型（iOS 手机、Android 手机或 Web 浏览器），与设备上的一致时用 `dsh-teamwork device accept <id>` 确认；`reject` 和 `revoke` 用于拒绝或移除。
 
 ## 选择模型或预设
 
@@ -83,7 +83,7 @@ dsh-teamwork share members        # 另有 status、unlock <email>、disable
 | `/teamwork share members` | 查看可访问这台团队 DSH 的成员及其设备。 |
 | `/teamwork share unlock <email>` | 清除某个成员在这台团队 DSH 上的 PIN 和锁定，对方下次连接时重新设置。 |
 | `/teamwork share audit-key <key>` | 把这台团队 DSH 的归档加密到 `dsh-teamwork-audit keygen` 打印的密钥；设置之后才会接纳成员。 |
-| `/teamwork pin reset` | 清除你自己手机在这台计算机上的 PIN 和锁定，再从手机设置新的。 |
+| `/teamwork pin reset` | 清除你自己在这台计算机上的 PIN 和锁定，再从手机或浏览器设置新的。 |
 | `/teamwork status` | 查看登录、同步和最近错误。 |
 | `/teamwork sync` | 刷新团队资源。 |
 | `/teamwork list` | 列出配置 ID。 |
@@ -122,15 +122,15 @@ dsh-teamwork share members        # 另有 status、unlock <email>、disable
 
 由宿主自行为 DSH 登录的环境（例如 DSH Teamwork 云电脑）可以把 `tokenFile` 设为一个文件的绝对路径，文件内容是插件令牌。插件启动时读取它，并跟随之后的每次变化（包括原子替换）；文件为空或不存在即视为退出登录。此模式下不能在插件里登录、退出或切换服务器，服务器由 `apiEndpoint` 指定，也不会连接手机中转。
 
-## 数据与手机连接
+## 数据与设备连接
 
 令牌只在宿主内存中保存，重启需要登录；团队配置以私有文件权限缓存。旧缓存不是登录授权。网络失败时保留缓存；401／403 会清除团队注册并暂停同步，等待重新登录。供应商密钥保留在服务端，团队模型的提示词与上下文经过其网关。
 
-托管服务可提供中转，需要匹配的 Teamwork App 与在线的 DSH web／桌面宿主。仅启动 headless 的主机对手机请求返回 503；社区版不提供托管中转。
+托管服务可提供中转，需要匹配的 Teamwork App 与在线的 DSH web／桌面宿主。仅启动 headless 的主机对设备请求返回 503；社区版不提供托管中转。
 
 配对需要相同账号、两端核对安全码并在电脑批准。配对可访问本机账号有权限的个人和各团队会话，不增加团队权限。私有认证加密通道保护手机请求与普通附件；中转仍可见账号／设备元数据、公钥、时间和大小。团队模型网关是另一条数据边界；两端须使用匹配协议版本。
 
-配对密钥保存在本机。信任密钥变化或丢失时需要重新配对。电脑解除配对会立即关闭通道；手机端解除需要电脑的加密确认，离线电脑需要重新连线。
+配对密钥保存在本机。信任密钥变化或丢失时需要重新配对。电脑解除配对会立即关闭通道；设备端解除需要电脑的加密确认，离线电脑需要重新连线。
 
 ## 获取帮助
 

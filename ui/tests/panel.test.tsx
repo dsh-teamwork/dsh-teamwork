@@ -41,16 +41,16 @@ async function input(selector: string, value: string) {
 test('a slow profile never redirects someone who already opened the phone page', async () => {
   let resolve!: (value: typeof profile) => void;
   vi.mocked(api.profile).mockReturnValue(new Promise(r => { resolve = r; }));
-  await mount(); await click('手机连接');
+  await mount(); await click('设备连接');
   await act(async () => resolve(profile));
-  expect(document.body.textContent).toContain('手机连接的是这台电脑');
+  expect(document.body.textContent).toContain('手机或浏览器连接的是这台电脑');
   expect(document.body.textContent).not.toContain('先从哪个团队开始');
 });
 
 test('preserves an unsaved profile across pages, keeps it after a failed save, and allows discarding it', async () => {
   vi.mocked(api.updateProfile).mockRejectedValue(new Error('Profile offline'));
   await mount(); await click('我的账号'); await input('#teamwork-name', 'Draft');
-  await click('手机连接'); await click('我的账号');
+  await click('设备连接'); await click('我的账号');
   expect(document.querySelector<HTMLInputElement>('#teamwork-name')!.value).toBe('Draft');
   await click('保存资料');
   expect(document.querySelector<HTMLInputElement>('#teamwork-name')!.value).toBe('Draft');
@@ -63,7 +63,7 @@ test('retains revoke confirmation after a failure so the member can retry', asyn
   const phone = { id: 'phone', deviceName: 'Test phone', status: 'confirmed' as const, createdAt: new Date().toISOString(), lastUsedAt: null };
   vi.mocked(api.state).mockResolvedValue({ ...state, phones: [phone] });
   vi.mocked(api.revokePhone).mockRejectedValueOnce(new Error('Relay offline')).mockResolvedValueOnce(undefined);
-  await mount(); await click('手机连接'); await click('解除配对');
+  await mount(); await click('设备连接'); await click('解除配对');
   const confirm = () => [...document.querySelectorAll<HTMLButtonElement>('.twui-confirm button')][0];
   await act(async () => confirm().click());
   expect(document.querySelector('.twui-confirm')).not.toBeNull();
@@ -74,7 +74,7 @@ test('retains revoke confirmation after a failure so the member can retry', asyn
 test('explains an expired pairing code and offers a new one', async () => {
   vi.useFakeTimers();
   vi.mocked(api.pairPhone).mockResolvedValue({ code: '12345678', link: 'dshteamwork://pair?code=12345678', expiresAt: new Date(Date.now() + 1000).toISOString() });
-  await mount(); await click('手机连接'); await click('配对新手机');
+  await mount(); await click('设备连接'); await click('配对新设备');
   await act(async () => { await vi.advanceTimersByTimeAsync(1100); });
   expect(document.body.textContent).toContain('配对码已过期');
   expect([...document.querySelectorAll('button')].some(b => b.textContent === '重新生成配对码')).toBe(true);
@@ -116,10 +116,10 @@ test('switches teams and survives a removed membership without changing the phon
   await act(async () => document.querySelector<HTMLButtonElement>('.twui-select-trigger')!.click());
   await act(async () => document.querySelector('[role="option"][data-index="2"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
   expect(document.body.textContent).toContain('Preset b'); expect(document.body.textContent).not.toContain('Preset a');
-  await click('手机连接');
+  await click('设备连接');
   vi.mocked(api.state).mockResolvedValue({ ...state, teams: state.teams.slice(0, 1), presets: state.presets.slice(0, 1) });
   await act(async () => { await vi.advanceTimersByTimeAsync(5001); });
-  expect(document.body.textContent).toContain('手机连接的是这台电脑');
+  expect(document.body.textContent).toContain('手机或浏览器连接的是这台电脑');
   await click('返回团队资源'); expect(document.querySelector('.twui-select-primary')!.textContent).toContain('全部团队');
   expect(api.use).not.toHaveBeenCalled(); expect(api.decidePhone).not.toHaveBeenCalled();
 });
@@ -127,7 +127,7 @@ test('switches teams and survives a removed membership without changing the phon
 test('locks pairing generation and lets the member hide a still-valid code', async () => {
   let resolve!: (value: { code: string; link: string; expiresAt: string }) => void;
   vi.mocked(api.pairPhone).mockReturnValue(new Promise(r => { resolve = r; }));
-  await mount(); await click('手机连接'); await click('配对新手机'); await click('配对新手机');
+  await mount(); await click('设备连接'); await click('配对新设备'); await click('配对新设备');
   expect(api.pairPhone).toHaveBeenCalledTimes(1);
   await act(async () => resolve({ code: '12345678', link: 'dshteamwork://pair?code=12345678', expiresAt: new Date(Date.now() + 60000).toISOString() }));
   expect(document.body.textContent).toContain('收起配对码'); await click('收起配对码');
@@ -142,7 +142,7 @@ test('retries rejecting a request, then confirms a new request and revokes the r
     current = { ...current, phones: accept ? [{ ...pending, status: 'confirmed' }] : [] };
   });
   vi.mocked(api.revokePhone).mockImplementation(async () => { current = { ...current, phones: [] }; });
-  await mount(); await click('手机连接 · 1');
+  await mount(); await click('设备连接 · 1');
   expect(document.body.textContent).toContain('目前不能只授权一个团队');
   await click('拒绝'); expect(document.body.textContent).toContain('等待你确认');
   await click('拒绝'); expect(document.body.textContent).not.toContain('等待你确认');
@@ -150,7 +150,7 @@ test('retries rejecting a request, then confirms a new request and revokes the r
   await click('刷新'); await click('安全码一致，确认配对');
   expect(document.body.textContent).not.toContain('等待你确认');
   await click('解除配对'); await act(async () => document.querySelector<HTMLButtonElement>('.twui-confirm button')!.click());
-  expect(document.body.textContent).toContain('尚无已配对手机');
+  expect(document.body.textContent).toContain('尚无已配对设备');
 });
 
 test('profile read retry stays on the account page instead of opening onboarding', async () => {
@@ -166,7 +166,7 @@ test('hides a consumed code when a new pending phone replaces another pending ph
   let current: PanelState = { ...state, phones: [phone] };
   vi.mocked(api.state).mockImplementation(async () => current);
   vi.mocked(api.pairPhone).mockResolvedValue({ code: '12345678', link: 'dshteamwork://pair?code=12345678', expiresAt: new Date(Date.now() + 60000).toISOString() });
-  await mount(); await click('手机连接 · 1'); await click('配对新手机');
+  await mount(); await click('设备连接 · 1'); await click('配对新设备');
   expect(document.querySelector('[aria-label="配对二维码"]')).not.toBeNull();
   current = { ...current, phones: [{ ...phone, id: 'new', deviceName: 'New request' }] };
   await act(async () => { await vi.advanceTimersByTimeAsync(5001); });
@@ -191,7 +191,7 @@ test('chooses a team, filters its resources without changing sessions, and edits
   await act(async () => [...document.querySelectorAll('[role="option"]')].find(o => o.textContent === 'English')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
   expect(api.updateProfile).not.toHaveBeenCalled();
   await click('保存资料'); expect(api.updateProfile).toHaveBeenCalledWith({ name: 'Ada', locale: 'en' });
-  await click('手机连接'); expect(document.body.textContent).toContain('与当前浏览的团队无关');
+  await click('设备连接'); expect(document.body.textContent).toContain('与当前浏览的团队无关');
   await click('返回团队资源');
   await act(async () => document.querySelectorAll<HTMLButtonElement>('[role="tab"]')[1].click());
   act(() => root.unmount());
@@ -299,7 +299,7 @@ test('a Team DSH shows its members and holds invites until the audit key is set,
   await mount();
   expect(api.profile).not.toHaveBeenCalled();
   const labels = [...document.querySelectorAll('button')].map(b => b.textContent?.trim());
-  expect(labels).not.toContain('手机连接');
+  expect(labels).not.toContain('设备连接');
   await click('团队 DSH');
   expect(document.body.textContent).toContain('成员还不能加入');
   expect(document.body.textContent).toContain('bob@example.com');

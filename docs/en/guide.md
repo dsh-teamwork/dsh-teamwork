@@ -104,10 +104,12 @@ home (below), which only that user can open. It runs on Linux and macOS.
 A personal DSH on a server works the same way: `dsh-teamwork login` prints a
 sign-in link to open in any browser, and `dsh-teamwork authorize <code>` takes
 the code the page shows. `dsh-teamwork status` and `dsh-teamwork sync` follow
-the team's configuration. `dsh-teamwork phone pair` draws the phone app's
-pairing QR code in the terminal. `dsh-teamwork phone list` then shows the
-waiting phone's safety code. When the phone shows the same code,
-`dsh-teamwork phone accept <id>` accepts it; `reject` and `revoke` refuse or
+the team's configuration. `dsh-teamwork device pair` prints a pairing code and
+draws the phone app's QR code in the terminal; a browser types the code under
+**My DSH** in the Teamwork web console. `dsh-teamwork device list` then shows
+the waiting device's safety code, and what it is (an iOS or Android phone, or
+a web browser). When the device shows the same code,
+`dsh-teamwork device accept <id>` accepts it; `reject` and `revoke` refuse or
 remove one.
 
 ## Choose a model or preset
@@ -163,7 +165,7 @@ Run these in DSH's command input, not your shell. IDs come from `/teamwork list`
 | `/teamwork share members` | The members who may reach this Team DSH, and their devices. |
 | `/teamwork share unlock <email>` | Clear a member's PIN and lock on this Team DSH; they set a new PIN next time. |
 | `/teamwork share audit-key <key>` | Seal this Team DSH's archive to the key `dsh-teamwork-audit keygen` printed; members are admitted only once it is set. |
-| `/teamwork pin reset` | Clear your own phone PIN and lock on this computer; set a new one from your phone. |
+| `/teamwork pin reset` | Clear your own PIN and lock on this computer; set a new one from your phone or browser. |
 | `/teamwork status` | Show authentication, sync status and recent errors. |
 | `/teamwork sync` | Refresh the team's resources. |
 | `/teamwork list` | List configuration IDs. |
@@ -216,7 +218,7 @@ changing servers are refused, `apiEndpoint` names the server, and the phone
 relay is never opened.
 Do not duplicate the package's `insert` entry in a profile.
 
-## Data and phone access
+## Data and device access
 
 Tokens stay in host memory; restart requires sign-in. Team configuration is
 cached with private file permissions. A stale cache is not authorization.
@@ -225,19 +227,19 @@ until sign-in. Provider keys remain on the service; team-model prompts and
 context travel through that service's gateway.
 
 The hosted service may advertise a relay. A matching Teamwork App and an online
-DSH web/desktop host are required. Headless-only hosts return 503 for phone
+DSH web/desktop host are required. Headless-only hosts return 503 for device
 requests. The community edition does not supply the hosted relay.
 
 Pairing requires matching account identity, checking the safety code on both
 devices and approval on the computer. It authorizes the owner's permitted
 personal and team sessions on this DSH, across teams. It grants no additional
-team permissions. A private, authenticated encrypted channel protects phone
+team permissions. A private, authenticated encrypted channel protects device
 requests and ordinary file attachments; the relay can still see account/device
 metadata, public keys, timing and sizes. The team-model gateway is a separate
 boundary. Both endpoints must be on matching protocol versions.
 
 Pairing keys persist locally. Changed or missing trusted keys require pairing
-again. Desktop revocation closes the channel immediately; phone-side revocation
+again. Desktop revocation closes the channel immediately; device-side revocation
 needs the computer's encrypted acknowledgement and may wait for reconnection.
 
 ## Getting help

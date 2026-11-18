@@ -66,6 +66,8 @@ export interface PanelPhone {
     safetyCode?: string;
     phoneConfirmed?: boolean;
     verified?: boolean;
+    /** What the device said it is when it paired (src/phone-security.ts); absent for one paired before devices said. */
+    deviceKind?: 'ios' | 'android' | 'web';
 }
 /** A single-use pairing code, and the link the app's QR scanner reads. */
 export interface PanelPairingOffer {
