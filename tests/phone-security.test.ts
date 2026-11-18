@@ -55,7 +55,8 @@ it('requires both local approvals, persists trust, and acknowledges durable remo
       send: (packet) => queueMicrotask(() => void host.handle(packet)),
       ready: (_key, code) => {
         codes.push(code);
-        phone.send({ t: 'pairHello', name: 'My phone' });
+        // It says what it is; the desktop keeps that beside its name, for the panel's list of devices.
+        phone.send({ t: 'pairHello', name: 'My phone', kind: 'ios' });
       },
       message: (value) => messages.push(value),
       closed: () => {},
@@ -84,6 +85,8 @@ it('requires both local approvals, persists trust, and acknowledges durable remo
     await until(() => messages.some((m) => m.t === 'pairAccepted'));
     expect(confirms).toBe(1);
     expect((await keys.peer('server|account', 'pair'))?.key).toBe(identity.publicKey);
+    expect((await keys.peer('server|account', 'pair'))?.kind).toBe('ios');
+    expect(await host.details('pair')).toMatchObject({ deviceName: 'My phone', deviceKind: 'ios' });
     expect(await keys.peer('other-account', 'pair')).toBeUndefined();
     expect((await new PhoneKeys(path).identity()).publicKey).toBe((await keys.identity()).publicKey);
     // Windows reports DOS attributes rather than POSIX permission bits.

@@ -1,6 +1,9 @@
 import { type Identity, type SecurePacket } from './secure-channel.js';
 import { type Forwarded } from './bridge.js';
 import { type PinStore } from './pin-lock.js';
+/** What a paired device is, as it says when it pairs: the phone app on iOS or Android, or a web browser. */
+export declare const DEVICE_KINDS: readonly ["ios", "android", "web"];
+export type DeviceKind = (typeof DEVICE_KINDS)[number];
 export declare class PhoneKeys {
     private readonly path;
     private state?;
@@ -12,10 +15,11 @@ export declare class PhoneKeys {
     peer(scope: string, id: string): Promise<{
         key: string;
         name: string;
+        kind?: "ios" | "android" | "web" | undefined;
     }>;
     private updates;
     private update;
-    trust(scope: string, id: string, key: string, name: string): Promise<void>;
+    trust(scope: string, id: string, key: string, name: string, kind?: DeviceKind): Promise<void>;
     forget(scope: string, id: string): Promise<void>;
     /** Forgets every phone of `scope` outside `kept`, and answers which ones went. */
     forgetExcept(scope: string, kept: ReadonlySet<string>): Promise<string[]>;
@@ -58,12 +62,14 @@ export declare class PhoneSecurity {
     offerCode(expiresAt: string): void;
     publicKey(): Promise<string>;
     status(id: string): {
+        deviceKind?: "ios" | "android" | "web" | undefined;
         deviceName?: string | undefined;
         safetyCode: string | undefined;
         phoneConfirmed: boolean;
     };
     details(id: string): Promise<{
         status?: "pending" | undefined;
+        deviceKind?: "ios" | "android" | "web" | undefined;
         deviceName?: string | undefined;
         verified: boolean;
         safetyCode: string | undefined;

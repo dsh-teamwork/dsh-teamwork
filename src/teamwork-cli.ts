@@ -7,14 +7,15 @@
  *                                         without a url, prints it
  *   dsh-teamwork login                    a sign-in link to open in any browser; the code it shows goes to authorize
  *   dsh-teamwork authorize <code>         finish signing in
- *   dsh-teamwork status                   sign-in, teams, sync, the relay and paired phones
+ *   dsh-teamwork status                   sign-in, teams, sync, the relay and paired devices
  *   dsh-teamwork sync                     sync the team configuration now
  *   dsh-teamwork logout                   sign out
- *   dsh-teamwork phone pair               a pairing QR code (and link) for the DSH Teamwork phone app
- *   dsh-teamwork phone list               paired and waiting phones, with a waiting phone's safety code
- *   dsh-teamwork phone accept <id>        accept a waiting phone, once its safety code matches the one listed here
- *   dsh-teamwork phone reject <id>        refuse a waiting phone
- *   dsh-teamwork phone revoke <id>        remove a paired phone
+ *   dsh-teamwork device pair              a pairing code, and a QR code for the DSH Teamwork phone app; a browser
+ *                                         types the code in My DSH
+ *   dsh-teamwork device list              paired and waiting devices, with a waiting device's safety code
+ *   dsh-teamwork device accept <id>       accept a waiting device, once its safety code matches the one listed here
+ *   dsh-teamwork device reject <id>       refuse a waiting device
+ *   dsh-teamwork device revoke <id>       remove a paired device
  *   dsh-teamwork share enable <key>       make this DSH its team's shared DSH with the console's team host key
  *   dsh-teamwork share audit-key <key>    seal its archive to the key `dsh-teamwork-audit keygen` printed
  *   dsh-teamwork share status             its name, team, audit key and any error
@@ -74,32 +75,34 @@ export function terminalQr(link: string) {
   return code.createASCII(1, 2);
 }
 
-const phoneLine = (p: PanelPhone) => p.status === 'pending'
-  ? `${p.id}  ${p.deviceName}  waiting: ${p.safetyCode && p.phoneConfirmed ? `safety code ${p.safetyCode}; if the phone shows the same, dsh-teamwork phone accept ${p.id}` : 'the phone has not finished its encrypted handshake yet'}`
-  : `${p.id}  ${p.deviceName}  paired${p.verified ? '' : ' (pair it again: its key is not verified)'}${p.lastUsedAt ? `, last used ${p.lastUsedAt}` : ''}`;
+const kinds = { ios: 'iOS phone', android: 'Android phone', web: 'web browser' } as const;
+const deviceLine = (p: PanelPhone) => p.status === 'pending'
+  ? `${p.id}  ${p.deviceName}${p.deviceKind ? ` (${kinds[p.deviceKind]})` : ''}  waiting: ${p.safetyCode && p.phoneConfirmed ? `safety code ${p.safetyCode}; if the device shows the same, dsh-teamwork device accept ${p.id}` : 'the device has not finished its encrypted handshake yet'}`
+  : `${p.id}  ${p.deviceName}${p.deviceKind ? ` (${kinds[p.deviceKind]})` : ''}  paired${p.verified ? '' : ' (pair it again: its key is not verified)'}${p.lastUsedAt ? `, last used ${p.lastUsedAt}` : ''}`;
 
-async function phone(action: string | undefined, id: string | undefined, socketPath: string, out: (line: string) => void, err: (line: string) => void) {
+async function device(action: string | undefined, id: string | undefined, socketPath: string, out: (line: string) => void, err: (line: string) => void) {
   const phones = async () => (await state(socketPath)).phones;
-  const needsId = () => { if (!id) { err(`${usage}\n(phone ${action} needs the phone's id, from dsh-teamwork phone list)`); return false; } return true; };
+  const needsId = () => { if (!id) { err(`${usage}\n(device ${action} needs the device's id, from dsh-teamwork device list)`); return false; } return true; };
   switch (action) {
     case 'pair': {
       const offer = (await call(socketPath, 'pair-phone')) as PanelPairingOffer;
       out(terminalQr(offer.link));
       out(`Scan it in the DSH Teamwork app, or open: ${offer.link}`);
-      out(`Valid until ${offer.expiresAt}. Then run dsh-teamwork phone list to compare the safety code.`);
+      out(`Or enter ${offer.code} in the app, or in My DSH in the Teamwork web console.`);
+      out(`Valid until ${offer.expiresAt}. Then run dsh-teamwork device list to compare the safety code.`);
       return 0;
     }
     case 'list': {
       const listed = await phones();
-      out(listed.length ? listed.map(phoneLine).join('\n') : 'No phone is paired. Run dsh-teamwork phone pair.');
+      out(listed.length ? listed.map(deviceLine).join('\n') : 'No device is paired. Run dsh-teamwork device pair.');
       return 0;
     }
     case 'accept': {
       if (!needsId()) return 2;
       const waiting = (await phones()).find((p) => p.id === id && p.status === 'pending');
-      if (!waiting) { err(`No phone waits as ${id}. Run dsh-teamwork phone list.`); return 1; }
+      if (!waiting) { err(`No device waits as ${id}. Run dsh-teamwork device list.`); return 1; }
       // As in the panel: only a finished handshake has a safety code the person can have compared.
-      if (!waiting.safetyCode || !waiting.phoneConfirmed) { err('The phone has not finished its encrypted handshake yet; wait, then run dsh-teamwork phone list.'); return 1; }
+      if (!waiting.safetyCode || !waiting.phoneConfirmed) { err('The device has not finished its encrypted handshake yet; wait, then run dsh-teamwork device list.'); return 1; }
       await call(socketPath, 'decide-phone', { id, accept: true });
       out(`Accepted ${waiting.deviceName}.`);
       return 0;
@@ -128,7 +131,7 @@ function describeState(s: PanelState) {
     `Sync: ${s.sync.running ? 'running' : s.sync.lastSuccess ? `last ${s.sync.lastSuccess}` : 'not yet'}${s.sync.auto ? ', automatic' : ''}`,
     ...(s.sync.lastError ? [`Sync error: ${s.sync.lastError}`] : []),
     `Relay: ${s.relay}`,
-    `Phones: ${s.phones.length ? s.phones.map((p) => `${p.deviceName} (${p.status === 'pending' ? 'waiting' : 'paired'})`).join(', ') : 'none'}`,
+    `Devices: ${s.phones.length ? s.phones.map((p) => `${p.deviceName} (${p.status === 'pending' ? 'waiting' : 'paired'})`).join(', ') : 'none'}`,
   ].join('\n');
 }
 
@@ -141,7 +144,7 @@ const describe = (s: PanelShared) => [
 
 const usage = [
   'usage: dsh-teamwork server [url] | login | authorize <code> | status | sync | logout',
-  '       dsh-teamwork phone pair | list | accept <id> | reject <id> | revoke <id>',
+  '       dsh-teamwork device pair | list | accept <id> | reject <id> | revoke <id>',
   '       dsh-teamwork share enable <key> | audit-key <key> | status | members | invite <email> | unlock <email> | disable',
 ].join('\n');
 
@@ -178,7 +181,7 @@ export async function run(args: string[], socketPath: string, out: (line: string
       return 0;
     }
     case 'logout': await call(socketPath, 'logout'); out('Signed out; the team configuration is removed from this DSH.'); return 0;
-    case 'phone': return phone(action, value, socketPath, out, err);
+    case 'device': return device(action, value, socketPath, out, err);
   }
   if (group !== 'share') { err(usage); return 2; }
   switch (action) {

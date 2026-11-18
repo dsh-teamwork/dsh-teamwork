@@ -113,18 +113,18 @@ test.skipIf(process.platform === 'win32')('a personal DSH signs in, syncs and pa
     expect((await cli('status')).out).toContain('Teams: Team (member)');
     expect(await cli('sync')).toMatchObject({ code: 0, out: 'Synced 1 team.' });
 
-    const pair = await cli('phone', 'pair');
+    const pair = await cli('device', 'pair');
     expect(pair.out).toContain('dshteamwork://pair?server=x&code=c&key=k');
     expect(pair.out).toMatch(/[█▀▄]/);
     // Before the handshake there is no safety code to compare, so it cannot be accepted.
-    expect((await cli('phone', 'list')).out).toContain('has not finished its encrypted handshake');
-    expect(await cli('phone', 'accept', 'p1')).toMatchObject({ code: 1 });
+    expect((await cli('device', 'list')).out).toContain('has not finished its encrypted handshake');
+    expect(await cli('device', 'accept', 'p1')).toMatchObject({ code: 1 });
     expect(calls.some(([name]) => name === 'decide-phone')).toBe(false);
     Object.assign(phones[0]!, { safetyCode: '12 34 56', phoneConfirmed: true });
-    expect((await cli('phone', 'list')).out).toContain('safety code 12 34 56; if the phone shows the same, dsh-teamwork phone accept p1');
-    expect(await cli('phone', 'accept', 'p1')).toMatchObject({ code: 0, out: 'Accepted Pixel.' });
+    expect((await cli('device', 'list')).out).toContain('safety code 12 34 56; if the device shows the same, dsh-teamwork device accept p1');
+    expect(await cli('device', 'accept', 'p1')).toMatchObject({ code: 0, out: 'Accepted Pixel.' });
     expect(calls).toContainEqual(['decide-phone', { id: 'p1', accept: true }]);
-    expect((await cli('phone', 'list')).out).toBe('p1  Pixel  paired');
+    expect((await cli('device', 'list')).out).toBe('p1  Pixel  paired');
   } finally { await close(); }
 });
 

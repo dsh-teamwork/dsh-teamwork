@@ -8,9 +8,14 @@ import { SecureChannel, base64, deviceIdentity, type Identity, type SecurePacket
 import { forwardedSchema, type Forwarded } from './bridge.js';
 import { IDLE_MS, PIN, type PinStore } from './pin-lock.js';
 
+/** What a paired device is, as it says when it pairs: the phone app on iOS or Android, or a web browser. */
+export const DEVICE_KINDS = ['ios', 'android', 'web'] as const;
+export type DeviceKind = (typeof DEVICE_KINDS)[number];
+const deviceKind = (value: unknown): DeviceKind | undefined => (DEVICE_KINDS as readonly unknown[]).includes(value) ? (value as DeviceKind) : undefined;
+
 const fileSchema = z.object({
   seed: z.string(),
-  peers: z.record(z.string(), z.object({ key: z.string(), name: z.string() })),
+  peers: z.record(z.string(), z.object({ key: z.string(), name: z.string(), kind: z.enum(DEVICE_KINDS).optional() })),
 });
 export class PhoneKeys {
   private state?: Promise<z.infer<typeof fileSchema>>;
@@ -64,9 +69,9 @@ export class PhoneKeys {
     this.updates = task;
     return task;
   }
-  trust(scope: string, id: string, key: string, name: string) {
+  trust(scope: string, id: string, key: string, name: string, kind?: DeviceKind) {
     return this.update((peers) => {
-      peers[JSON.stringify([scope, id])] = { key, name };
+      peers[JSON.stringify([scope, id])] = { key, name, ...(kind ? { kind } : {}) };
     });
   }
   forget(scope: string, id: string) {
@@ -89,6 +94,8 @@ export class PhoneKeys {
   }
 }
 interface Link {
+  /** What the device said it is when it paired; a device from before that said nothing. */
+  kind?: DeviceKind;
   channel: SecureChannel;
   channelId: string;
   scope: string;
@@ -146,6 +153,7 @@ export class PhoneSecurity {
       safetyCode: link?.code,
       phoneConfirmed: link?.phoneConfirmed ?? false,
       ...(link?.name ? { deviceName: link.name } : {}),
+      ...(link?.kind ? { deviceKind: link.kind } : {}),
     };
   }
   async details(id: string) {
@@ -154,6 +162,7 @@ export class PhoneSecurity {
       ...this.status(id),
       verified: !!trusted,
       ...(trusted ? { deviceName: trusted.name } : {}),
+      ...(trusted?.kind ? { deviceKind: trusted.kind } : {}),
       ...(this.links.get(id)?.pending ? { status: 'pending' as const } : {}),
     };
   }
@@ -217,6 +226,7 @@ export class PhoneSecurity {
             body.name.length <= 100
           ) {
             link.name = body.name;
+            link.kind = deviceKind(body.kind);
             this.options.changed();
             return;
           }
@@ -228,7 +238,8 @@ export class PhoneSecurity {
               channel.send({ t: 'joinRefused' });
               throw new Error('invite_refused');
             }
-            await this.options.keys.trust(link.scope, frame.pairingId, link.remoteKey!, input.name as string);
+            link.kind = deviceKind(body.kind);
+            await this.options.keys.trust(link.scope, frame.pairingId, link.remoteKey!, input.name as string, link.kind);
             await this.options.confirm(frame.pairingId);
             link.name = input.name as string;
             link.authorized = true;
@@ -308,7 +319,7 @@ export class PhoneSecurity {
     const link = this.links.get(id);
     if (!link?.pending || !link.phoneConfirmed || !link.remoteKey || !link.code || !link.name)
       throw new Error('Compare the security codes on both devices first.');
-    await this.options.keys.trust(link.scope, id, link.remoteKey, link.name);
+    await this.options.keys.trust(link.scope, id, link.remoteKey, link.name, link.kind);
     if (this.links.get(id) !== link) throw new Error('Device disconnected. Pair again.');
     // Both local approval and the relay's account authorization are required.
     await this.options.confirm(id);

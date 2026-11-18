@@ -32,7 +32,7 @@ demonstration team.
 | Reviewed sharing | Prepare local plugin packages and submit new or updated plugins/presets for administrator review. |
 | Version history | Inspect publications, export resource backups and prepare a reviewed restoration. |
 | Team governance | Administrators manage configuration, budgets and approval through the connected service. |
-| Paired mobile access | With the hosted relay and a matching Teamwork App, pair your phone to your online DSH computer. |
+| Paired device access | With the relay, pair your phone (the Teamwork App) or a browser (My DSH in the web console) to your online DSH computer. |
 
 Sharing and review happen inside the selected team. A publication becomes
 available to its members; it does not install code on their computers.
@@ -96,7 +96,7 @@ to act; inheriting a model does not configure a team gateway route.
 
 Mutations use DSH's real approval flow and the server rechecks permissions.
 Enter provider keys and account passwords through the console's secure forms.
-The [user guide](docs/en/guide.md) covers commands, configuration, phone access
+The [user guide](docs/en/guide.md) covers commands, configuration, device access
 and the distinction between submitted, published, synced and installed.
 
 ![Administrator review of a demonstration preset submission](https://raw.githubusercontent.com/dsh-teamwork/dsh-teamwork/main/assets/readme/review-and-publish.png)
@@ -109,11 +109,11 @@ and the distinction between submitted, published, synced and installed.
   that server; prompts and model context pass through its model gateway.
 - Plugin sign-in tokens stay in host memory. Restarting DSH requires signing
   in again. Configuration caches do not authenticate a session.
-- The hosted phone relay requires the matching App and an online web/desktop
-  host. The community server does not provide that relay. Pairing grants
+- The device relay requires an online web/desktop host, and on a phone the
+  matching App. Pairing grants
   access to the owner's permitted DSH sessions across teams.
 
-[Data, phone pairing and recovery details](docs/en/guide.md#data-and-phone-access)
+[Data, device pairing and recovery details](docs/en/guide.md#data-and-device-access)
 explain which information is local, which reaches your server, and what the
 paired channel protects.
 
