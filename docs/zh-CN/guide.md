@@ -25,11 +25,28 @@
 
 ### 团队共享 DSH
 
-在托管服务上，团队管理员可以把一台 DSH 设为团队自己的：在团队控制台的**共享 DSH**里创建 key，再在那台 DSH 中运行 `/teamwork share enable <key>`。之后它以团队身份登录而不是个人：共享期间拒绝个人登录，只同步这一个团队，团队模型的调用计入团队。第一台使用 key 的机器会绑定它，同一个 key 换到其他机器上会被拒绝；管理员更换或删除 key 后它立即失效。`/teamwork share disable` 会删除 key。团队管理员在控制台决定谁可以访问它；对其中每个人，在这里运行 `/teamwork share invite <email>`，并当面或通过团队信任的渠道交给对方，不要经过 Teamwork 服务器。每个成员的会话只属于自己，其他人无法查看、跟随或回答。打开邀请链接的手机和网页客户端将在后续版本提供。
+在托管服务上，团队管理员可以把一台 DSH 设为团队自己的：在团队控制台的**共享 DSH**里创建 key，再在那台 DSH 中运行 `/teamwork share enable <key>`。之后它以团队身份登录而不是个人：共享期间拒绝个人登录，只同步这一个团队，团队模型的调用计入团队。第一台使用 key 的机器会绑定它，同一个 key 换到其他机器上会被拒绝；管理员更换或删除 key 后它立即失效。`/teamwork share disable` 会删除 key。团队管理员在控制台决定谁可以访问它；对其中每个人，在这里运行 `/teamwork share invite <email>`，并当面或通过团队信任的渠道交给对方，不要经过 Teamwork 服务器。每个成员的会话只属于自己，其他人无法查看、跟随或回答。成员在 DSH Teamwork 手机 App 中打开链接，或粘贴到团队控制台的**共享 DSH**页。
 
 共享 DSH 在管理员设置团队审计密钥之前不会接纳任何人。管理员在自己的电脑上运行 `dsh-teamwork-audit keygen`（随本插件包安装），它会写出 `audit-key.json` 并打印要在这里运行的 `/teamwork share audit-key <public key>`。此后这台 DSH 会把与成员设备之间的每次交互加密到这把密钥并上传，服务器保存它却无法读取。管理员在控制台下载归档，用 `dsh-teamwork-audit read <file> --key audit-key.json` 打开。丢失的密钥无法找回。
 
 以上操作也都可以在 Teamwork 面板中完成：在登录页或账号页选择**把这台 DSH 设为团队的共享 DSH** 即可开启共享模式；开启后的**共享 DSH** 页可以设置审计密钥、查看可访问的成员及其设备、生成邀请（链接和二维码）、为输错 PIN 被锁定的成员解锁，以及关闭共享模式。
+
+在没有浏览器的服务器上，可以用 `dsh-teamwork`（随本插件包安装）在那台机器的终端里完成同样的操作，前提是 DSH 正以同一个用户在那里运行：
+
+```sh
+dsh-teamwork server https://teamwork.example.com   # 仅自托管团队，在开启前设置
+dsh-teamwork share enable <key>
+dsh-teamwork share audit-key <public key>
+dsh-teamwork share invite alice@example.com
+dsh-teamwork share members        # 另有 status、unlock <email>、disable
+```
+
+它通过 DSH home 里插件目录下的一个 socket 连接正在运行的 DSH（见下文），只有该用户能打开。支持 Linux 和 macOS。
+
+服务器上的个人 DSH 也一样：
+- **登录**：`dsh-teamwork login` 打印登录链接，在任意浏览器中打开，再用 `dsh-teamwork authorize <code>` 填入页面上显示的授权码。
+- **同步**：`dsh-teamwork status` 和 `dsh-teamwork sync` 查看并同步团队配置。
+- **配对手机**：`dsh-teamwork phone pair` 在终端里画出手机 App 的配对二维码，`dsh-teamwork phone list` 显示等待中手机的安全码，与手机上的一致时用 `dsh-teamwork phone accept <id>` 确认；`reject` 和 `revoke` 用于拒绝或移除。
 
 ## 选择模型或预设
 
@@ -87,6 +104,8 @@
 ## 配置
 
 默认服务器为 `https://www.dshteamwork.com`，可在登录页改为自建服务。除本机回环地址外须使用 HTTPS。切换服务器会退出登录并清除旧服务器的团队资源。
+
+插件把登录状态、团队缓存，以及共享 DSH 的 key、成员名单、PIN 锁定和归档队列保存在 DSH home（`$DSH_HOME`，否则 `~/.dsh`）下的 `dsh-teamwork/` 中，与从哪个目录启动 DSH 无关。
 
 高级 profile 配置可覆盖已插入的插件条目：
 
