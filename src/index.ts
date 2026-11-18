@@ -18,7 +18,7 @@ import { pluginState, stateText, type PluginState } from './plugin-status.js';
 import { panelRoutes, type FetchRoute, type PanelOps, type PanelPreset } from './panel.js';
 import { registerAssistantTools } from './assistant-tools.js';
 import { platformAdapter, platformProvider } from './platform-models.js';
-import { Bridge } from './bridge.js';
+import { Bridge, bridgeRoute } from './bridge.js';
 import { PhoneSessionError, phonePresets } from './phone-session.js';
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm';
 import { listenForCode, type LoginCallback } from './login-callback.js';
@@ -594,7 +594,8 @@ export async function apply(ctx: Context, config: Config) {
   // The panel's routes exist only where a browser reaches the host (DSH web and desktop), like the panel itself.
   ctx.inject(['connection'], (scoped) => {
     const { connection } = scoped as unknown as { connection: { fetch: { register(route: FetchRoute): () => Promise<void> } } };
-    for (const route of routes) scoped.effect(() => { const dispose = connection.fetch.register(route); return () => { void dispose(); }; });
+    // A cloud computer's server makes a phone's calls here instead of through the relay (src/bridge.ts).
+    for (const route of config.tokenFile ? [...routes, bridgeRoute(bridge)] : routes) scoped.effect(() => { const dispose = connection.fetch.register(route); return () => { void dispose(); }; });
   });
   ctx.inject(['connection', 'webServer'], (scoped) => {
     const { connection, webServer } = scoped as unknown as { connection: { authenticatedUrl(base: string): string }; webServer: { getOrigin(): string } };

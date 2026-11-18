@@ -133,6 +133,12 @@ gaining or losing a token moves it, and losing one drops the cache. A 401/403
 still clears the token until the file changes. In this mode the relay is never
 opened, and sign-in, sign-out and server changes are refused: the server reaches
 a cloud computer itself, and the token belongs to the host, not a member.
+The server reaches it through DSH's own web server: streams on DSH's
+`/api/remote.mux`, and a phone's unary calls on `POST /api/teamwork/bridge`
+(`bridgeRoute` in `src/bridge.ts`), registered only in this mode. Its body is a
+relay `call` frame's `{ id, method, body }` and its answer the `result`'s
+`{ status, body }`, through the same allow-list and session operations, under
+the one pairing `cloud`; DSH's sign-in guards it as it guards `/api/`.
 
 ## Shared mode
 
