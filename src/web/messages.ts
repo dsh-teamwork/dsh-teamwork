@@ -97,6 +97,9 @@ const en = {
   'teams.manage': 'Manage team',
   'teams.view': 'View team',
   'teams.joinOrCreate': 'Join or create a team',
+  'teams.workspace': 'Default workspace',
+  'teams.workspaceHint': 'New sessions started for this team from your phone or the web console open here. Add a workspace in DSH to offer another folder.',
+  'teams.workspaceSaved': '{team}’s default workspace is saved.',
 
   // Resource tabs
   'tabs.label': 'Resource type',
@@ -374,6 +377,9 @@ const zhCN: Record<PanelMessage, string> = {
   'teams.manage': '管理团队',
   'teams.view': '查看团队',
   'teams.joinOrCreate': '加入或创建团队',
+  'teams.workspace': '默认工作区',
+  'teams.workspaceHint': '从手机或网页控制台为该团队新建的会话会在这里打开。在 DSH 中添加工作区即可选择其他文件夹。',
+  'teams.workspaceSaved': '已保存{team}的默认工作区。',
 
   'tabs.label': '资源类型',
   'tabs.presets': '预设',
