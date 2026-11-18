@@ -31,6 +31,8 @@ export interface PanelPreset {
     teamName: string;
     name: string;
     version: number;
+    /** Its avatar's id in the platform's shared library, which the console and the phone draw; none when the admin chose none. */
+    avatar?: string;
     description: string;
     /** The team model the preset calls, or its own provider/model; null when it runs on the session's own model. */
     model: string | null;

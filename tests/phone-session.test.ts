@@ -9,6 +9,10 @@ describe('phone preset catalog', () => {
     expect(phonePresets(state(),[row])[0]).toMatchObject({id:row.id,teamId:'t1',version:3,model:{provider:'teamwork-platform',model:'p1'},blocked:null});
     expect(phonePresets(state(),[{...row,id:'team:t2:p1'}])[0]).not.toHaveProperty('teamId');
   });
+  it('passes the team preset\'s avatar to the phone, and none it did not choose', () => {
+    expect(phonePresets(state({avatar:'flask'}),[row])[0].avatar).toBe('flask');
+    expect(phonePresets(state(),[row])[0]).not.toHaveProperty('avatar');
+  });
   it('reports unusable dependencies and preserves checks requiring a live session', () => {
     expect(phonePresets(state({plugins:[{name:'Lint',version:'1.0.0',state:'missing'}]}),[row])[0].blocked).toBe('missing_plugins');
     expect(phonePresets(state({tools:[{name:'shell',required:true,state:'missing'}]}),[row])[0].blocked).toBe('missing_tools');

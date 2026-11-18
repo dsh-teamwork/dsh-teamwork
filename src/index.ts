@@ -510,7 +510,7 @@ export async function apply(ctx: Context, config: Config) {
         const linked = item.data.modelConfigId ? team.configs.find(c => c.id === item.data.modelConfigId) : undefined;
         const candidate = {requiredTools:item.data.requiredTools ?? [],optionalTools:item.data.optionalTools ?? []} as PresetContext;
         presets.push({
-          id: item.id, teamId: team.teamId, teamName: team.teamName, name: item.name, version: item.version, description: item.data.description ?? '',
+          id: item.id, teamId: team.teamId, teamName: team.teamName, name: item.name, version: item.version, ...(item.data.avatar ? { avatar: item.data.avatar } : {}), description: item.data.description ?? '',
           model: item.data.inheritModel ? null : item.data.modelConfigId ? linked?.name ?? item.data.modelConfigId : `${item.data.provider}/${item.data.model}`,
           assistant: item.builtin === 'team-assistant',
           modelAvailable: inheritsModel(item) || !!modelData(snapshot!, item) && !unsizedModel(snapshot!, item),
