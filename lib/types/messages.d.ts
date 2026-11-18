@@ -20,6 +20,7 @@ declare const en: {
     'field.device': string;
     'field.key': string;
     'field.email': string;
+    'field.workspace': string;
     'profile.nameTooLong': string;
     'profile.badLocale': string;
     'server.invalid': string;
@@ -52,6 +53,8 @@ declare const en: {
     'install.notEnabled': string;
     'install.restart': string;
     'install.done': string;
+    'workspace.unknownTeam': string;
+    'workspace.unknownDirectory': string;
 };
 export type HostMessage = keyof typeof en;
 /** The language of the machine DSH runs on, which the panel speaks until the account's is known. */

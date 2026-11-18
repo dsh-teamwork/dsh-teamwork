@@ -23,6 +23,7 @@ const en = {
   'field.device': 'Device',
   'field.key': 'Key',
   'field.email': 'Email address',
+  'field.workspace': 'Workspace',
   'profile.nameTooLong': 'A display name can be at most 80 characters.',
   'profile.badLocale': 'Choose English or Simplified Chinese.',
   'server.invalid': 'That is not a server address. Enter the full address, for example https://www.dshteamwork.com.',
@@ -55,6 +56,8 @@ const en = {
   'install.notEnabled': 'The plugin was downloaded but not enabled: it could not be confirmed to only add configuration, or it conflicts with local configuration. Check it in the local plugin manager.',
   'install.restart': 'Installed. Restart DSH to use it.',
   'install.done': 'Installed and enabled.',
+  'workspace.unknownTeam': 'This DSH has not synced that team. Sync, then try again.',
+  'workspace.unknownDirectory': 'That folder is not one of this DSH’s workspaces. Add it as a workspace in DSH first.',
 };
 
 const zhCN: Record<keyof typeof en, string> = {
@@ -71,6 +74,7 @@ const zhCN: Record<keyof typeof en, string> = {
   'field.device': '设备',
   'field.key': '密钥',
   'field.email': '邮箱地址',
+  'field.workspace': '工作区',
   'profile.nameTooLong': '显示名称不能超过 80 个字符。',
   'profile.badLocale': '请选择 English 或简体中文。',
   'server.invalid': '服务器地址无效，请输入完整地址，例如 https://www.dshteamwork.com。',
@@ -103,6 +107,8 @@ const zhCN: Record<keyof typeof en, string> = {
   'install.notEnabled': '插件已下载但未启用：无法确认它只新增配置，或存在本地配置冲突。请在本地插件管理器中检查。',
   'install.restart': '已安装，请重启 DSH 生效。',
   'install.done': '插件已安装并启用。',
+  'workspace.unknownTeam': '这台 DSH 还没有同步该团队，请先同步再试。',
+  'workspace.unknownDirectory': '该文件夹不是这台 DSH 的工作区，请先在 DSH 中添加为工作区。',
 };
 
 export type HostMessage = keyof typeof en;

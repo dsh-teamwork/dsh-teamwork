@@ -28,6 +28,7 @@ import { SharedMode, sharedKeyPath } from './shared-mode.js';
 import { SharedRoster, sharedRosterPath } from './shared-roster.js';
 import { OwnerFilter, startDirectories } from './shared-owner.js';
 import { PinStore, pinsPath } from './pin-lock.js';
+import { TeamWorkspaces, teamWorkspacesPath } from './team-workspaces.js';
 import { AuditArchive, auditArchivePath } from './audit-archive.js';
 import type { PanelPhone } from './panel.js';
 import { panelLocale, say, setLocale, speaking } from './messages.js';
@@ -203,6 +204,9 @@ export async function apply(ctx: Context, config: Config) {
     });
   });
   const directories = () => startDirectories(process.cwd(), workspaces?.list() ?? []);
+  /** Each synced team's default workspace here (src/team-workspaces.ts), where a phone or the console starts a session. */
+  const teamWorkspaces = new TeamWorkspaces(teamWorkspacesPath(config.cachePath));
+  const teamDirectories = () => teamWorkspaces.defaults((client.current()?.teams ?? []).map(team => team.teamId), directories());
   const owners = new OwnerFilter(roster, (pairingId) => roster.memberOf(pairingId), directories);
   /** Who the server lets reach this shared DSH, as the relay last said; and members whose handsets wait to join. */
   let sharedMembers: SharedMember[] = [];
@@ -218,7 +222,7 @@ export async function apply(ctx: Context, config: Config) {
         if (sessionId && !agent) throw new PhoneSessionError('busy');
         const state = await panel.state(sessionId);
         const roster = await ctx.agentPresets.remoteExportList();
-        return { presets: phonePresets(state, [...roster.presets]), directories: directories(), current: agent ? {
+        return { presets: phonePresets(state, [...roster.presets]), directories: directories(), teamDirectories: await teamDirectories(), current: agent ? {
           sessionId: String(agent.id), cwd: agent.session.header.cwd,
           agentPreset: ctx.agentPresets.presetForSession(agent.session), model: agent.model.current() ?? null,
           started: state.session?.started ?? false, running: agent.status !== 'idle',
@@ -516,11 +520,13 @@ export async function apply(ctx: Context, config: Config) {
         });
       }
       const selection = agent?.model.current(), active = agent && activePreset(agent), boundary = agent && ctx.agents.turnBoundaryOf(agent.session);
+      const defaults = await teamDirectories();
       return {
         locale: panelLocale(),
         authRevision: client.sessionRevision(),
         authenticated: status.authenticated,
-        teams: (snapshot?.teams ?? []).map(team => ({ id: team.teamId, name: team.teamName, role: team.role, consoleUrl: `${client.endpoint}/teams/${team.teamId}` })),
+        teams: (snapshot?.teams ?? []).map(team => ({ id: team.teamId, name: team.teamName, role: team.role, consoleUrl: `${client.endpoint}/teams/${team.teamId}`, workspace: defaults[team.teamId] ?? null })),
+        directories: directories(),
         server: client.endpoint,
         defaultServer: serverAddress(config.apiEndpoint),
         sync: { auto: status.autoSync, running: status.syncing, lastSuccess: status.lastSuccess, lastError: status.lastError },
@@ -541,6 +547,11 @@ export async function apply(ctx: Context, config: Config) {
           return { ...plugin, teamId: team?.teamId, teamName: team?.teamName };
         }),
       };
+    },
+    async setWorkspace(teamId, path) {
+      if (!client.current()?.teams.some(team => team.teamId === teamId)) throw new Error(say('workspace.unknownTeam'));
+      if (!directories().includes(path)) throw new Error(say('workspace.unknownDirectory'));
+      await teamWorkspaces.set(teamId, path);
     },
     login: beginLogin,
     authorize: (code) => authorize(code),
