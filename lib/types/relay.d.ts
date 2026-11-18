@@ -126,4 +126,9 @@ export declare class RelayLink {
 }
 /** `<cache>.host.json`, beside the cache, like the other per-computer files. */
 export declare const relayClientIdPath: (cachePath: string) => string;
+/**
+ * This computer's operating system as the relay names it, for the member's phone and browser to show; left out where
+ * the relay names none (it refuses a value it does not know).
+ */
+export declare function hostOs(platform?: NodeJS.Platform): 'macos' | 'windows' | 'linux' | undefined;
 //# sourceMappingURL=relay.d.ts.map
