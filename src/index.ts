@@ -616,8 +616,8 @@ export async function apply(ctx: Context, config: Config) {
           }
           if (action === 'authorize') { await authorize(id ?? ''); return { kind: 'success', text: 'Authorized. Run /teamwork status to see the sync status.' }; }
           if (action === 'share') {
-            if (requestedId === 'enable') { await shareEnable(confirmation ?? ''); const st = shared!.status(); return { kind: 'success', text: `This DSH is now the shared DSH “${st.name}” of its team. Personal sign-in is off while it is shared; /teamwork share disable ends it.` }; }
-            if (requestedId === 'disable') { await shareDisable(); return { kind: 'success', text: 'Shared mode is off and its key deleted. Sign in with /teamwork login to use this DSH as yourself.' }; }
+            if (requestedId === 'enable') { await shareEnable(confirmation ?? ''); const st = shared!.status(); return { kind: 'success', text: `This DSH is now the Team DSH “${st.name}” of its team. Personal sign-in is off while it is shared; /teamwork share disable ends it.` }; }
+            if (requestedId === 'disable') { await shareDisable(); return { kind: 'success', text: 'This DSH is no longer a Team DSH, and its key is deleted. Sign in with /teamwork login to use this DSH as yourself.' }; }
             if (requestedId === 'invite') {
               const invite = await shareInvite(confirmation ?? '');
               return { kind: 'success', text: [`Invite for ${confirmation}, single use, valid until ${invite.expiresAt}:`, invite.link, 'Hand it over yourself, in person or through a channel your team trusts, never through the Teamwork server. Whoever opens it signed in as that member pairs a device with this DSH.'].join('\n') };
@@ -633,10 +633,10 @@ export async function apply(ctx: Context, config: Config) {
             if (requestedId === 'members') {
               const devices = await roster.devices();
               const rows = sharedMembers.map((m) => `${m.email ?? m.userId}: ${Object.values(devices).filter((d) => d.userId === m.userId).map((d) => d.name).join(', ') || 'no device yet'}`);
-              return { kind: 'success', text: rows.length ? ['Members who may reach this shared DSH, and their devices:', ...rows].join('\n') : 'Nobody is listed yet, or the relay is not connected.' };
+              return { kind: 'success', text: rows.length ? ['Members who may reach this Team DSH, and their devices:', ...rows].join('\n') : 'Nobody is listed yet, or the relay is not connected.' };
             }
             const st = shared?.status() ?? { enabled: false };
-            return { kind: 'success', text: st.enabled ? [`Shared DSH: ${st.name ?? st.hostId ?? 'not yet confirmed'}`, `Team: ${st.teamId ?? 'unknown'}`, st.expiresAt ? `Host token valid until ${st.expiresAt}` : '', st.error ?? ''].filter(Boolean).join('\n') : 'Shared mode is off. A team admin creates a team host key in the console; run /teamwork share enable <key> here.' };
+            return { kind: 'success', text: st.enabled ? [`Team DSH: ${st.name ?? st.hostId ?? 'not yet confirmed'}`, `Team: ${st.teamId ?? 'unknown'}`, st.expiresAt ? `Host token valid until ${st.expiresAt}` : '', st.error ?? ''].filter(Boolean).join('\n') : 'This DSH is not a Team DSH. A team admin creates a team host key under Team assets → Team DSH in the console; run /teamwork share enable <key> here.' };
           }
           if (action === 'sync') {
             await configSync.sync();
@@ -644,7 +644,7 @@ export async function apply(ctx: Context, config: Config) {
             return { kind: 'success', text: ['Team configuration synced; your local configuration is unchanged.', ...problems].join('\n') };
           }
           if (action === 'pin' && requestedId === 'reset') {
-            if (shared?.enabled) throw new Error('On a shared DSH, clear a member\'s PIN with /teamwork share unlock <email>.');
+            if (shared?.enabled) throw new Error('On a Team DSH, clear a member\'s PIN with /teamwork share unlock <email>.');
             await pins.clear('owner');
             return { kind: 'success', text: 'Your phone PIN and its lock are cleared; set a new PIN on your phone\'s next connection.' };
           }

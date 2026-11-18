@@ -124,7 +124,7 @@ export class SharedMode {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000), redirect: 'error',
     });
     const challenge = await post('challenge', { key });
-    if (challenge.status === 404) throw new SharedKeyError('invalid', 'This Teamwork server does not offer shared DSHs.');
+    if (challenge.status === 404) throw new SharedKeyError('invalid', 'This Teamwork server does not offer Team DSHs.');
     if (!challenge.ok) throw new SharedKeyError(challenge.status === 400 ? 'format' : 'unavailable', 'The Teamwork server refused the challenge.');
     const { nonce } = challengeSchema.parse(await challenge.json());
     const identity = await this.options.identity();

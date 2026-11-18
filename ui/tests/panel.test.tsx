@@ -291,7 +291,7 @@ test('marks a team model without its context window, and a preset on it, as not 
   expect(row('Sized').querySelector('button:disabled')).toBeNull();
 });
 
-test('a shared DSH shows its members and holds invites until the audit key is set, with no person signed in', async () => {
+test('a Team DSH shows its members and holds invites until the audit key is set, with no person signed in', async () => {
   const shared = { name: 'Build box', teamName: 'Alpha', error: null, auditKey: null as string | null, members: [{ userId: 'u-bob', email: 'bob@example.com', devices: [], locked: true }] };
   vi.mocked(api.state).mockImplementation(async () => ({ ...state, teams: [state.teams[0]!], shared }));
   vi.mocked(api.shareInvite).mockResolvedValue({ link: 'dshteamwork://join?host=h&invite=i', expiresAt: '2026-11-19T00:00:00Z' });
@@ -300,7 +300,7 @@ test('a shared DSH shows its members and holds invites until the audit key is se
   expect(api.profile).not.toHaveBeenCalled();
   const labels = [...document.querySelectorAll('button')].map(b => b.textContent?.trim());
   expect(labels).not.toContain('手机连接');
-  await click('共享 DSH');
+  await click('团队 DSH');
   expect(document.body.textContent).toContain('成员还不能加入');
   expect(document.body.textContent).toContain('bob@example.com');
   const inviteButton = () => [...document.querySelectorAll('button')].find(b => b.textContent?.trim() === '邀请')!;
