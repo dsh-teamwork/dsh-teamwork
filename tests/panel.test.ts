@@ -12,6 +12,7 @@ const ops: PanelOps = {
   authorize: async (code) => { calls.push(['authorize', [code]]); },
   sync: async () => { throw new Error('Sync failed'); },
   logout: async () => {},
+  setWorkspace: async (teamId, path) => { calls.push(['workspace', [teamId, path]]); },
   setServer: async (server) => { calls.push(['server', [server]]); },
   use: async (sessionId, id) => `used ${id} in ${sessionId}`,
   install: async (id, version) => { calls.push(['install', [id, version]]); return 'installed'; },
@@ -31,7 +32,7 @@ describe('panel routes', () => {
     expect(calls).toHaveLength(1);
   });
   it('registers POST-only routes under /api/teamwork', () => {
-    expect([...routes.keys()].sort()).toEqual(['authorize', 'decide-phone', 'install', 'login', 'logout', 'pair-phone', 'profile', 'revoke-phone', 'server', 'share-audit-key', 'share-disable', 'share-enable', 'share-invite', 'share-unlock', 'state', 'summary', 'sync', 'update-profile', 'use'].map((n) => `${ROUTE_PREFIX}/${n}`));
+    expect([...routes.keys()].sort()).toEqual(['authorize', 'decide-phone', 'install', 'login', 'logout', 'pair-phone', 'profile', 'revoke-phone', 'server', 'share-audit-key', 'share-disable', 'share-enable', 'share-invite', 'share-unlock', 'state', 'summary', 'sync', 'update-profile', 'use', 'workspace'].map((n) => `${ROUTE_PREFIX}/${n}`));
     for (const route of routes.values()) expect(route.methods).toEqual(['POST']);
   });
 
@@ -65,6 +66,15 @@ describe('panel routes', () => {
     await post('server', { server: null });
     expect(calls).toEqual([['server', ['http://localhost:3800']], ['server', [null]]]);
     expect((await post('server', { server: ' ' })).status).toBe(400);
+  });
+
+  it('sets a team’s default workspace with the path exactly as given', async () => {
+    calls.length = 0;
+    await post('workspace', { teamId: 'team', path: '/work/name ' });
+    expect(calls).toEqual([['workspace', ['team', '/work/name ']]]);
+    expect((await post('workspace', { teamId: 'team' })).status).toBe(400);
+    expect((await post('workspace', { path: '/work' })).status).toBe(400);
+    expect(calls).toHaveLength(1);
   });
 
   it('never caches an answer', async () => {
