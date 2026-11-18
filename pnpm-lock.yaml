@@ -38,6 +38,9 @@ importers:
       '@noble/hashes':
         specifier: 1.8.0
         version: 1.8.0
+      qrcode-generator:
+        specifier: 2.0.4
+        version: 2.0.4
       zod:
         specifier: 4.6.6
         version: 4.6.6
@@ -81,9 +84,6 @@ importers:
       esbuild:
         specifier: 0.25.12
         version: 0.25.12
-      qrcode-generator:
-        specifier: 2.0.4
-        version: 2.0.4
       react:
         specifier: ^18.3.0
         version: 18.3.1

@@ -43,6 +43,11 @@ dsh-teamwork share members        # 另有 status、unlock <email>、disable
 
 它通过 DSH home 里插件目录下的一个 socket 连接正在运行的 DSH（见下文），只有该用户能打开。支持 Linux 和 macOS。
 
+服务器上的个人 DSH 也一样：
+- **登录**：`dsh-teamwork login` 打印登录链接，在任意浏览器中打开，再用 `dsh-teamwork authorize <code>` 填入页面上显示的授权码。
+- **同步**：`dsh-teamwork status` 和 `dsh-teamwork sync` 查看并同步团队配置。
+- **配对手机**：`dsh-teamwork phone pair` 在终端里画出手机 App 的配对二维码，`dsh-teamwork phone list` 显示等待中手机的安全码，与手机上的一致时用 `dsh-teamwork phone accept <id>` 确认；`reject` 和 `revoke` 用于拒绝或移除。
+
 ## 选择模型或预设
 
 使用“新建会话”应用团队预设。“用于当前空白会话”仅适用于尚未开始对话的会话。已开始的会话保留原预设代次，使用新会话采用更新。跨重启不保证重建已删除的旧预设；发现版本不一致时会阻止团队推理并给出恢复指引。

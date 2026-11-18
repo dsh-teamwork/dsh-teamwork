@@ -3,8 +3,8 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import { controlSocketPath, serveControlSocket } from '../src/control-socket.js';
-import type { FetchRoute, PanelShared } from '../src/panel.js';
-import { dshHome, run, socketIn } from '../src/share-cli.js';
+import type { FetchRoute, PanelPhone, PanelShared } from '../src/panel.js';
+import { dshHome, run, socketIn } from '../src/teamwork-cli.js';
 
 const route = (name: string, handle: (body: Record<string, unknown>) => unknown): FetchRoute => ({
   path: `/api/teamwork/${name}`, methods: ['POST'], requestBody: 'buffered',
@@ -14,14 +14,27 @@ const route = (name: string, handle: (body: Record<string, unknown>) => unknown)
   },
 });
 
-/** A stand-in for the panel: shared mode with one member, an invite, and the plugin's own refusal of a bad key. */
+/**
+ * A stand-in for the panel: shared mode with one member, an invite, and the plugin's own refusal of a bad key; a
+ * sign-in by pasted code; and a phone that pairs, first before its handshake, then with a safety code.
+ */
 function panel() {
   const calls: Array<[string, Record<string, unknown>]> = [];
   let shared: PanelShared | null = null;
   const record = (name: string, handle: (body: Record<string, unknown>) => unknown) => route(name, (body) => { calls.push([name, body]); return handle(body); });
   let server = 'https://www.dshteamwork.com';
+  let authenticated = false;
+  const phones: PanelPhone[] = [];
   const routes = [
-    record('state', () => ({ shared, server })),
+    record('state', () => ({ shared, server, authenticated, teams: authenticated ? [{ id: 't', name: 'Team', role: 'member', consoleUrl: '' }] : [], sync: { auto: true, running: false }, relay: 'connected', phones })),
+    record('login', () => ({ url: 'https://teamwork.example.com/plugin?challenge=c', automatic: true })),
+    record('authorize', (body) => { if (body.code !== 'ABCD-1234') throw new Error('That code is not valid.'); authenticated = true; }),
+    record('sync', () => undefined),
+    record('pair-phone', () => {
+      phones.push({ id: 'p1', deviceName: 'Pixel', status: 'pending', createdAt: '', lastUsedAt: null });
+      return { code: 'c', expiresAt: '2026-11-19T00:00:00Z', link: 'dshteamwork://pair?server=x&code=c&key=k' };
+    }),
+    record('decide-phone', (body) => { if (body.accept) Object.assign(phones[0]!, { status: 'confirmed', verified: true }); }),
     record('server', (body) => { server = String(body.server); }),
     record('share-enable', (body) => {
       if (body.key !== 'dshh_good') throw new Error('That is not a team host key. Copy it again from the team console.');
@@ -29,13 +42,13 @@ function panel() {
     }),
     record('share-invite', () => ({ link: 'dshteamwork://join?x', expiresAt: '2026-11-19T00:00:00Z' })),
   ];
-  return { routes, calls };
+  return { routes, calls, phones };
 }
 
 async function serving() {
   const home = await mkdtemp(join(tmpdir(), 'tw-'));
   const socket = socketIn(home);
-  const { routes, calls } = panel();
+  const { routes, calls, phones } = panel();
   const logs: string[] = [];
   const close = await serveControlSocket(controlSocketPath(join(home, 'dsh-teamwork', 'cache.json')), routes, (m) => logs.push(m));
   const cli = async (...args: string[]) => {
@@ -43,7 +56,7 @@ async function serving() {
     const code = await run(args, socket, (l) => out.push(l), (l) => err.push(l)).catch((e: Error) => { err.push(e.message); return 1; });
     return { code, out: out.join('\n'), err: err.join('\n') };
   };
-  return { home, socket, calls, logs, close, cli, routes };
+  return { home, socket, calls, phones, logs, close, cli, routes };
 }
 
 test.skipIf(process.platform === 'win32')('the command drives the panel routes through a socket only its user opens', async () => {
@@ -87,3 +100,31 @@ test('the home is found as DSH finds it', () => {
   expect(dshHome({ DSH_HOME: '/srv/dsh' })).toBe('/srv/dsh');
   expect(dshHome({ DSH_HOME: '~/team-dsh' })).toBe(join(homedir(), 'team-dsh'));
 });
+
+test.skipIf(process.platform === 'win32')('a personal DSH signs in, syncs and pairs a phone from the command line', async () => {
+  const { calls, phones, close, cli } = await serving();
+  try {
+    const login = await cli('login');
+    expect(login.out).toContain('https://teamwork.example.com/plugin?challenge=c');
+    expect(login.out).toContain('dsh-teamwork authorize <code>');
+    // The page shows a whole line to paste; its code is what reaches the plugin.
+    expect(await cli('authorize', '/teamwork', 'authorize', 'ABCD-1234')).toMatchObject({ code: 0 });
+    expect(calls).toContainEqual(['authorize', { code: 'ABCD-1234' }]);
+    expect((await cli('status')).out).toContain('Teams: Team (member)');
+    expect(await cli('sync')).toMatchObject({ code: 0, out: 'Synced 1 team.' });
+
+    const pair = await cli('phone', 'pair');
+    expect(pair.out).toContain('dshteamwork://pair?server=x&code=c&key=k');
+    expect(pair.out).toMatch(/[█▀▄]/);
+    // Before the handshake there is no safety code to compare, so it cannot be accepted.
+    expect((await cli('phone', 'list')).out).toContain('has not finished its encrypted handshake');
+    expect(await cli('phone', 'accept', 'p1')).toMatchObject({ code: 1 });
+    expect(calls.some(([name]) => name === 'decide-phone')).toBe(false);
+    Object.assign(phones[0]!, { safetyCode: '12 34 56', phoneConfirmed: true });
+    expect((await cli('phone', 'list')).out).toContain('safety code 12 34 56; if the phone shows the same, dsh-teamwork phone accept p1');
+    expect(await cli('phone', 'accept', 'p1')).toMatchObject({ code: 0, out: 'Accepted Pixel.' });
+    expect(calls).toContainEqual(['decide-phone', { id: 'p1', accept: true }]);
+    expect((await cli('phone', 'list')).out).toBe('p1  Pixel  paired');
+  } finally { await close(); }
+});
+

@@ -96,6 +96,15 @@ dsh-teamwork share members        # also: status, unlock <email>, disable
 It reaches the running DSH through a socket in the plugin's directory in the DSH
 home (below), which only that user can open. It runs on Linux and macOS.
 
+A personal DSH on a server works the same way: `dsh-teamwork login` prints a
+sign-in link to open in any browser, and `dsh-teamwork authorize <code>` takes
+the code the page shows. `dsh-teamwork status` and `dsh-teamwork sync` follow
+the team's configuration. `dsh-teamwork phone pair` draws the phone app's
+pairing QR code in the terminal. `dsh-teamwork phone list` then shows the
+waiting phone's safety code. When the phone shows the same code,
+`dsh-teamwork phone accept <id>` accepts it; `reject` and `revoke` refuse or
+remove one.
+
 ## Choose a model or preset
 
 Use **New session** for a team preset. **Use in this blank session** works only
