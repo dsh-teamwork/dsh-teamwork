@@ -66,13 +66,13 @@ test.skipIf(process.platform === 'win32')('the command drives the panel routes t
     expect((await stat(socket)).mode & 0o777).toBe(0o600);
     expect((await stat(join(home, 'dsh-teamwork'))).mode & 0o777).toBe(0o700);
 
-    expect(await cli('share', 'status')).toMatchObject({ code: 0, out: expect.stringContaining('Shared mode is off') });
+    expect(await cli('share', 'status')).toMatchObject({ code: 0, out: expect.stringContaining('This DSH is not a Team DSH') });
     expect(await cli('server', 'https://teamwork.example.com')).toMatchObject({ code: 0, out: 'Teamwork server: https://teamwork.example.com' });
     // The plugin's own refusal reaches the command line unchanged.
     expect(await cli('share', 'enable', 'dshh_bad')).toMatchObject({ code: 1, err: 'That is not a team host key. Copy it again from the team console.' });
     const enabled = await cli('share', 'enable', 'dshh_good');
     expect(enabled.code).toBe(0);
-    expect(enabled.out).toContain('Shared DSH: vm3');
+    expect(enabled.out).toContain('Team DSH: vm3');
     expect(enabled.out).toContain('Audit key: not set');
     expect(await cli('share', 'members')).toMatchObject({ out: 'bob@example.test (locked): Phone' });
     const invite = await cli('share', 'invite', 'bob@example.test');
