@@ -66,7 +66,8 @@ the key. A team admin chooses in the console who may reach it; for each of
 them, run `/teamwork share invite <email>` here and hand the link over in
 person or through a channel the team trusts, never through the Teamwork server.
 Each member's sessions are theirs alone: others cannot list, follow or answer
-them. A member opens the link in the DSH Teamwork phone app, or pastes it under
+them. A member starts a session in the folder this DSH was started in, or in
+one of its workspaces, so start DSH in the project folder the team works in. A member opens the link in the DSH Teamwork phone app, or pastes it under
 **Workspace → Team DSH** in the team console.
 
 A Team DSH admits nobody until its admin sets the team's audit key. On their

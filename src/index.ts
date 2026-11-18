@@ -26,7 +26,7 @@ import { offerSchema, pairingSchema, RelayError, RelayLink, relayClientIdPath, t
 import { watchTokenFile } from './token-file.js';
 import { SharedMode, sharedKeyPath } from './shared-mode.js';
 import { SharedRoster, sharedRosterPath } from './shared-roster.js';
-import { OwnerFilter } from './shared-owner.js';
+import { OwnerFilter, startDirectories } from './shared-owner.js';
 import { PinStore, pinsPath } from './pin-lock.js';
 import { AuditArchive, auditArchivePath } from './audit-archive.js';
 import type { PanelPhone } from './panel.js';
@@ -191,7 +191,19 @@ export async function apply(ctx: Context, config: Config) {
     if (!shared?.enabled || typeof pairingId !== 'string') return;
     void roster.memberOf(pairingId).then((member) => { if (member) archive.record({ member, device: pairingId, dir, frame }); });
   };
-  const owners = new OwnerFilter(roster, (pairingId) => roster.memberOf(pairingId));
+  /**
+   * Where a session may be started from a phone or the console: the directory DSH was started in, then DSH's own
+   * workspaces. A new device, or a member of a shared DSH with no session yet, has no other way to name one.
+   */
+  let workspaces: { list(): { path: string }[] } | undefined;
+  ctx.inject(['workspaceRegistry'], (scoped) => {
+    scoped.effect(() => {
+      workspaces = (scoped as unknown as { workspaceRegistry: { list(): { path: string }[] } }).workspaceRegistry;
+      return () => { workspaces = undefined; };
+    });
+  });
+  const directories = () => startDirectories(process.cwd(), workspaces?.list() ?? []);
+  const owners = new OwnerFilter(roster, (pairingId) => roster.memberOf(pairingId), directories);
   /** Who the server lets reach this shared DSH, as the relay last said; and members whose handsets wait to join. */
   let sharedMembers: SharedMember[] = [];
   const joining = new Map<string, string>();
@@ -206,7 +218,7 @@ export async function apply(ctx: Context, config: Config) {
         if (sessionId && !agent) throw new PhoneSessionError('busy');
         const state = await panel.state(sessionId);
         const roster = await ctx.agentPresets.remoteExportList();
-        return { presets: phonePresets(state, [...roster.presets]), current: agent ? {
+        return { presets: phonePresets(state, [...roster.presets]), directories: directories(), current: agent ? {
           sessionId: String(agent.id), cwd: agent.session.header.cwd,
           agentPreset: ctx.agentPresets.presetForSession(agent.session), model: agent.model.current() ?? null,
           started: state.session?.started ?? false, running: agent.status !== 'idle',

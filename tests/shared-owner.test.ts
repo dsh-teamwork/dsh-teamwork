@@ -2,7 +2,7 @@ import { mkdtemp, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { OwnerFilter, eventSession } from '../src/shared-owner.js';
+import { OwnerFilter, eventSession, startDirectories } from '../src/shared-owner.js';
 import { SharedRoster, sharedRosterPath } from '../src/shared-roster.js';
 
 async function roster(now = () => Date.now()) {
@@ -45,7 +45,7 @@ describe('sessions belong to their starter', () => {
       const invite = await r.invite({ userId: userId!, email: `${userId}@x.io` });
       await r.accept({ inviteId: invite.id, secret: invite.secret, userId: userId!, pairingId: pairingId!, deviceName: 'phone' });
     }
-    return new OwnerFilter(r, (id) => r.memberOf(id));
+    return new OwnerFilter(r, (id) => r.memberOf(id), () => ['/srv/project', '/srv/docs']);
   };
   const created = (sessionId: string) => ({ result: { ok: true, value: { sessionId } } });
   const call = (sessionId: string) => ({ args: { request: { sessionId } } });
@@ -84,5 +84,27 @@ describe('sessions belong to their starter', () => {
     expect(await filter.eventFor('pa', question)).toBe(question);
     expect(await filter.admitCall('pa', '$events/result', { args: { eventId: 'e1' } })).toBe(true);
     expect(await filter.eventFor('pb', { type: 'ready', clientId: 'c' })).toBeTruthy();
+  });
+});
+
+describe('where a member may start a session', () => {
+  it('admits a new session only in one of the DSH\'s directories', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'shared-roster-'));
+    const r = new SharedRoster(sharedRosterPath(join(dir, 'teamwork-cache.json')));
+    const invite = await r.invite({ userId: 'ada', email: 'ada@x.io' });
+    await r.accept({ inviteId: invite.id, secret: invite.secret, userId: 'ada', pairingId: 'pa', deviceName: 'phone' });
+    const filter = new OwnerFilter(r, (id) => r.memberOf(id), () => ['/srv/project']);
+    const create = (cwd?: string) => ({ args: { request: cwd === undefined ? {} : { cwd } } });
+    expect(await filter.admitCall('pa', 'session/create', create('/srv/project'))).toBe(true);
+    expect(await filter.admitCall('pa', 'session/create', create('/etc'))).toBe(false);
+    expect(await filter.admitCall('pa', 'session/create', create())).toBe(false);
+    expect(await filter.admitCall('px', 'session/create', create('/srv/project'))).toBe(false);
+  });
+
+  it('lists where DSH was started first, then its workspaces, each once', async () => {
+    const started = await mkdtemp(join(tmpdir(), 'started-'));
+    const real = await import('node:fs/promises').then((fs) => fs.realpath(started));
+    expect(startDirectories(started, [{ path: '/srv/a' }, { path: real }, { path: '/srv/b' }])).toEqual([real, '/srv/a', '/srv/b']);
+    expect(startDirectories('/no/such/dir', [])).toEqual(['/no/such/dir']);
   });
 });
