@@ -57,15 +57,14 @@ export async function apply(ctx: Context, config: Config) {
   const stamps = new PresetStamps(presetStampPath(config.cachePath));
   await stamps.load();
   const overlay = new TeamOverlay(async (id, item, team) => ctx.agentPresets.register({
-    id, name: `[${team.teamName}] ${item.name}`,
-    ...(item.kind === 'preset' ? { description: item.data.description ?? '' } : {}),
-    plugins: item.kind === 'preset' ? [{ name: 'cordis:group', group: true, isolate: {teamworkPreset:true}, config: [{ name: new URL('./preset-context.js', import.meta.url).href, config: {
+    id, name: `[${team.teamName}] ${item.name}`, description: item.data.description ?? '',
+    plugins: [{ name: 'cordis:group', group: true, isolate: {teamworkPreset:true}, config: [{ name: new URL('./preset-context.js', import.meta.url).href, config: {
       inheritModel: item.data.inheritModel, builtin: item.builtin, description: item.data.description ?? '', instructions: item.data.instructions ?? '', outputDescription: item.data.outputDescription ?? '',
       pluginDependencies: item.data.pluginDependencies ?? [],
       requiredTools: item.data.requiredTools ?? [], optionalTools: item.data.optionalTools ?? [], systemPrompt: item.data.systemPrompt,
       ...(item.data.modelConfigId ? {modelConfigId: item.data.modelConfigId} : {}),
       teamId: team.teamId, id: item.id, name: item.name, version: item.version,
-    } }] }] : [],
+    } }] }],
   }));
   const restartRequired = new Set<string>();
   const activePreset = (agent: Agent) => ctx.agentPresets.serviceFor(agent, 'teamworkPreset');
@@ -453,7 +452,7 @@ export async function apply(ctx: Context, config: Config) {
     const item = snapshot?.teams.flatMap(team => team.configs.filter(c => `team:${team.teamId}:${c.id}` === selected))[0];
     const preset = activePreset(agent);
     if (preset && !stamps.get(String(agent.id))) stamp(agent,preset);
-    if (source !== 'resume' && item && item.kind !== 'plugin' && !inheritsModel(item)) agent.model.select({ provider: platformProvider, model: item.id });
+    if (source !== 'resume' && item?.kind === 'preset' && !inheritsModel(item)) agent.model.select({ provider: platformProvider, model: item.id });
     // A cloud computer (tokenFile) has no local model of its own: a session that names none answers with the team's first model that can run.
     if (config.tokenFile && !agent.model.current() && snapshot) {
       const fallback = allConfigs(snapshot).find(c => c.kind === 'model' && modelData(snapshot, c) && !modelLimitProblem(snapshot, c));
