@@ -1,4 +1,4 @@
-// On a cloud computer (tokenFile) a session that names no model answers with the team's first model.
+// On a cloud computer (tokenFile) a session whose model cannot be called there answers with the team's first model.
 import { reportResult } from './result.mjs';
 import { readFile, writeFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
@@ -12,7 +12,12 @@ export function apply(ctx) {
       await ctx.agents.create({ sessionId: 'plain-' + process.pid, meta: { cwd: process.env.TEAMWORK_TEST_CWD } });
       const agent = ctx.agents.get('plain-' + process.pid);
       assert.deepEqual(agent.model.current(), { provider: 'teamwork-platform', model: 'm1' });
-      await reportResult({ passed: true, checks: ['cloud session defaults to the team model'] });
+      // DSH's own default model, which has no key on a cloud computer, is replaced too.
+      await ctx.agents.create({ sessionId: 'keyless-' + process.pid, meta: { cwd: process.env.TEAMWORK_TEST_CWD }, agentOptions: { provider: 'deepseek-official', model: 'deepseek-flash' } });
+      const keyless = ctx.agents.get('keyless-' + process.pid);
+      for (let i = 0; i < 50 && keyless.model.current()?.provider !== 'teamwork-platform'; i++) await new Promise(resolve => setTimeout(resolve, 100));
+      assert.deepEqual(keyless.model.current(), { provider: 'teamwork-platform', model: 'm1' });
+      await reportResult({ passed: true, checks: ['cloud session defaults to the team model', 'a keyless default model is replaced by the team model'] });
     } catch (error) { await reportResult({ passed: false, error: String(error), stack: error.stack }); }
   }, 3000);
   ctx.effect(() => () => clearTimeout(timer));
