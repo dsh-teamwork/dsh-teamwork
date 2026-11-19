@@ -158,6 +158,21 @@ a full database-and-artifact backup managed by the server operator.
 
 ![Publication history of a demonstration team](../../assets/readme/versions-and-backups.png)
 
+## Pages
+
+Ask the agent for a report, a deck, a dashboard or a diagram and to publish it:
+its `teamwork_page` tool uploads the page to your team, private to you, and the
+conversation shows a card that opens it beside the conversation in the web
+console. Asking for a change adds a version; earlier versions stay. A page is
+an `index.html` with the files it loads, one `index.md`, or one `index.svg`,
+from a folder in the session's workspace; at most 255 files and 16 MiB a
+version. Only you share a page, from **Pages** in the console, with chosen
+members or the whole team; the agent cannot. On a Team DSH a page belongs to
+the member whose session made it. A page shared with you can be opened into
+your own session's workspace by your agent, changed, and published as a new
+version under your name. Pages run sandboxed: a page cannot act as
+the person viewing it.
+
 ## Commands
 
 Run these in DSH's command input, not your shell. IDs come from `/teamwork list`.
@@ -233,6 +248,8 @@ cached with private file permissions. A stale cache is not authorization.
 Network failures preserve it; 401/403 clear team registrations and suspend sync
 until sign-in. Provider keys remain on the service; team-model prompts and
 context travel through that service's gateway.
+Pages an agent publishes are stored on the Teamwork server, private until
+their owner shares them; the rest of a session stays on the computer.
 
 The hosted service may advertise a relay. A matching Teamwork App and an online
 DSH web/desktop host are required. Headless-only hosts return 503 for device

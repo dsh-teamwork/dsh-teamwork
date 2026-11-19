@@ -41,6 +41,10 @@ export function serverAddress(input: string) {
   if (url.search || url.hash || url.username || url.password) throw new Error(say('server.extra'));
   return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
 }
+/** A page the server refused: its status, code (`page_stale`, `page_too_large`, …) and what it said was wrong. */
+export class PageError extends Error {
+  constructor(readonly status:number,readonly code:string,readonly detail:string) { super(`Page refused (${status}${code?` ${code}`:''})${detail?`: ${detail}`:''}`); }
+}
 export class TeamworkClient {
   private token?: string;
   private verifier?: string;
@@ -112,6 +116,44 @@ export class TeamworkClient {
     const path=join(directory,`${digest}.tgz`),temporary=`${path}.${randomBytes(8).toString('hex')}.tmp`;
     try{await writeFile(temporary,bytes,{mode:0o600});await rename(temporary,path);}finally{await rm(temporary,{force:true});}
     return path;
+  }
+  /**
+   * Publishes a page (docs/tech/pages.md in the platform repository): a new one, or a version on top of `baseVersion`.
+   * `files` are paths within the page and their bytes; the server holds every rule and limit, and says which broke.
+   */
+  async publishPage(teamId:string,input:{pageId?:string;title?:string;kind:'html'|'markdown'|'svg';note:string;sessionId:string;computer:string;baseVersion?:number;starter?:string},files:{path:string;bytes:Uint8Array}[],signal:AbortSignal) {
+    if(!this.token)throw new Error('Sign in to Teamwork first');
+    const epoch=this.epoch,form=new FormData();
+    const {pageId,...meta}=input;
+    form.append('meta',JSON.stringify(meta));
+    for(const file of files)form.append(file.path,new Blob([new Uint8Array(file.bytes)]),file.path.split('/').pop());
+    const path=pageId?`pages/${encodeURIComponent(pageId)}/versions`:'pages';
+    const response=await this.request(`${this.endpoint}/api/teams/${encodeURIComponent(teamId)}/${path}`,{method:'POST',headers:{Authorization:`Bearer ${this.token}`,Origin:new URL(this.endpoint).origin},body:form,signal,redirect:'error'});
+    const body=await response.json().catch(()=>({})) as {error?:string;issues?:{message:string}[]};
+    if(!response.ok)throw new PageError(response.status,String(body.error??''),(body.issues??[]).map(i=>i.message).join('; '));
+    const page=z.object({id:z.string().min(1),teamId:z.string(),version:z.number().int().positive(),title:z.string(),kind:z.enum(['html','markdown','svg'])}).parse(body);
+    if(epoch!==this.epoch)throw new Error('Account changed during upload');
+    return page;
+  }
+  /**
+   * The files of a page's version, fetched through a view address minted for this member (or, on a Team DSH, for the
+   * session's starter), as the console's frame fetches them.
+   */
+  async readPage(teamId:string,pageId:string,version:number,starter:string|undefined,signal:AbortSignal) {
+    if(!this.token)throw new Error('Sign in to Teamwork first');
+    const epoch=this.epoch,query=starter?`?starter=${encodeURIComponent(starter)}`:'';
+    const response=await this.request(`${this.endpoint}/api/teams/${encodeURIComponent(teamId)}/pages/${encodeURIComponent(pageId)}/versions/${version}/view${query}`,{method:'POST',headers:{Authorization:`Bearer ${this.token}`,Origin:new URL(this.endpoint).origin},signal,redirect:'error'});
+    const body=await response.json().catch(()=>({})) as {error?:string};
+    if(!response.ok)throw new PageError(response.status,String(body.error??''),'');
+    const view=z.object({url:z.string().url(),files:z.array(z.object({path:z.string(),size:z.number()}))}).parse(body);
+    const files:{path:string;bytes:Uint8Array}[]=[];
+    for(const file of view.files){
+      const got=await this.request(view.url+file.path.split('/').map(encodeURIComponent).join('/'),{signal,redirect:'error'});
+      if(!got.ok)throw new Error(`Could not read ${file.path} (${got.status})`);
+      files.push({path:file.path,bytes:new Uint8Array(await got.arrayBuffer())});
+    }
+    if(epoch!==this.epoch)throw new Error('Account changed during download');
+    return files;
   }
   async submitPlugin(teamId:string,bytes:Buffer,sha256:string,input:{name:string;note:string;configId?:string;baseVersion:number},signal:AbortSignal) {
     if(!this.token || createHash('sha256').update(bytes).digest('hex')!==sha256)throw new Error('Prepared archive changed');
