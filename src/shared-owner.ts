@@ -8,7 +8,8 @@
  *   workspaces), and records the new session as the member's;
  * - `session/list` keeps the member's own sessions and drops sub-agents, which stay under their parent;
  * - a call or stream that names a session must name one of the member's, else DSH is never asked and the answer is
- *   `not_found`;
+ *   `not_found`; renaming, pinning and archiving included, though pins and archives land in the DSH's one registry,
+ *   seen at its keyboard as well;
  * - `$events` items reach a member only for their own sessions, and `$events/result` answers only an event this
  *   member was shown;
  * - sessions with no owner (started at this DSH's keyboard, or by the agent itself) are reachable by nobody remotely.
@@ -33,8 +34,9 @@ export function namedSession(body: unknown): string | undefined {
 }
 
 /** Calls that act on one session; each must name one the member owns. */
-const SESSION_CALLS = new Set(['session/state', 'session/page', 'session/prompt', 'session/cancel', 'teamwork/selectModel',
-  'teamwork/uploadStart', 'teamwork/uploadChunk', 'teamwork/uploadFinish', 'teamwork/uploadCancel', 'userQuestions/answer']);
+const SESSION_CALLS = new Set(['session/state', 'session/page', 'session/prompt', 'session/cancel', 'teamwork/selectModel', 'teamwork/selectPermission',
+  'teamwork/uploadStart', 'teamwork/uploadChunk', 'teamwork/uploadFinish', 'teamwork/uploadCancel', 'userQuestions/answer',
+  'session/rename', 'workspace/pinSession', 'workspace/unpinSession', 'workspace/archiveSession', 'workspace/unarchiveSession']);
 
 /** The session an `$events` item is about: a summary's `sessionId`, an emit's first argument, a question's `agentId`. */
 export function eventSession(item: unknown): string | undefined {

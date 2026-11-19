@@ -26,6 +26,11 @@ import { type FetchRoute } from './panel.js';
 export declare const ALLOWED_CALLS: ReadonlySet<string>;
 /** Streams a phone may open on the mux. A test holds this list. */
 export declare const ALLOWED_STREAMS: ReadonlySet<string>;
+/** Which of the member's sessions DSH's workspace registry pins and archives (its `pinnedSessionIds`, `archivedSessionIds`). */
+export interface SessionMarks {
+    pinned: readonly string[];
+    archived: readonly string[];
+}
 /** A frame the relay passes to the bridge. */
 export declare const forwardedSchema: z.ZodUnion<readonly [z.ZodObject<{
     t: z.ZodLiteral<"call">;
@@ -60,6 +65,8 @@ export interface BridgeOptions {
     session?: PhoneSessionOps;
     /** On a shared DSH, whose sessions each pairing's member may reach (src/shared-owner.ts); none on a personal computer. */
     owners?: () => OwnerFilter | undefined;
+    /** The pin and archive sets `session/list` marks each item with, under `teamwork`; none while DSH has no registry. */
+    marks?: () => SessionMarks | undefined;
     /** The DSH workspace registered at exactly this folder, if any (see `session/create` in `call`). */
     workspaceAt?: (path: string) => string | undefined;
 }
@@ -84,6 +91,8 @@ export declare class Bridge {
         body: unknown;
     }>;
     private run;
+    /** A `session/list` answer with each item's place in DSH's pin and archive sets, as `teamwork: { pinned, archived }`. */
+    private marked;
     private mux;
     private muxNow;
     private openMux;

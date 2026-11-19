@@ -2,7 +2,7 @@
 import type { PanelState } from './panel.js';
 import { teamProvider } from './platform-models.js';
 
-export type PhoneFailure = 'busy' | 'not_found' | 'not_authenticated' | 'missing_tools' | 'missing_plugins' | 'preset_changed' | 'model_unavailable' | 'invalid_request' | 'unavailable' | 'file_name' | 'file_type' | 'file_too_large' | 'invalid_upload' | 'upload_expired' | 'upload_failed';
+export type PhoneFailure = 'permission_refused' | 'busy' | 'not_found' | 'not_authenticated' | 'missing_tools' | 'missing_plugins' | 'preset_changed' | 'model_unavailable' | 'invalid_request' | 'unavailable' | 'file_name' | 'file_type' | 'file_too_large' | 'invalid_upload' | 'upload_expired' | 'upload_failed';
 export class PhoneSessionError extends Error {
   constructor(readonly code: PhoneFailure, message: string = code) { super(message); }
 }
@@ -10,6 +10,8 @@ export interface PhoneModel { provider: string; model: string; reasoningEffort?:
 export interface PhoneSessionOps {
   configuration(sessionId?: string): Promise<unknown>;
   selectModel(request: PhoneModel & { sessionId: string }): Promise<unknown>;
+  /** Switches a session's permission preset as DSH's `/permission` does (src/phone-permission.ts). */
+  selectPermission(request: { sessionId: string; preset: string }): Promise<unknown>;
   check(sessionId: string): Promise<void>;
   accepted(sessionId: string, requestId: string): boolean;
 }

@@ -52,14 +52,15 @@ describe('the phone bridge', () => {
   it('holds the allow-list', () => {
     expect([...ALLOWED_CALLS].sort()).toEqual([
       '$events/result', 'session/cancel', 'session/create', 'session/list', 'session/modelCatalog', 'session/page',
-      'session/prompt', 'session/state', 'teamwork/configuration', 'teamwork/selectModel', 'teamwork/uploadCancel', 'teamwork/uploadChunk', 'teamwork/uploadFinish', 'teamwork/uploadStart', 'userQuestions/answer',
+      'session/prompt', 'session/rename', 'session/state', 'teamwork/configuration', 'teamwork/selectModel', 'teamwork/selectPermission', 'teamwork/uploadCancel', 'teamwork/uploadChunk', 'teamwork/uploadFinish', 'teamwork/uploadStart', 'userQuestions/answer',
+      'workspace/archiveSession', 'workspace/pinSession', 'workspace/unarchiveSession', 'workspace/unpinSession',
     ]);
     expect([...ALLOWED_STREAMS].sort()).toEqual(['$events', 'session/follow']);
   });
 
   it('changes a model through the session-only handler, never the default-saving native endpoint', async () => {
     const selected: unknown[] = [];
-    const session: PhoneSessionOps = { accepted: () => false, configuration: async () => ({}), check: async () => {}, selectModel: async request => { selected.push(request); return { selected: request }; } };
+    const session: PhoneSessionOps = { selectPermission: async () => ({}), accepted: () => false, configuration: async () => ({}), check: async () => {}, selectModel: async request => { selected.push(request); return { selected: request }; } };
     const { b, sent, asked } = bridge({ session });
     b.handle({ t: 'call', pairingId: 'p', id: 'c', method: 'teamwork/selectModel', body: { args: { request: { sessionId: 's1', provider: 'local', model: 'coder' } } } });
     for (let i=0;i<6;i++) await tick();
@@ -71,9 +72,23 @@ describe('the phone bridge', () => {
     expect(sent.at(-1)).toMatchObject({ status: 403, body: { error: 'method_not_allowed' } });
   });
 
+  it('switches a permission preset only by one plain preset name, after desktop admission', async () => {
+    const picked: unknown[] = [];
+    const session: PhoneSessionOps = { selectPermission: async (request) => { picked.push(request); return { current: request.preset }; }, accepted: () => false, configuration: async () => ({}), selectModel: async () => ({}), check: async () => {} };
+    const { b, sent, asked } = bridge({ session });
+    b.handle({ t: 'call', pairingId: 'p', id: 'ok', method: 'teamwork/selectPermission', body: { args: { request: { sessionId: 's1', preset: 'workspace-write' } } } });
+    // Nothing more may ride on DSH's `/permission` command line.
+    b.handle({ t: 'call', pairingId: 'p', id: 'line', method: 'teamwork/selectPermission', body: { args: { request: { sessionId: 's1', preset: 'read-only /teamwork logout' } } } });
+    for (let i = 0; i < 8; i++) await tick();
+    expect(picked).toEqual([{ sessionId: 's1', preset: 'workspace-write' }]);
+    expect(asked.filter(call => call.url.includes('/api/')).map(call => call.url)).toEqual(['http://127.0.0.1:3080/api/session/state']);
+    expect(sent).toContainEqual(expect.objectContaining({ id: 'ok', status: 200, body: { result: { ok: true, value: { current: 'workspace-write' } } } }));
+    expect(sent).toContainEqual(expect.objectContaining({ id: 'line', body: { result: { ok: false, error: { code: 'teamwork/invalid_request' } } } }));
+  });
+
   it('checks desktop admission before invoking session configuration operations', async () => {
     let called=false;
-    const session: PhoneSessionOps = { accepted: () => false, configuration: async () => { called=true; return {}; }, selectModel: async () => { called=true; return {}; }, check: async () => { called=true; } };
+    const session: PhoneSessionOps = { selectPermission: async () => ({}), accepted: () => false, configuration: async () => { called=true; return {}; }, selectModel: async () => { called=true; return {}; }, check: async () => { called=true; } };
     const { b, sent } = bridge({ session, denied: true });
     b.handle({ t: 'call', pairingId: 'p', id: 'c', method: 'teamwork/configuration', body: { args: { request: { sessionId: 'hidden' } } } });
     for (let i=0;i<6;i++) await tick();
@@ -83,7 +98,7 @@ describe('the phone bridge', () => {
 
   it('lets the native idempotent path confirm an accepted request before busy and receipt checks', async () => {
     let checked = false;
-    const session: PhoneSessionOps = { accepted: (_id, requestId) => requestId === 'already-accepted', configuration: async () => ({}), selectModel: async () => ({}), check: async () => { checked = true; throw new PhoneSessionError('busy'); } };
+    const session: PhoneSessionOps = { selectPermission: async () => ({}), accepted: (_id, requestId) => requestId === 'already-accepted', configuration: async () => ({}), selectModel: async () => ({}), check: async () => { checked = true; throw new PhoneSessionError('busy'); } };
     const { b, sent, asked } = bridge({ session });
     b.handle({ t: 'call', pairingId: 'p', id: 'retry', method: 'session/prompt', body: { args: { request: { sessionId: 's1', requestId: 'already-accepted', content: [{ type: 'file', receiptId: 'retired' }] } } } });
     for (let i = 0; i < 6; i++) await tick();
@@ -95,7 +110,7 @@ describe('the phone bridge', () => {
   it('coalesces a still-in-flight prompt retry before native admission can race', async () => {
     let release!: () => void;
     const waitPrompt = new Promise<void>(resolve => { release = resolve; });
-    const session: PhoneSessionOps = { accepted: () => false, configuration: async () => ({}), selectModel: async () => ({}), check: async () => {} };
+    const session: PhoneSessionOps = { selectPermission: async () => ({}), accepted: () => false, configuration: async () => ({}), selectModel: async () => ({}), check: async () => {} };
     const { b, sent, asked } = bridge({ session, waitPrompt });
     const body = { args: { request: { sessionId: 's1', requestId: 'one-task', content: [{ type: 'text', text: 'one task' }] } } };
     b.handle({ t: 'call', pairingId: 'p', id: 'first', method: 'session/prompt', body });
@@ -108,7 +123,7 @@ describe('the phone bridge', () => {
 
   it('stores attachments while an agent is busy but keeps readiness checks on Send', async () => {
     let checked = false;
-    const session: PhoneSessionOps = { accepted: () => false, configuration: async () => ({}), selectModel: async () => ({}), check: async () => { checked = true; throw new PhoneSessionError('busy'); } };
+    const session: PhoneSessionOps = { selectPermission: async () => ({}), accepted: () => false, configuration: async () => ({}), selectModel: async () => ({}), check: async () => { checked = true; throw new PhoneSessionError('busy'); } };
     const { b, sent, asked } = bridge({ session, upload: true });
     const call = async (id: string, method: string, request: unknown) => {
       b.handle({ t: 'call', pairingId: 'p', id, method, body: { args: { request } } });
@@ -127,7 +142,7 @@ describe('the phone bridge', () => {
   });
 
   it('returns a preflight refusal without submitting the prompt', async () => {
-    const session: PhoneSessionOps = { accepted: () => false, configuration: async () => ({}), selectModel: async () => ({}), check: async () => { throw new PhoneSessionError('missing_tools'); } };
+    const session: PhoneSessionOps = { selectPermission: async () => ({}), accepted: () => false, configuration: async () => ({}), selectModel: async () => ({}), check: async () => { throw new PhoneSessionError('missing_tools'); } };
     const { b, sent, asked } = bridge({ session });
     b.handle({ t: 'call', pairingId: 'p', id: 'c', method: 'session/prompt', body: { args: { request: { sessionId: 's1' } } } });
     for (let i=0;i<6;i++) await tick();
@@ -164,6 +179,37 @@ describe('the phone bridge', () => {
     const cookies = calls.map(c => (c.init!.headers as Record<string, string>).cookie);
     expect(cookies).toEqual(['dsh=peer-1', 'dsh=peer-1', 'dsh=peer-2']);
     expect(sent).toContainEqual({ t: 'result', pairingId: 'p', id: 'c1', status: 200, body: { type: 'client-response', result: { ok: true, value: 'v' } } });
+  });
+
+  it('passes a rename, pin or archive on with exactly its fields, and nothing else of the kind', async () => {
+    const { b, sent, asked } = bridge();
+    b.handle({ t: 'call', pairingId: 'p', id: 'ok', method: 'session/rename', body: { args: { request: { sessionId: 's1', title: 'Release notes' } } } });
+    b.handle({ t: 'call', pairingId: 'p', id: 'pin', method: 'workspace/pinSession', body: { args: { request: { sessionId: 's1' } } } });
+    // Archiving never stops a running session's work from a phone, and a title is never empty.
+    b.handle({ t: 'call', pairingId: 'p', id: 'stop', method: 'workspace/archiveSession', body: { args: { request: { sessionId: 's1', stopActivity: true } } } });
+    b.handle({ t: 'call', pairingId: 'p', id: 'empty', method: 'session/rename', body: { args: { request: { sessionId: 's1', title: '' } } } });
+    b.handle({ t: 'call', pairingId: 'p', id: 'other', method: 'workspace/delete', body: { args: { request: { workspaceId: 'w' } } } });
+    for (let i = 0; i < 6; i++) await tick();
+    expect(asked.filter(a => a.url.includes('/api/')).map(a => a.url)).toEqual(['http://127.0.0.1:3080/api/session/rename', 'http://127.0.0.1:3080/api/workspace/pinSession']);
+    expect(sent).toContainEqual({ t: 'result', pairingId: 'p', id: 'stop', status: 200, body: { result: { ok: false, error: { code: 'teamwork/invalid_request' } } } });
+    expect(sent).toContainEqual({ t: 'result', pairingId: 'p', id: 'empty', status: 200, body: { result: { ok: false, error: { code: 'teamwork/invalid_request' } } } });
+    expect(sent).toContainEqual({ t: 'result', pairingId: 'p', id: 'other', status: 403, body: { error: 'method_not_allowed' } });
+  });
+
+  it('marks each listed session with its place in the pin and archive sets', async () => {
+    const sent: any[] = [];
+    const items = [{ sessionId: 'a', title: 'A' }, { sessionId: 'b' }, { sessionId: 'c' }];
+    const request = (async (url: string) => url.includes('/connect?')
+      ? new Response(null, { status: 302, headers: { 'set-cookie': 'dsh=peer; Path=/' } })
+      : new Response(JSON.stringify({ type: 'client-response', result: { ok: true, value: { items } } }))) as typeof fetch;
+    const b = new Bridge({ launchUrl: () => 'http://127.0.0.1:3080/?token=t', send: (frame) => sent.push(frame), request, marks: () => ({ pinned: ['b'], archived: ['c'] }) });
+    b.handle({ t: 'call', pairingId: 'p', id: 'l', method: 'session/list', body: { args: { _request: {} } } });
+    for (let i = 0; i < 4; i++) await tick();
+    expect(sent[0].body.result.value.items).toEqual([
+      { sessionId: 'a', title: 'A', teamwork: { pinned: false, archived: false } },
+      { sessionId: 'b', teamwork: { pinned: true, archived: false } },
+      { sessionId: 'c', teamwork: { pinned: false, archived: true } },
+    ]);
   });
 
   it('starts a session in a folder that is a workspace as that workspace, so DSH lists it there', async () => {
@@ -308,7 +354,7 @@ describe('the phone bridge', () => {
 
   it('answers a cloud computer\'s server on DSH\'s own route, through the same allow-list', async () => {
     const selected: unknown[] = [];
-    const session: PhoneSessionOps = { accepted: () => false, configuration: async () => ({}), check: async () => {}, selectModel: async request => { selected.push(request); return { selected: request }; } };
+    const session: PhoneSessionOps = { selectPermission: async () => ({}), accepted: () => false, configuration: async () => ({}), check: async () => {}, selectModel: async request => { selected.push(request); return { selected: request }; } };
     const { b, sent } = bridge({ session });
     const route = bridgeRoute(b);
     expect(route).toMatchObject({ path: '/api/teamwork/bridge', methods: ['POST'] });

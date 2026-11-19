@@ -1,6 +1,6 @@
 /** The paired phone's session configuration, with no credentials or desktop-default mutation. */
 import type { PanelState } from './panel.js';
-export type PhoneFailure = 'busy' | 'not_found' | 'not_authenticated' | 'missing_tools' | 'missing_plugins' | 'preset_changed' | 'model_unavailable' | 'invalid_request' | 'unavailable' | 'file_name' | 'file_type' | 'file_too_large' | 'invalid_upload' | 'upload_expired' | 'upload_failed';
+export type PhoneFailure = 'permission_refused' | 'busy' | 'not_found' | 'not_authenticated' | 'missing_tools' | 'missing_plugins' | 'preset_changed' | 'model_unavailable' | 'invalid_request' | 'unavailable' | 'file_name' | 'file_type' | 'file_too_large' | 'invalid_upload' | 'upload_expired' | 'upload_failed';
 export declare class PhoneSessionError extends Error {
     readonly code: PhoneFailure;
     constructor(code: PhoneFailure, message?: string);
@@ -14,6 +14,11 @@ export interface PhoneSessionOps {
     configuration(sessionId?: string): Promise<unknown>;
     selectModel(request: PhoneModel & {
         sessionId: string;
+    }): Promise<unknown>;
+    /** Switches a session's permission preset as DSH's `/permission` does (src/phone-permission.ts). */
+    selectPermission(request: {
+        sessionId: string;
+        preset: string;
     }): Promise<unknown>;
     check(sessionId: string): Promise<void>;
     accepted(sessionId: string, requestId: string): boolean;

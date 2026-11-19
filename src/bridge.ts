@@ -20,6 +20,7 @@
  */
 import { z } from 'zod';
 import { PhoneSessionError, type PhoneSessionOps } from './phone-session.js';
+import { PRESET_NAME } from './phone-permission.js';
 import { PhoneUploads, uploadLimits, uploadSchemas } from './phone-uploads.js';
 import type { OwnerFilter } from './shared-owner.js';
 import { MAX_MESSAGE } from './secure-channel.js';
@@ -28,16 +29,41 @@ import { ROUTE_PREFIX, type FetchRoute } from './panel.js';
 /** Unary methods a phone may call. A test holds this list. */
 export const ALLOWED_CALLS: ReadonlySet<string> = new Set([
   'session/list', 'session/create', 'session/prompt', 'session/state', 'session/page', 'session/cancel',
-  'session/modelCatalog', 'teamwork/configuration', 'teamwork/selectModel',
+  'session/modelCatalog', 'teamwork/configuration', 'teamwork/selectModel', 'teamwork/selectPermission',
   'teamwork/uploadStart', 'teamwork/uploadChunk', 'teamwork/uploadFinish', 'teamwork/uploadCancel',
   'userQuestions/answer',
   '$events/result',
+  ...Object.keys(sessionActionSchemas()),
 ]);
 
 /** Streams a phone may open on the mux. A test holds this list. */
 export const ALLOWED_STREAMS: ReadonlySet<string> = new Set(['session/follow', '$events']);
 
 const MUX_PATH = '/api/remote.mux';
+
+/**
+ * What a phone may do to a session from its list, as DSH's own sidebar does: rename it, pin it, archive it. Each is
+ * DSH's own call, passed on only with exactly these fields, so `stopActivity` never reaches `archiveSession` and a
+ * running session's archive is refused (`workspace/session-active`) rather than stopping its work.
+ */
+function sessionActionSchemas() {
+  const sessionId = z.string().min(1).max(256);
+  const named = z.object({ sessionId }).strict();
+  return {
+    'session/rename': z.object({ sessionId, title: z.string().min(1).max(500) }).strict(),
+    'workspace/pinSession': named,
+    'workspace/unpinSession': named,
+    'workspace/archiveSession': named,
+    'workspace/unarchiveSession': named,
+  } as Record<string, z.ZodType>;
+}
+const SESSION_ACTIONS = sessionActionSchemas();
+
+/** Which of the member's sessions DSH's workspace registry pins and archives (its `pinnedSessionIds`, `archivedSessionIds`). */
+export interface SessionMarks {
+  pinned: readonly string[];
+  archived: readonly string[];
+}
 
 const callSchema = z.object({ t: z.literal('call'), pairingId: z.string(), id: z.string(), method: z.string(), body: z.unknown() });
 const muxSchema = z.object({ t: z.literal('mux'), pairingId: z.string(), body: z.unknown() });
@@ -69,6 +95,8 @@ export interface BridgeOptions {
   session?: PhoneSessionOps;
   /** On a shared DSH, whose sessions each pairing's member may reach (src/shared-owner.ts); none on a personal computer. */
   owners?: () => OwnerFilter | undefined;
+  /** The pin and archive sets `session/list` marks each item with, under `teamwork`; none while DSH has no registry. */
+  marks?: () => SessionMarks | undefined;
   /** The DSH workspace registered at exactly this folder, if any (see `session/create` in `call`). */
   workspaceAt?: (path: string) => string | undefined;
 }
@@ -171,6 +199,7 @@ export class Bridge {
     try {
       const operations = this.options.session;
       const request = (frame.body as { args?: { request?: unknown } } | null)?.args?.request;
+      if (Object.hasOwn(SESSION_ACTIONS, frame.method) && !SESSION_ACTIONS[frame.method]!.safeParse(request).success) throw new PhoneSessionError('invalid_request');
       if (Object.hasOwn(uploadSchemas, frame.method)) {
         if (!operations) return answer(503, { error: 'configuration_unsupported' });
         const input = uploadSchemas[frame.method as keyof typeof uploadSchemas].safeParse(request);
@@ -205,7 +234,9 @@ export class Bridge {
         if (!operations) return answer(503, { error: 'configuration_unsupported' });
         const schema = frame.method === 'teamwork/configuration'
           ? z.object({ sessionId: z.string().min(1).max(256).optional() }).strict()
-          : z.object({ sessionId: z.string().min(1).max(256), provider: z.string().min(1), model: z.string().min(1), reasoningEffort: z.string().optional() }).strict();
+          : frame.method === 'teamwork/selectPermission'
+            ? z.object({ sessionId: z.string().min(1).max(256), preset: z.string().regex(PRESET_NAME) }).strict()
+            : z.object({ sessionId: z.string().min(1).max(256), provider: z.string().min(1), model: z.string().min(1), reasoningEffort: z.string().optional() }).strict();
         const input = schema.safeParse(request);
         if (!input.success) throw new PhoneSessionError('invalid_request');
         await this.cookie(link, origin);
@@ -217,7 +248,9 @@ export class Bridge {
         if (this.links.get(frame.pairingId) !== link) throw new PhoneSessionError('not_found');
         const value = frame.method === 'teamwork/configuration'
           ? { ...await operations.configuration(input.data.sessionId) as object, uploads: uploadLimits }
-          : await operations.selectModel(input.data as Parameters<PhoneSessionOps['selectModel']>[0]);
+          : frame.method === 'teamwork/selectPermission'
+            ? await operations.selectPermission(input.data as Parameters<PhoneSessionOps['selectPermission']>[0])
+            : await operations.selectModel(input.data as Parameters<PhoneSessionOps['selectModel']>[0]);
         return answer(200, { result: { ok: true, value } });
       }
       let uploaded: string[] = [];
@@ -248,13 +281,28 @@ export class Bridge {
         for (const id of uploaded) this.uploads.cancel(frame.pairingId, promptSession, id);
       }
       const body = text ? parseJson(text) : null;
-      answer(response.status, owners && response.ok ? await owners.afterCall(frame.pairingId, frame.method, body) : body);
+      const kept = owners && response.ok ? await owners.afterCall(frame.pairingId, frame.method, body) : body;
+      answer(response.status, frame.method === 'session/list' && response.ok ? this.marked(kept) : kept);
     } catch (error) {
       if (error instanceof PhoneSessionError) return answer(200, { result: { ok: false, error: { code: `teamwork/${error.code}` } } });
       link.cookie = undefined;
       this.options.log?.('A phone request could not reach DSH', error);
       answer(502, { error: 'dsh_unreachable' });
     }
+  }
+
+  /** A `session/list` answer with each item's place in DSH's pin and archive sets, as `teamwork: { pinned, archived }`. */
+  private marked(body: unknown) {
+    const marks = this.options.marks?.();
+    const wire = body as { result?: { ok?: boolean; value?: { items?: unknown } } } | null;
+    const items = wire?.result?.value?.items;
+    if (!marks || !wire?.result?.ok || !Array.isArray(items)) return body;
+    const pinned = new Set(marks.pinned), archived = new Set(marks.archived);
+    const mark = (item: unknown) => {
+      const id = (item as { sessionId?: unknown } | null)?.sessionId;
+      return typeof id === 'string' ? { ...(item as object), teamwork: { pinned: pinned.has(id), archived: archived.has(id) } } : item;
+    };
+    return { ...wire, result: { ...wire.result, value: { ...wire.result.value, items: items.map(mark) } } };
   }
 
   private mux(pairingId: string, body: unknown) {
