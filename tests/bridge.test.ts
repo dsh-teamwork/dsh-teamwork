@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALLOWED_CALLS, ALLOWED_STREAMS, Bridge } from '../src/bridge';
+import { ALLOWED_CALLS, ALLOWED_STREAMS, Bridge, bridgeRoute } from '../src/bridge';
 import { MAX_MESSAGE } from '../src/secure-channel';
 import { PhoneSessionError, type PhoneSessionOps } from '../src/phone-session';
 
@@ -291,5 +291,22 @@ describe('the phone bridge', () => {
       expect(result.body.result.value.hasMore).toBe(true);
       expect(result.body.result.value.records.at(-1).seq).toBe(2999);
     });
+  });
+
+  it('answers a cloud computer\'s server on DSH\'s own route, through the same allow-list', async () => {
+    const selected: unknown[] = [];
+    const session: PhoneSessionOps = { accepted: () => false, configuration: async () => ({}), check: async () => {}, selectModel: async request => { selected.push(request); return { selected: request }; } };
+    const { b, sent } = bridge({ session });
+    const route = bridgeRoute(b);
+    expect(route).toMatchObject({ path: '/api/teamwork/bridge', methods: ['POST'] });
+    const post = async (body: unknown) => (await route.fetch(new Request('http://dsh/api/teamwork/bridge', { method: 'POST', body: JSON.stringify(body) }))).json();
+    expect(await post({ id: 'c1', method: 'teamwork/selectModel', body: { args: { request: { sessionId: 's1', provider: 'local', model: 'coder' } } } }))
+      .toMatchObject({ status: 200, body: { result: { ok: true } } });
+    expect(selected).toEqual([{ sessionId: 's1', provider: 'local', model: 'coder' }]);
+    expect(await post({ id: 'c2', method: 'session/selectModel', body: {} })).toEqual({ status: 403, body: { error: 'method_not_allowed' } });
+    expect(await post({ id: 'c3', method: 'session/list', body: { args: { _request: {} } } })).toMatchObject({ status: 200, body: { result: { ok: true, value: 'v' } } });
+    expect(await post({ method: 'session/list' })).toEqual({ status: 400, body: { error: 'invalid_request' } });
+    // Nothing goes out to a relay: the server reads the answer.
+    expect(sent).toEqual([]);
   });
 });

@@ -133,6 +133,17 @@ gaining or losing a token moves it, and losing one drops the cache. A 401/403
 still clears the token until the file changes. In this mode the relay is never
 opened, and sign-in, sign-out and server changes are refused: the server reaches
 a cloud computer itself, and the token belongs to the host, not a member.
+The server reaches it through DSH's own web server: streams on DSH's
+`/api/remote.mux`, and a phone's unary calls on `POST /api/teamwork/bridge`
+(`bridgeRoute` in `src/bridge.ts`), registered only in this mode. Its body is a
+relay `call` frame's `{ id, method, body }` and its answer the `result`'s
+`{ status, body }`, through the same allow-list and session operations, under
+the one pairing `cloud`; DSH's sign-in guards it as it guards `/api/`.
+A host in this mode may also name local MCP servers in `mcpServers`
+(`{ <name>: { command, args } }`, stdio): the plugin registers each with DSH's
+MCP manager (`ctx.mcpManager.register`) for its own lifetime, so they never
+replace the servers the owner configured in Settings. A cloud computer names
+its desktop's browser this way, Playwright's MCP server over CDP.
 
 ## Shared mode
 

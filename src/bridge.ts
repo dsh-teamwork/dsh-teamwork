@@ -13,12 +13,17 @@
  *   stream that pairing opened. Each pairing has its own loopback mux.
  * - Whatever goes back fits one message of the encrypted channel
  *   (`fitFrame`): a frame too large for it would close the channel.
+ *
+ * A cloud computer (the server's premium ADR 0051) is reached by the server,
+ * not the relay: its streams go straight to DSH's mux, and its unary calls to
+ * this bridge through `bridgeRoute`, behind DSH's own sign-in.
  */
 import { z } from 'zod';
 import { PhoneSessionError, type PhoneSessionOps } from './phone-session.js';
 import { PhoneUploads, uploadLimits, uploadSchemas } from './phone-uploads.js';
 import type { OwnerFilter } from './shared-owner.js';
 import { MAX_MESSAGE } from './secure-channel.js';
+import { ROUTE_PREFIX, type FetchRoute } from './panel.js';
 
 /** Unary methods a phone may call. A test holds this list. */
 export const ALLOWED_CALLS: ReadonlySet<string> = new Set([
@@ -113,10 +118,24 @@ export class Bridge {
   }
 
   private async call(frame: z.infer<typeof callSchema>) {
-    const output = (status: number, body: unknown) => {
-      const result = { t: 'result', pairingId: frame.pairingId, id: frame.id, status, body };
-      this.options.send(fitFrame(result) ?? { ...result, status: 502, body: { error: 'too_large' } });
-    };
+    const { status, body } = await this.answer(frame.pairingId, frame.id, frame.method, frame.body);
+    const result = { t: 'result', pairingId: frame.pairingId, id: frame.id, status, body };
+    this.options.send(fitFrame(result) ?? { ...result, status: 502, body: { error: 'too_large' } });
+  }
+
+  /**
+   * One unary call under `pairingId`, through the allow-list, and its answer: what the relay's `result` carries, and
+   * what a cloud computer's server reads from `POST /api/teamwork/bridge` (`bridgeRoute`).
+   */
+  async answer(pairingId: string, id: string, method: string, body: unknown): Promise<{ status: number; body: unknown }> {
+    const frame = { pairingId, id, method, body };
+    let output!: (status: number, body: unknown) => void;
+    const answered = new Promise<{ status: number; body: unknown }>((resolve) => { output = (status, body) => resolve({ status, body }); });
+    void this.run(frame, output);
+    return answered;
+  }
+
+  private async run(frame: { pairingId: string; id: string; method: string; body: unknown }, output: (status: number, body: unknown) => void) {
     const candidate = (frame.body as { args?: { request?: unknown } } | null)?.args?.request;
     const identity = frame.method === 'session/prompt' ? z.object({ sessionId: z.string().min(1).max(256), requestId: z.string().min(1).max(256) }).safeParse(candidate) : null;
     const key = identity?.success ? JSON.stringify([frame.pairingId, identity.data.sessionId, identity.data.requestId]) : null;
@@ -396,4 +415,27 @@ function shorten(value: unknown, cap: number): unknown {
   if (Array.isArray(value)) return value.map(item => shorten(item, cap));
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, shorten(item, cap)]));
   return value;
+}
+
+/** The pairing a cloud computer's server calls the bridge under: there is one, and no phone. */
+export const CLOUD_PAIRING = 'cloud';
+
+const routeCallSchema = z.object({ id: z.string().min(1).max(256), method: z.string().min(1).max(128), body: z.unknown() }).strict();
+
+/**
+ * `POST /api/teamwork/bridge` on DSH's own web server, registered only where a host provides the token (`tokenFile`):
+ * a cloud computer's server makes the calls a phone makes through the relay, `{ id, method, body }` as a `call`
+ * frame's, and reads `{ status, body }` as its `result`. DSH's sign-in guards it as it guards `/api/`.
+ */
+export function bridgeRoute(bridge: Bridge): FetchRoute {
+  return {
+    path: `${ROUTE_PREFIX}/bridge`,
+    methods: ['POST'],
+    requestBody: 'buffered',
+    async fetch(request) {
+      const input = routeCallSchema.safeParse(parseJson(await request.text()));
+      const answer = input.success ? await bridge.answer(CLOUD_PAIRING, input.data.id, input.data.method, input.data.body) : { status: 400, body: { error: 'invalid_request' } };
+      return new Response(JSON.stringify(answer), { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
+    },
+  };
 }

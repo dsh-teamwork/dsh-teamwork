@@ -13,10 +13,15 @@
  *   stream that pairing opened. Each pairing has its own loopback mux.
  * - Whatever goes back fits one message of the encrypted channel
  *   (`fitFrame`): a frame too large for it would close the channel.
+ *
+ * A cloud computer (the server's premium ADR 0051) is reached by the server,
+ * not the relay: its streams go straight to DSH's mux, and its unary calls to
+ * this bridge through `bridgeRoute`, behind DSH's own sign-in.
  */
 import { z } from 'zod';
 import { type PhoneSessionOps } from './phone-session.js';
 import type { OwnerFilter } from './shared-owner.js';
+import { type FetchRoute } from './panel.js';
 /** Unary methods a phone may call. A test holds this list. */
 export declare const ALLOWED_CALLS: ReadonlySet<string>;
 /** Streams a phone may open on the mux. A test holds this list. */
@@ -68,6 +73,15 @@ export declare class Bridge {
     private link;
     private drop;
     private call;
+    /**
+     * One unary call under `pairingId`, through the allow-list, and its answer: what the relay's `result` carries, and
+     * what a cloud computer's server reads from `POST /api/teamwork/bridge` (`bridgeRoute`).
+     */
+    answer(pairingId: string, id: string, method: string, body: unknown): Promise<{
+        status: number;
+        body: unknown;
+    }>;
+    private run;
     private mux;
     private muxNow;
     private openMux;
@@ -93,4 +107,12 @@ export declare class Bridge {
  * `session/page` reads back.
  */
 export declare function fitFrame<T>(frame: T): T | undefined;
+/** The pairing a cloud computer's server calls the bridge under: there is one, and no phone. */
+export declare const CLOUD_PAIRING = "cloud";
+/**
+ * `POST /api/teamwork/bridge` on DSH's own web server, registered only where a host provides the token (`tokenFile`):
+ * a cloud computer's server makes the calls a phone makes through the relay, `{ id, method, body }` as a `call`
+ * frame's, and reads `{ status, body }` as its `result`. DSH's sign-in guards it as it guards `/api/`.
+ */
+export declare function bridgeRoute(bridge: Bridge): FetchRoute;
 //# sourceMappingURL=bridge.d.ts.map
