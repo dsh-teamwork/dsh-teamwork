@@ -292,14 +292,16 @@ export class TeamworkClient {
 /**
  * Reconcile only registrations owned by this plugin, for every team at once. The host's local registry is never
  * enumerated or mutated. A registration is `team:<teamId>:<configId>`, and a team's new name re-registers its entries.
+ * Only presets are registered: a team model is already in the model picker through `platformAdapter`, and an
+ * empty preset that only selected it listed every model a second time in the mode menu.
  */
 export class TeamOverlay {
   private owned = new Map<string, { signature: string; dispose: () => Promise<void> }>();
-  constructor(private register: (id: string, config: TeamConfig, team: TeamSnapshot) => Promise<() => Promise<void>>) {}
+  constructor(private register: (id: string, preset: Extract<TeamConfig, { kind: 'preset' }>, team: TeamSnapshot) => Promise<() => Promise<void>>) {}
   private operations: Promise<void> = Promise.resolve();
   apply(snapshot?: Snapshot) { const next = this.operations.then(() => this.reconcile(snapshot)); this.operations = next.catch(() => {}); return next; }
   private async reconcile(snapshot?: Snapshot) {
-    const desired = new Map((snapshot?.teams ?? []).flatMap(team => team.configs.filter(c => c.kind !== 'plugin')
+    const desired = new Map((snapshot?.teams ?? []).flatMap(team => team.configs.filter((c): c is Extract<TeamConfig, { kind: 'preset' }> => c.kind === 'preset')
       .map(config => [`team:${team.teamId}:${config.id}` as string, { config, team, signature: JSON.stringify([team.teamName, config]) }] as const)));
     for (const [id, old] of this.owned) if (old.signature !== desired.get(id)?.signature) { await old.dispose(); this.owned.delete(id); }
     for (const [id, { config, team, signature }] of desired) if (!this.owned.has(id)) {

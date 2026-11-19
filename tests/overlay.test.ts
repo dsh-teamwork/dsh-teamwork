@@ -24,6 +24,13 @@ test('registers every team’s entries under its own team, and re-registers a te
   await overlay.apply({ teams: [team2] });
   expect([...registrations.keys()]).toEqual(['team:team2:p2']);
 });
+test('registers presets only: a team model stays in the model picker, not the mode menu', async () => {
+  const registered: string[] = [];
+  const overlay = new TeamOverlay(async id => { registered.push(id); return async () => {}; });
+  const model = { id: 'm1', name: 'Flash', kind: 'model' as const, version: 1, data: { provider: 'deepseek', model: 'chat', contextWindow: 65536 } };
+  await overlay.apply({ teams: [{ ...team1, configs: [...team1.configs, model] }] });
+  expect(registered).toEqual(['team:team1:p1']);
+});
 test('network and malformed replies preserve cache; revoked membership clears it', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'teamwork-')); const path = join(dir, 'cache.json'); let mode = 'ok';
   const request: typeof fetch = async (input) => {
