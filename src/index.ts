@@ -158,7 +158,9 @@ export async function apply(ctx: Context, config: Config) {
     return next();
   });
   ctx.inject(['tools'], child => registerAssistantTools(child, client, activePreset, () => configSync.sync(), async(id,version)=>{const item=pinnedPlugin(client.current(),id,version);if(!item)throw Error('Plugin version is unavailable');return installPlugin(item);}));
-  const configSync = new ConfigSync(client, overlay, config.autoSync ?? true, config.syncIntervalMs ?? 60000);
+  // The relay admits an account in at least one team; one it refused for being in none rejoins once a sync finds one.
+  const configSync = new ConfigSync(client, overlay, config.autoSync ?? true, config.syncIntervalMs ?? 60000,
+    () => { if (client.current()?.teams.length) relay.rejoin(); });
   /** Whether DSH offers a local model here, as its own catalogue decides: a provider with no key lists none. */
   const localCallable = async (selection: { provider: string; model: string }) => {
     if (!ctx.llm.listProviders().some(provider => provider.id === selection.provider)) return false;

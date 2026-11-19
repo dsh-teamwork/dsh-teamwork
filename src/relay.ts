@@ -94,6 +94,8 @@ export class RelayLink {
   /** Bumped by every refresh and stop, so a late callback of an older run changes nothing. */
   private run = 0;
   private hostId?: string;
+  /** Why the relay refused this computer: a token that names no team member can recover, a replaced socket cannot. */
+  private refusal?: number;
   private requests = new Map<string, { resolve(value: unknown): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }>();
 
   constructor(private readonly options: RelayLinkOptions) {}
@@ -109,6 +111,15 @@ export class RelayLink {
     if (!this.options.token()) return this.set('off');
     this.set('connecting');
     void this.connect(run);
+  }
+
+  /**
+   * After a sync found this account in a team: a relay that refused it as no member (it was in none, say after its
+   * last team was deleted) tries again. A computer replaced by another connection stays refused, so the two do not
+   * take turns kicking each other off.
+   */
+  rejoin() {
+    if (this.state === 'refused' && this.refusal === RELAY_CLOSE.unauthorized) this.refresh();
   }
 
   stop() {
@@ -224,7 +235,10 @@ export class RelayLink {
       if (run !== this.run || this.socket !== socket) return;
       this.socket = undefined;
       this.failRequests();
-      if (event.code === RELAY_CLOSE.unauthorized || event.code === RELAY_CLOSE.replaced) return this.set('refused');
+      if (event.code === RELAY_CLOSE.unauthorized || event.code === RELAY_CLOSE.replaced) {
+        this.refusal = event.code;
+        return this.set('refused');
+      }
       this.set('connecting');
       this.retry(run, this.backoff());
     });

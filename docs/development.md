@@ -215,7 +215,10 @@ read, and the header offers that page in place of Phone and Account.
 
 The hosted relay is optional and discovered through `GET /api/relay`. The host
 connects out over WebSocket using its in-memory token and `<cache>.host.json`
-identity. Logout disconnects it. Only confirmed pairings can reach allowlisted
+identity. Logout disconnects it. A relay that refuses the account as no team
+member (close 4401) stops the link until sign-in, or until a config sync finds a
+team; one replaced by another connection from this computer (4409) waits for
+sign-in only, so the two never take turns. Only confirmed pairings can reach allowlisted
 DSH calls. Headless-only hosts return 503. Pairing is account/host-wide, not
 limited by the panel's team filter. Model selection changes a session, not the
 computer's default. Notifications omit conversation/question contents and session IDs.
