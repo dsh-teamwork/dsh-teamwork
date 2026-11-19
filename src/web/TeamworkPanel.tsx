@@ -7,6 +7,7 @@ import qrcode from 'qrcode-generator';
 import type { Locale } from '../locale.js';
 import type { PanelPairingOffer, PanelPhone, PanelPlugin, PanelPreset, PanelShared, PanelState, PanelProfile, PanelSummary, PluginState, ToolState } from '../panel.js';
 import { api, HostUnreachable } from './api.js';
+import { PresetAvatar } from './PresetAvatar.js';
 import { currentSessionTracker, type Host } from './host.js';
 import { useT, Words, words, type PanelMessage, type Translate } from './messages.js';
 
@@ -629,7 +630,7 @@ function AssistantItem({ preset, team, state, dsh, run }: { preset: PanelPreset;
   return (
     <div className="twui-featured">
       <Item
-        icon="session"
+        media={<PresetAvatar avatar={preset.avatar} name={preset.name} />}
         title={<>{preset.name}<Badge tone="brand">{t('assistant.label')}</Badge></>}
         subtitle={team}
         description={t('assistant.body')}
@@ -654,7 +655,7 @@ function PresetItem({ preset, team, state, dsh, run, onInstall }: { preset: Pane
   const model = preset.model ?? t('preset.sessionModel');
   return (
     <Item
-      icon="layers"
+      media={<PresetAvatar avatar={preset.avatar} name={preset.name} />}
       title={preset.name}
       subtitle={team}
       description={preset.description || undefined}

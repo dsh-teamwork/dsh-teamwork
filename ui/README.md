@@ -40,7 +40,7 @@ Nothing is published yet: the plugin's browser bundle compiles it in.
 | `Icon` | The stroke icons the screens use (Lucide's paths), in `currentColor`. |
 | `Card`, `Banner` | A bordered surface; a block message with a tone, a title and one action. |
 | `UIRoot` | The theme root for anything that is not a `Panel`. |
-| `Item`, `ItemBody` | One entry in a list: an icon tile, title, subtitle, description, tags, actions, a notice, and a body below a divider. |
+| `Item`, `ItemBody` | One entry in a list: an icon tile (or the caller's own `media`), title, subtitle, description, tags, actions, a notice, and a body below a divider. |
 | `Confirm` | An inline confirmation for an action with consequences, in place of a modal. |
 | `EmptyState` | What an empty list means and, when there is one, what to do about it. |
 | `Button` | `primary`, `secondary`, `ghost`, `danger`; sizes `sm`, `md`, `lg`; a leading or trailing `Icon`; `busy` shows a spinner and blocks a second click. |
