@@ -280,6 +280,8 @@ export async function apply(ctx: Context, config: Config) {
         return { presets: phonePresets(state, [...roster.presets]), directories: directories(), teamDirectories: await teamDirectories(),
           // A session's permission preset and those a remote device may pick; none where DSH composes no presets.
           permissions: presets ? phonePermissions(presets, shared?.enabled === true, agent?.session) : null,
+          // A session's files can be browsed, read only (src/phone-files.ts).
+          files: true,
           current: agent ? {
           sessionId: String(agent.id), cwd: agent.session.header.cwd,
           agentPreset: ctx.agentPresets.presetForSession(agent.session), model: agent.model.current() ?? null,
@@ -314,6 +316,12 @@ export async function apply(ctx: Context, config: Config) {
         const run = await commandRegistry.execute(agent, `/permission ${request.preset}`, [], AbortSignal.timeout(10_000));
         if (!run || run.result.kind !== 'success') throw new PhoneSessionError('unavailable');
         return { current: presets.current(agent.session) };
+      },
+      async fileRoot(sessionId) {
+        const agent = sessionAgent(sessionId);
+        const cwd = agent?.session.header.cwd;
+        if (!cwd) throw new PhoneSessionError('not_found');
+        return cwd;
       },
       accepted(sessionId, requestId) {
         const agent = sessionAgent(sessionId);

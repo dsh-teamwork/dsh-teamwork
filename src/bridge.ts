@@ -21,6 +21,7 @@
 import { z } from 'zod';
 import { PhoneSessionError, type PhoneSessionOps } from './phone-session.js';
 import { PRESET_NAME } from './phone-permission.js';
+import { listDirectory, readText, searchFiles } from './phone-files.js';
 import { PhoneUploads, uploadLimits, uploadSchemas } from './phone-uploads.js';
 import type { OwnerFilter } from './shared-owner.js';
 import { MAX_MESSAGE } from './secure-channel.js';
@@ -30,6 +31,7 @@ import { ROUTE_PREFIX, type FetchRoute } from './panel.js';
 export const ALLOWED_CALLS: ReadonlySet<string> = new Set([
   'session/list', 'session/create', 'session/prompt', 'session/state', 'session/page', 'session/cancel',
   'session/modelCatalog', 'teamwork/configuration', 'teamwork/selectModel', 'teamwork/selectPermission',
+  'teamwork/listFiles', 'teamwork/searchFiles', 'teamwork/readFile',
   'teamwork/uploadStart', 'teamwork/uploadChunk', 'teamwork/uploadFinish', 'teamwork/uploadCancel',
   'userQuestions/answer',
   '$events/result',
@@ -58,6 +60,9 @@ function sessionActionSchemas() {
   } as Record<string, z.ZodType>;
 }
 const SESSION_ACTIONS = sessionActionSchemas();
+
+/** Reading a session's files, under its working directory (src/phone-files.ts). */
+const FILE_CALLS = new Set(['teamwork/listFiles', 'teamwork/searchFiles', 'teamwork/readFile']);
 
 /** Which of the member's sessions DSH's workspace registry pins and archives (its `pinnedSessionIds`, `archivedSessionIds`). */
 export interface SessionMarks {
@@ -232,12 +237,17 @@ export class Bridge {
       }
       if (frame.method.startsWith('teamwork/')) {
         if (!operations) return answer(503, { error: 'configuration_unsupported' });
-        const schema = frame.method === 'teamwork/configuration'
-          ? z.object({ sessionId: z.string().min(1).max(256).optional() }).strict()
-          : frame.method === 'teamwork/selectPermission'
-            ? z.object({ sessionId: z.string().min(1).max(256), preset: z.string().regex(PRESET_NAME) }).strict()
-            : z.object({ sessionId: z.string().min(1).max(256), provider: z.string().min(1), model: z.string().min(1), reasoningEffort: z.string().optional() }).strict();
-        const input = schema.safeParse(request);
+        const sessionId = z.string().min(1).max(256);
+        const schemas: Record<string, z.ZodType> = {
+          'teamwork/configuration': z.object({ sessionId: sessionId.optional() }).strict(),
+          'teamwork/selectPermission': z.object({ sessionId, preset: z.string().regex(PRESET_NAME) }).strict(),
+          'teamwork/listFiles': z.object({ sessionId, path: z.string().max(4096) }).strict(),
+          'teamwork/searchFiles': z.object({ sessionId, query: z.string().min(1).max(200) }).strict(),
+          'teamwork/readFile': z.object({ sessionId, path: z.string().min(1).max(4096) }).strict(),
+        };
+        const schema = schemas[frame.method]
+          ?? z.object({ sessionId, provider: z.string().min(1), model: z.string().min(1), reasoningEffort: z.string().optional() }).strict();
+        const input = schema.safeParse(request) as z.ZodSafeParseResult<{ sessionId?: string; path?: string; query?: string }>;
         if (!input.success) throw new PhoneSessionError('invalid_request');
         await this.cookie(link, origin);
         if (input.data.sessionId) {
@@ -246,6 +256,16 @@ export class Bridge {
           if (!admission.ok || !body.result?.ok) return answer(admission.status, body);
         }
         if (this.links.get(frame.pairingId) !== link) throw new PhoneSessionError('not_found');
+        // A session's files, read only and under its working directory (src/phone-files.ts).
+        if (FILE_CALLS.has(frame.method)) {
+          const root = await operations.fileRoot(input.data.sessionId!);
+          const read = frame.method === 'teamwork/listFiles' ? listDirectory(root, input.data.path!)
+            : frame.method === 'teamwork/searchFiles' ? searchFiles(root, input.data.query!)
+              : readText(root, input.data.path!);
+          // A file the system will not open (no permission, gone meanwhile) is one the member cannot reach.
+          const value = await read.catch((error: unknown) => { throw error instanceof PhoneSessionError ? error : new PhoneSessionError('not_found'); });
+          return answer(200, { result: { ok: true, value } });
+        }
         const value = frame.method === 'teamwork/configuration'
           ? { ...await operations.configuration(input.data.sessionId) as object, uploads: uploadLimits }
           : frame.method === 'teamwork/selectPermission'

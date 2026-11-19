@@ -1,6 +1,6 @@
 {
   "name": "@dsh-teamwork/dsh-teamwork",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "Shared team models, agent presets, and approved plugins for DeepSeek Harness",
   "icon": "icon.svg",
   "license": "Apache-2.0",

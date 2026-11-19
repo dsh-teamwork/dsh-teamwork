@@ -273,6 +273,18 @@ command in process (`commands.execute`), as DSH's picker does, so the switch is
 logged in the session; `teamwork/permission_refused` answers a preset that is
 not `allowed`.
 
+A session's files are read, never written, through `teamwork/listFiles`
+(`{ sessionId, path }`), `teamwork/searchFiles` (`{ sessionId, query }`, by
+name) and `teamwork/readFile` (`{ sessionId, path }`), all in
+`src/phone-files.ts` and all under the session's working directory: a path is
+resolved to its real path first, so neither `..`, an absolute path elsewhere
+nor a symbolic link reaches past it, and what does is `not_found`. DSH's own
+`workspaceFiles` reads beyond the workspace, so it is not passed on. A folder
+lists at most 500 entries, a search walks no link, `.git` or `node_modules`
+and returns at most 200 names, and a file gives its first 256 KiB as text; one
+with a NUL byte is `teamwork/not_text`. On a shared DSH they reach only the
+member's own sessions, like every call naming one.
+
 ## Publishing
 
 Update `package.json`, build and commit the matching `lib/`, and merge reviewed
