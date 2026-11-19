@@ -7,7 +7,7 @@ const team1 = { teamId: 'team1', teamName: 'Team one', role: 'member' as const, 
 const snapshot: Snapshot = { teams: [team1] };
 test('team updates and removal never touch a same-named local registration', async () => {
   const registrations = new Map<string, string>([['local', 'Same name']]); let count = 0;
-  const overlay = new TeamOverlay(async (id, config) => { if (registrations.has(id)) throw new Error('collision'); registrations.set(id, config.name); count++; return async () => { registrations.delete(id); }; });
+  const overlay = new TeamOverlay(async (id, config) => { if (registrations.has(id)) throw new Error('collision'); registrations.set(id, config.name); count++; return async () => { registrations.delete(id); }; }, () => {});
   await overlay.apply(snapshot); await overlay.apply(snapshot); expect(count).toBe(1);
   await overlay.apply({ teams: [{ ...team1, configs: [{ ...team1.configs[0]!, name: 'Updated', version: 2 }] }] });
   expect(registrations.get('local')).toBe('Same name'); expect(registrations.get('team:team1:p1')).toBe('Updated');
@@ -15,7 +15,7 @@ test('team updates and removal never touch a same-named local registration', asy
 });
 test('registers every team’s entries under its own team, and re-registers a team that was renamed', async () => {
   const registrations = new Map<string, string>();
-  const overlay = new TeamOverlay(async (id, config, team) => { registrations.set(id, `[${team.teamName}] ${config.name}`); return async () => { registrations.delete(id); }; });
+  const overlay = new TeamOverlay(async (id, config, team) => { registrations.set(id, `[${team.teamName}] ${config.name}`); return async () => { registrations.delete(id); }; }, () => {});
   const team2 = { teamId: 'team2', teamName: 'Team two', role: 'admin' as const, configs: [{ ...team1.configs[0]!, id: 'p2' }] };
   await overlay.apply({ teams: [team1, team2] });
   expect(Object.fromEntries(registrations)).toEqual({ 'team:team1:p1': '[Team one] Same name', 'team:team2:p2': '[Team two] Same name' });
@@ -26,7 +26,7 @@ test('registers every team’s entries under its own team, and re-registers a te
 });
 test('registers presets only: a team model stays in the model picker, not the mode menu', async () => {
   const registered: string[] = [];
-  const overlay = new TeamOverlay(async id => { registered.push(id); return async () => {}; });
+  const overlay = new TeamOverlay(async id => { registered.push(id); return async () => {}; }, () => {});
   const model = { id: 'm1', name: 'Flash', kind: 'model' as const, version: 1, data: { provider: 'deepseek', model: 'chat', contextWindow: 65536 } };
   await overlay.apply({ teams: [{ ...team1, configs: [...team1.configs, model] }] });
   expect(registered).toEqual(['team:team1:p1']);

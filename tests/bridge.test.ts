@@ -19,7 +19,7 @@ class FakeSocket {
 
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
-function bridge(options: { web?: boolean; expire?: boolean; session?: PhoneSessionOps; denied?: boolean; waitPrompt?: Promise<void>; upload?: boolean } = {}) {
+function bridge(options: { web?: boolean; expire?: boolean; session?: PhoneSessionOps; denied?: boolean; waitPrompt?: Promise<void>; upload?: boolean; workspaceAt?: (path: string) => string | undefined } = {}) {
   FakeSocket.made = [];
   const sent: any[] = [];
   const asked: Array<{ url: string; init?: RequestInit }> = [];
@@ -43,6 +43,7 @@ function bridge(options: { web?: boolean; expire?: boolean; session?: PhoneSessi
     request,
     WebSocket: FakeSocket as unknown as typeof WebSocket,
     session: options.session,
+    workspaceAt: options.workspaceAt,
   });
   return { b, sent, asked };
 }
@@ -208,6 +209,18 @@ describe('the phone bridge', () => {
       { sessionId: 'a', title: 'A', teamwork: { pinned: false, archived: false } },
       { sessionId: 'b', teamwork: { pinned: true, archived: false } },
       { sessionId: 'c', teamwork: { pinned: false, archived: true } },
+    ]);
+  });
+
+  it('starts a session in a folder that is a workspace as that workspace, so DSH lists it there', async () => {
+    const { b, asked } = bridge({ workspaceAt: path => path === '/work/alpha' ? 'ws-alpha' : undefined });
+    b.handle({ t: 'call', pairingId: 'p', id: 'c1', method: 'session/create', body: { args: { request: { cwd: '/work/alpha', agentPreset: 'team:t:p' } } } });
+    b.handle({ t: 'call', pairingId: 'p', id: 'c2', method: 'session/create', body: { args: { request: { cwd: '/home/me/Desktop' } } } });
+    for (let i = 0; i < 5; i++) await tick();
+    const payloads = asked.filter(a => a.url.endsWith('/api/session/create')).map(a => JSON.parse(String(a.init!.body)).payload);
+    expect(payloads).toEqual([
+      { args: { request: { agentPreset: 'team:t:p', workspaceId: 'ws-alpha' } } },
+      { args: { request: { cwd: '/home/me/Desktop' } } },
     ]);
   });
 

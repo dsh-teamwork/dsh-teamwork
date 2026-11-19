@@ -67,6 +67,8 @@ export interface BridgeOptions {
     owners?: () => OwnerFilter | undefined;
     /** The pin and archive sets `session/list` marks each item with, under `teamwork`; none while DSH has no registry. */
     marks?: () => SessionMarks | undefined;
+    /** The DSH workspace registered at exactly this folder, if any (see `session/create` in `call`). */
+    workspaceAt?: (path: string) => string | undefined;
 }
 export declare class Bridge {
     private readonly options;

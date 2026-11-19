@@ -1,8 +1,9 @@
 /**
  * Each team's default workspace on this computer: the folder a session started from a phone or the web console lands
- * in when its member does not pick one. Until the member picks one in the panel, a team's default is the directory DSH
- * was started in, so every synced team has one. A default is only ever one of the directories a session may start in
- * (`startDirectories`, src/shared-owner.ts); a saved one that DSH no longer offers falls back to the first of them.
+ * in when its member does not pick one. Until the member picks one in the panel, a team's default is the fallback the
+ * caller names: one of DSH's workspaces where there is one, so its sessions are listed under it rather than Ungrouped.
+ * A default is only ever one of the directories a session may start in (`startDirectories`, src/shared-owner.ts); a
+ * saved one that DSH no longer offers falls back too.
  *
  * The file (`<cache>.workspaces.json`, mode 0600) keeps only the choices the member made, by team id.
  */
@@ -27,13 +28,13 @@ export class TeamWorkspaces {
     ));
   }
 
-  /** Every listed team's default among `directories`, the first of which is where DSH was started. */
-  async defaults(teamIds: readonly string[], directories: readonly string[]): Promise<Record<string, string>> {
+  /** Every listed team's default among `directories`: its saved choice, else `fallback`. */
+  async defaults(teamIds: readonly string[], directories: readonly string[], fallback: string | undefined): Promise<Record<string, string>> {
     const saved = await this.load();
     const result: Record<string, string> = {};
     for (const id of teamIds) {
       const choice = saved[id];
-      const path = choice !== undefined && directories.includes(choice) ? choice : directories[0];
+      const path = choice !== undefined && directories.includes(choice) ? choice : fallback;
       if (path !== undefined) result[id] = path;
     }
     return result;

@@ -11,12 +11,12 @@ export function apply(ctx) {
       await writeFile(process.env.TEAMWORK_TEST_CACHE, JSON.stringify({ teams: [snapshot] })); await ctx.dshTeamwork.reload();
       await ctx.agents.create({ sessionId: 'plain-' + process.pid, meta: { cwd: process.env.TEAMWORK_TEST_CWD } });
       const agent = ctx.agents.get('plain-' + process.pid);
-      assert.deepEqual(agent.model.current(), { provider: 'teamwork-platform', model: 'm1' });
+      assert.deepEqual(agent.model.current(), { provider: 'teamwork-platform-host-smoke', model: 'm1' });
       // DSH's own default model, which has no key on a cloud computer, is replaced too.
       await ctx.agents.create({ sessionId: 'keyless-' + process.pid, meta: { cwd: process.env.TEAMWORK_TEST_CWD }, agentOptions: { provider: 'deepseek-official', model: 'deepseek-flash' } });
       const keyless = ctx.agents.get('keyless-' + process.pid);
-      for (let i = 0; i < 50 && keyless.model.current()?.provider !== 'teamwork-platform'; i++) await new Promise(resolve => setTimeout(resolve, 100));
-      assert.deepEqual(keyless.model.current(), { provider: 'teamwork-platform', model: 'm1' });
+      for (let i = 0; i < 50 && keyless.model.current()?.provider !== 'teamwork-platform-host-smoke'; i++) await new Promise(resolve => setTimeout(resolve, 100));
+      assert.deepEqual(keyless.model.current(), { provider: 'teamwork-platform-host-smoke', model: 'm1' });
       await reportResult({ passed: true, checks: ['cloud session defaults to the team model', 'a keyless default model is replaced by the team model'] });
     } catch (error) { await reportResult({ passed: false, error: String(error), stack: error.stack }); }
   }, 3000);

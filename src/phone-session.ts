@@ -1,5 +1,6 @@
 /** The paired phone's session configuration, with no credentials or desktop-default mutation. */
 import type { PanelState } from './panel.js';
+import { teamProvider } from './platform-models.js';
 
 export type PhoneFailure = 'permission_refused' | 'busy' | 'not_found' | 'not_authenticated' | 'missing_tools' | 'missing_plugins' | 'preset_changed' | 'model_unavailable' | 'invalid_request' | 'unavailable' | 'file_name' | 'file_type' | 'file_too_large' | 'invalid_upload' | 'upload_expired' | 'upload_failed';
 export class PhoneSessionError extends Error {
@@ -21,7 +22,7 @@ export function phonePresets(state: PanelState, roster: { id: string; name?: str
     const team = state.presets.find(preset => `team:${preset.teamId}:${preset.id}` === row.id);
     return {
       id: row.id, name: team?.name ?? row.name ?? row.id, description: row.description ?? '', isDefault: row.isDefault,
-      ...(team ? { teamId: team.teamId, teamName: team.teamName, version: team.version, ...(team.avatar ? { avatar: team.avatar } : {}), model: { provider: 'teamwork-platform', model: team.id } } : {}),
+      ...(team ? { teamId: team.teamId, teamName: team.teamName, version: team.version, ...(team.avatar ? { avatar: team.avatar } : {}), model: { provider: teamProvider(team.teamId), model: team.id } } : {}),
       blocked: row.broken ? 'preset_unavailable' : team && !team.modelAvailable ? 'model_unavailable' : team?.plugins.some(plugin => plugin.state !== 'ready') ? 'missing_plugins' : team?.tools.some(tool => tool.required && tool.state === 'missing') ? 'missing_tools' : null,
       tools: team?.tools ?? [], dependencies: team?.plugins.map(plugin => ({ name: plugin.name, version: plugin.version, state: plugin.state })) ?? [],
     };

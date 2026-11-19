@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { findConfig, modelLimitProblem, TeamworkClient, unsizedModel } from '../src/client.js';
-import { platformAdapter, platformProvider } from '../src/platform-models.js';
+import { platformAdapter, teamProvider, teamRoutes } from '../src/platform-models.js';
 test('team model uses platform only, with session credential and opaque config ID', async () => {
   let authorization = '', wire: any, path = '';
   const server = createServer(async (req, res) => {
@@ -21,17 +21,17 @@ test('team model uses platform only, with session credential and opaque config I
   try {
     client.beginLogin(); await client.completeLogin('code'); await client.sync();
     const adapter = platformAdapter(client);
-    const info = await adapter.resolveModel(platformProvider, 'config1');
+    const info = await adapter.resolveModel(teamProvider('t'), 'config1');
     expect(info.context?.contextWindow).toBe(131072);
     expect(info.inputModalities).toEqual(['text', 'image']);
     expect(client.current()?.teams[0]?.configs[0]?.data).toMatchObject({ vision: true });
-    expect((await adapter.listModels(platformProvider))[0]?.id).toBe('config1');
+    expect((await adapter.listModels(teamProvider('t')))[0]?.id).toBe('config1');
     let text = ''; const chunks = [];
-    for await (const chunk of adapter.stream({provider:platformProvider,model:'config1',messages:[{role:'user',content:[{type:'text',text:'Hello'}]}]})) { chunks.push(chunk); if(chunk.type==='text-delta') text+=chunk.text; }
+    for await (const chunk of adapter.stream({provider:teamProvider('t'),model:'config1',messages:[{role:'user',content:[{type:'text',text:'Hello'}]}]})) { chunks.push(chunk); if(chunk.type==='text-delta') text+=chunk.text; }
     expect(text, JSON.stringify(chunks)).toBe('OK');
     expect(path).toBe('/api/llm/chat/completions'); expect(authorization).toBe('Bearer platform-session-only'); expect(wire.model).toBe('config1'); expect(wire.max_tokens ?? wire.max_completion_tokens).toBe(8192);
     await client.logout();
-    await expect((async () => { for await (const chunk of adapter.stream({provider:platformProvider,model:'config1',messages:[]})) { if(chunk.type==='finish' && chunk.reason.kind==='error') throw new Error('unauthorized'); } })()).rejects.toThrow();
+    await expect((async () => { for await (const chunk of adapter.stream({provider:teamProvider('t'),model:'config1',messages:[]})) { if(chunk.type==='finish' && chunk.reason.kind==='error') throw new Error('unauthorized'); } })()).rejects.toThrow();
   } finally { server.closeAllConnections(); await new Promise<void>(resolve=>server.close(()=>resolve())); await rm(dir,{recursive:true,force:true}); }
 });
 test('a team model without its context window is not offered, and says why', async () => {
@@ -47,8 +47,8 @@ test('a team model without its context window is not offered, and says why', asy
   try {
     client.beginLogin(); await client.completeLogin('code'); await client.sync();
     const adapter = platformAdapter(client);
-    expect((await adapter.listModels(platformProvider)).map(m => m.id)).toEqual(['sized']);
-    expect((await adapter.resolveModel(platformProvider, 'sized')).context?.contextWindow).toBe(131072);
+    expect((await adapter.listModels(teamProvider('t'))).map(m => m.id)).toEqual(['sized']);
+    expect((await adapter.resolveModel(teamProvider('t'), 'sized')).context?.contextWindow).toBe(131072);
     const snapshot = client.current()!, config = (id: string) => findConfig(snapshot, id)!;
     expect(modelLimitProblem(snapshot, config('sized'))).toBeUndefined();
     expect(modelLimitProblem(snapshot, config('inherits'))).toBeUndefined();
@@ -56,5 +56,26 @@ test('a team model without its context window is not offered, and says why', asy
     expect(unsizedModel(snapshot, config('uses-unsized'))).toBe('DeepSeek Flash');
     expect(unsizedModel(snapshot, config('legacy'))).toBe('openai/gpt');
     expect(modelLimitProblem(snapshot, config('unsized'))).toContain('“DeepSeek Flash” has no context window');
+  } finally { await rm(dir,{recursive:true,force:true}); }
+});
+test('each team is its own provider, named for the team, and the routes follow the teams', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'platform-teams-'));
+  const model = (id: string) => ({id,kind:'model',name:'MiniMax-M3',version:1,data:{provider:'minimax',model:'m3',contextWindow:131072}});
+  let teams = [{teamId:'a',teamName:'Alpha',role:'member',configs:[model('ma')]},{teamId:'b',teamName:'Beta',role:'admin',configs:[model('mb')]}];
+  const client = new TeamworkClient('http://127.0.0.1:9', join(dir,'cache'), async input => Response.json(String(input).endsWith('/auth/plugin/token') ? {token:'t'} : {teams}));
+  const registered: string[][] = [], replaced: string[][] = []; let released = 0;
+  const llm = { registerAdapter: (providers: string[]) => { registered.push(providers); return Object.assign(() => { released++; }, { replace: (next: string[]) => { replaced.push(next); } }); } };
+  try {
+    const adapter = platformAdapter(client), routes = teamRoutes(llm, client, adapter);
+    routes.sync(); expect(registered).toEqual([]);
+    client.beginLogin(); await client.completeLogin('code'); await client.sync(); routes.sync();
+    expect(registered).toEqual([[teamProvider('a'), teamProvider('b')]]);
+    expect(adapter.providerInfo(teamProvider('a')).name).toBe('Alpha');
+    expect((await adapter.listModels(teamProvider('a'))).map(m => m.id)).toEqual(['ma']);
+    expect((await adapter.listModels(teamProvider('b'))).map(m => m.id)).toEqual(['mb']);
+    teams = [teams[1]!]; await client.sync(); routes.sync();
+    expect(replaced).toEqual([[teamProvider('b')]]);
+    await client.logout(); routes.sync(); expect(replaced.at(-1)).toEqual([]);
+    routes.dispose(); expect(released).toBe(1);
   } finally { await rm(dir,{recursive:true,force:true}); }
 });

@@ -2,8 +2,12 @@ import { PiAiAdapter, type ResolvedPiAiProviderProfile } from '@deepseek-ai/dsh-
 import { resolveRetryPolicy } from '@deepseek-ai/dsh-llm';
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy';
 import type { Model } from '@earendil-works/pi-ai';
-import { allConfigs, modelData, type TeamworkClient, type Snapshot } from './client.js';
-export const platformProvider = 'teamwork-platform';
+import type { AdapterRegistrationHandle, LlmAdapter } from '@deepseek-ai/dsh-llm';
+import { modelData, type TeamworkClient, type Snapshot } from './client.js';
+const prefix = 'teamwork-platform-';
+/** Each team is its own provider route, so DSH's model menu groups a team's models under the team's name. */
+export const teamProvider = (teamId: string) => prefix + teamId;
+export const isTeamProvider = (provider: string | undefined) => !!provider?.startsWith(prefix);
 /** Provider credentials never exist here: the adapter authenticates only to platform. */
 export function platformAdapter(client: TeamworkClient) {
   let previous: Snapshot | undefined;
@@ -15,28 +19,31 @@ export function platformAdapter(client: TeamworkClient) {
       if (snapshot === previous) return profiles;
       previous = snapshot;
       const baseUrl = `${client.endpoint.replace(/\/$/, '')}/api/llm`;
-      // A model without its contextWindow is not offered at all (see modelLimitProblem); the plugin says why.
-      const models: Model<'openai-completions'>[] = allConfigs(snapshot).flatMap(c => {
-        const data = c.kind === 'plugin' ? undefined : modelData(snapshot!, c);
-        if (data?.contextWindow === undefined) return [];
-        return [{
-          id: c.id, name: c.name, provider: platformProvider, api: 'openai-completions' as const, baseUrl,
-          reasoning: false, input: 'vision' in data && data.vision ? ['text' as const, 'image' as const] : ['text' as const], contextWindow: data.contextWindow, maxTokens: data.maxTokens ?? Math.min(4096, data.contextWindow),
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        }];
-      });
-      profiles = new Map([[platformProvider, {
-        provider: platformProvider, displayName: 'Teamwork Platform', api: 'openai-completions', baseURL: baseUrl,
-        streamIdleTimeoutMs: 120000, maxRequestImageBytes: 1048576, maxRequestImages: 1,
-        imageOffloadCountQuantum: 1, requestImagePixelBudget: 1048576, requestImageMaxBytes: 1048576,
-        retryPolicy: resolveRetryPolicy({ mode: 'normal', maxRetries: 0 }, 'teamwork-platform'), modelErrors: new Map(), configuredMaxTokens: new Map(models.map(m => [m.id, m.maxTokens])),
-        piProvider: { id: platformProvider, name: 'Teamwork Platform', baseUrl,
-          auth: { apiKey: { name: 'Platform session', resolve: async ({ credential }) => ({ auth: { apiKey: credential?.key }, source: 'Platform session' }) } },
-          getModels: () => models,
-          stream: (model, context, options) => api.stream(model, context, options),
-          streamSimple: (model, context, options) => api.streamSimple(model, context, options),
-        },
-      }]]);
+      profiles = new Map((snapshot?.teams ?? []).map(team => {
+        const provider = teamProvider(team.teamId);
+        // A model without its contextWindow is not offered at all (see modelLimitProblem); the plugin says why.
+        const models: Model<'openai-completions'>[] = team.configs.flatMap(c => {
+          const data = c.kind === 'plugin' ? undefined : modelData(snapshot!, c);
+          if (data?.contextWindow === undefined) return [];
+          return [{
+            id: c.id, name: c.name, provider, api: 'openai-completions' as const, baseUrl,
+            reasoning: false, input: 'vision' in data && data.vision ? ['text' as const, 'image' as const] : ['text' as const], contextWindow: data.contextWindow, maxTokens: data.maxTokens ?? Math.min(4096, data.contextWindow),
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          }];
+        });
+        return [provider, {
+          provider, displayName: team.teamName, api: 'openai-completions', baseURL: baseUrl,
+          streamIdleTimeoutMs: 120000, maxRequestImageBytes: 1048576, maxRequestImages: 1,
+          imageOffloadCountQuantum: 1, requestImagePixelBudget: 1048576, requestImageMaxBytes: 1048576,
+          retryPolicy: resolveRetryPolicy({ mode: 'normal', maxRetries: 0 }, provider), modelErrors: new Map(), configuredMaxTokens: new Map(models.map(m => [m.id, m.maxTokens])),
+          piProvider: { id: provider, name: team.teamName, baseUrl,
+            auth: { apiKey: { name: 'Platform session', resolve: async ({ credential }) => ({ auth: { apiKey: credential?.key }, source: 'Platform session' }) } },
+            getModels: () => models,
+            stream: (model, context, options) => api.stream(model, context, options),
+            streamSimple: (model, context, options) => api.streamSimple(model, context, options),
+          },
+        } satisfies ResolvedPiAiProviderProfile] as const;
+      }));
       return profiles;
     },
     resolveApiKey: async () => client.platformCredential(),
@@ -45,4 +52,20 @@ export function platformAdapter(client: TeamworkClient) {
       authContext: { env: async () => undefined, fileExists: async () => false },
     },
   });
+}
+
+/**
+ * Keeps DSH's routes equal to the synced teams: one per team, replaced as teams are joined or left. DSH refuses an
+ * empty first registration, so the first is made once there is a team.
+ */
+export function teamRoutes(llm: { registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle }, client: TeamworkClient, adapter: LlmAdapter) {
+  let handle: AdapterRegistrationHandle | undefined;
+  return {
+    sync() {
+      const providers = (client.current()?.teams ?? []).map(team => teamProvider(team.teamId));
+      if (handle) handle.replace(providers);
+      else if (providers.length) handle = llm.registerAdapter(providers, adapter);
+    },
+    dispose() { handle?.(); handle = undefined; },
+  };
 }

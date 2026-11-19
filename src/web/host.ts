@@ -22,7 +22,23 @@ export interface Host {
   layout: { selectPanel(id: string | null): void };
   /** `ctx.uiWorkspace` (`@deepseek-ai/dsh-client-ui-workspace`). */
   uiWorkspace: { startSession(workspaceId?: string, options?: { agentPreset?: string }): void };
+  /** `ctx.workspaces` (`@deepseek-ai/dsh-api-workspace-controller`): DSH's own workspaces, by id and folder. */
+  workspaces: { list: Observable<{ items: readonly Workspace[] }> };
 }
+
+export interface Workspace { workspaceId: string; path: string; title: string }
+
+/**
+ * Renders another plugin's Component Factory, as DSH hands it to a slot's occupant. The panel uses
+ * `workspace.picker` (`@deepseek-ai/dsh-client-ui-workspace`): DSH's workspace menu with "Add workspace…".
+ */
+export type RenderFactorySlot = (name: 'workspace.picker', props: {
+  open: boolean; anchorRef?: { current: HTMLElement | null }; selectedId?: string; onPick(workspaceId: string): void; onClose(): void;
+}) => unknown;
+
+/** The DSH workspace at exactly this folder, if the folder is one. */
+export const workspaceAt = (dsh: Pick<Host, 'workspaces'>, path: string | null | undefined) =>
+  path ? dsh.workspaces.list.getSnapshot().items.find(workspace => workspace.path === path) : undefined;
 
 export const PANEL_ID = 'dsh-teamwork';
 
