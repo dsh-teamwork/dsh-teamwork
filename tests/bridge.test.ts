@@ -51,7 +51,8 @@ describe('the phone bridge', () => {
   it('holds the allow-list', () => {
     expect([...ALLOWED_CALLS].sort()).toEqual([
       '$events/result', 'session/cancel', 'session/create', 'session/list', 'session/modelCatalog', 'session/page',
-      'session/prompt', 'session/state', 'teamwork/configuration', 'teamwork/selectModel', 'teamwork/uploadCancel', 'teamwork/uploadChunk', 'teamwork/uploadFinish', 'teamwork/uploadStart', 'userQuestions/answer',
+      'session/prompt', 'session/rename', 'session/state', 'teamwork/configuration', 'teamwork/selectModel', 'teamwork/uploadCancel', 'teamwork/uploadChunk', 'teamwork/uploadFinish', 'teamwork/uploadStart', 'userQuestions/answer',
+      'workspace/archiveSession', 'workspace/pinSession', 'workspace/unarchiveSession', 'workspace/unpinSession',
     ]);
     expect([...ALLOWED_STREAMS].sort()).toEqual(['$events', 'session/follow']);
   });
@@ -163,6 +164,37 @@ describe('the phone bridge', () => {
     const cookies = calls.map(c => (c.init!.headers as Record<string, string>).cookie);
     expect(cookies).toEqual(['dsh=peer-1', 'dsh=peer-1', 'dsh=peer-2']);
     expect(sent).toContainEqual({ t: 'result', pairingId: 'p', id: 'c1', status: 200, body: { type: 'client-response', result: { ok: true, value: 'v' } } });
+  });
+
+  it('passes a rename, pin or archive on with exactly its fields, and nothing else of the kind', async () => {
+    const { b, sent, asked } = bridge();
+    b.handle({ t: 'call', pairingId: 'p', id: 'ok', method: 'session/rename', body: { args: { request: { sessionId: 's1', title: 'Release notes' } } } });
+    b.handle({ t: 'call', pairingId: 'p', id: 'pin', method: 'workspace/pinSession', body: { args: { request: { sessionId: 's1' } } } });
+    // Archiving never stops a running session's work from a phone, and a title is never empty.
+    b.handle({ t: 'call', pairingId: 'p', id: 'stop', method: 'workspace/archiveSession', body: { args: { request: { sessionId: 's1', stopActivity: true } } } });
+    b.handle({ t: 'call', pairingId: 'p', id: 'empty', method: 'session/rename', body: { args: { request: { sessionId: 's1', title: '' } } } });
+    b.handle({ t: 'call', pairingId: 'p', id: 'other', method: 'workspace/delete', body: { args: { request: { workspaceId: 'w' } } } });
+    for (let i = 0; i < 6; i++) await tick();
+    expect(asked.filter(a => a.url.includes('/api/')).map(a => a.url)).toEqual(['http://127.0.0.1:3080/api/session/rename', 'http://127.0.0.1:3080/api/workspace/pinSession']);
+    expect(sent).toContainEqual({ t: 'result', pairingId: 'p', id: 'stop', status: 200, body: { result: { ok: false, error: { code: 'teamwork/invalid_request' } } } });
+    expect(sent).toContainEqual({ t: 'result', pairingId: 'p', id: 'empty', status: 200, body: { result: { ok: false, error: { code: 'teamwork/invalid_request' } } } });
+    expect(sent).toContainEqual({ t: 'result', pairingId: 'p', id: 'other', status: 403, body: { error: 'method_not_allowed' } });
+  });
+
+  it('marks each listed session with its place in the pin and archive sets', async () => {
+    const sent: any[] = [];
+    const items = [{ sessionId: 'a', title: 'A' }, { sessionId: 'b' }, { sessionId: 'c' }];
+    const request = (async (url: string) => url.includes('/connect?')
+      ? new Response(null, { status: 302, headers: { 'set-cookie': 'dsh=peer; Path=/' } })
+      : new Response(JSON.stringify({ type: 'client-response', result: { ok: true, value: { items } } }))) as typeof fetch;
+    const b = new Bridge({ launchUrl: () => 'http://127.0.0.1:3080/?token=t', send: (frame) => sent.push(frame), request, marks: () => ({ pinned: ['b'], archived: ['c'] }) });
+    b.handle({ t: 'call', pairingId: 'p', id: 'l', method: 'session/list', body: { args: { _request: {} } } });
+    for (let i = 0; i < 4; i++) await tick();
+    expect(sent[0].body.result.value.items).toEqual([
+      { sessionId: 'a', title: 'A', teamwork: { pinned: false, archived: false } },
+      { sessionId: 'b', teamwork: { pinned: true, archived: false } },
+      { sessionId: 'c', teamwork: { pinned: false, archived: true } },
+    ]);
   });
 
   it('mints a new identity once when DSH no longer knows the old one', async () => {

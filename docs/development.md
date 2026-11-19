@@ -246,6 +246,18 @@ transfer state, not stored DSH objects or workspace files. Native file receipts 
 stable request IDs support deduplication. Ordinary files are supported; image input
 and document extraction are not implemented in this slice.
 
+A session's list row offers what DSH's own sidebar does that fits a phone:
+`session/rename`, and `workspace/pinSession`, `unpinSession`, `archiveSession`
+and `unarchiveSession`, each passed on only as `{ sessionId }` (a rename adds
+`title`), so `stopActivity` never reaches DSH and a running session's archive
+is refused as `workspace/session-active`. `session/list` marks every item with
+`teamwork: { pinned, archived }` from DSH's workspace registry
+(`pinnedSessionIds`, `archivedSessionIds`); a client hides the actions where an
+item has no mark, an older plugin's list. On a shared DSH each action, like any
+call naming a session, reaches only the member's own sessions, though pins and
+archives land in the DSH's one registry, seen at its keyboard as well. Forking
+and opening a session in another app stay on the desktop.
+
 ## Publishing
 
 Update `package.json`, build and commit the matching `lib/`, and merge reviewed

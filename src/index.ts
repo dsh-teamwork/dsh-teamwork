@@ -37,6 +37,13 @@ import { panelLocale, say, setLocale, speaking } from './messages.js';
 import { controlSocketPath, serveControlSocket } from './control-socket.js';
 export const name = 'dsh-teamwork';
 export const inject = ['agentPresets', 'agents', 'llm', 'sessionProjections'];
+
+/** What the plugin reads of DSH's workspace registry: its workspaces, and its pin and archive sets (src/bridge.ts). */
+interface WorkspaceRegistry {
+  list(): { path: string }[];
+  readonly pinnedSessionIds: readonly string[];
+  readonly archivedSessionIds: readonly string[];
+}
 export interface Config { apiEndpoint: string; cachePath: string; autoSync?: boolean; syncIntervalMs?: number; tokenFile?: string; mcpServers?: Record<string, { command: string; args: string[] }>; }
 /** The hosted service. A member can pick another server in the panel; the profile's `apiEndpoint` sets the default. */
 export const DEFAULT_SERVER = 'https://www.dshteamwork.com';
@@ -216,10 +223,10 @@ export async function apply(ctx: Context, config: Config) {
    * Where a session may be started from a phone or the console: the directory DSH was started in, then DSH's own
    * workspaces. A new device, or a member of a shared DSH with no session yet, has no other way to name one.
    */
-  let workspaces: { list(): { path: string }[] } | undefined;
+  let workspaces: WorkspaceRegistry | undefined;
   ctx.inject(['workspaceRegistry'], (scoped) => {
     scoped.effect(() => {
-      workspaces = (scoped as unknown as { workspaceRegistry: { list(): { path: string }[] } }).workspaceRegistry;
+      workspaces = (scoped as unknown as { workspaceRegistry: WorkspaceRegistry }).workspaceRegistry;
       return () => { workspaces = undefined; };
     });
   });
@@ -234,6 +241,10 @@ export async function apply(ctx: Context, config: Config) {
   const bridge = new Bridge({
     launchUrl: () => launchUrl?.(),
     owners: () => shared?.enabled ? owners : undefined,
+    // A registry that has not opened yet has no sets to read: the list goes unmarked, as from an older DSH.
+    marks: () => {
+      try { return workspaces && { pinned: workspaces.pinnedSessionIds, archived: workspaces.archivedSessionIds }; } catch { return undefined; }
+    },
     send: (frame) => { audit(frame, 'out'); security.send(frame); },
     log: (message, error) => ctx.logger.warn('%s: %s', message, (error as Error | undefined)?.message ?? ''),
     session: {
