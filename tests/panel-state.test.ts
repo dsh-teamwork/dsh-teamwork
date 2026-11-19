@@ -17,6 +17,7 @@ test('a panel request reads one inventory for every preset and sees changes on t
   const snapshot = { teams: [{ teamId: 'team', teamName: 'Team', role: 'member', configs }] };
   await writeFile(cachePath, JSON.stringify(snapshot));
   let enabled = true;
+  const registry = { items: [] as { id: string; path: string; title: string }[], list() { return this.items; } };
   const manager = {
     listBundles: vi.fn(async () => [{ name: 'fixture', version: '1.0.0', availability: 'profile', enabled, rows: [{ entryId: 'entry' }] }]),
     listPlugins: vi.fn(async () => [{ entryId: 'entry', enabled, fiberPhase: 'active' }]),
@@ -35,7 +36,10 @@ test('a panel request reads one inventory for every preset and sees changes on t
     on: () => () => {},
     effect: (fn: () => (() => unknown)) => { cleanup.push(fn()); },
     connection: { fetch: { register: (route: FetchRoute) => { routes.set(route.path, route); return async () => {}; } } },
-    inject: (names: string[], fn: (ctx: unknown) => void) => { if (names.length === 1 && names[0] === 'connection') fn(ctx); },
+    inject: (names: string[], fn: (ctx: unknown) => void) => {
+      if (names.length === 1 && names[0] === 'connection') fn(ctx);
+      if (names.length === 1 && names[0] === 'workspaceRegistry') fn({ workspaceRegistry: registry, effect: ctx.effect });
+    },
   };
   try {
     await apply(ctx, { apiEndpoint: 'http://localhost:3800', cachePath, autoSync: false });
@@ -44,8 +48,15 @@ test('a panel request reads one inventory for every preset and sees changes on t
       expect(response.status).toBe(200);
       return response.json();
     };
+    // A team that never chose lands in DSH's own default workspace, else DSH's first, so its sessions are grouped.
+    registry.items = [{ id: 'w1', path: '/work/first', title: 'first' }, { id: 'w2', path: '/docs/deepseek-harness/default-workspace', title: 'default-workspace' }];
+    expect((await read()).teams.map(t => t.workspace)).toEqual(['/docs/deepseek-harness/default-workspace']);
+    registry.items = registry.items.slice(0, 1);
+    expect((await read()).teams.map(t => t.workspace)).toEqual(['/work/first']);
+    registry.items = [];
+    manager.listBundles.mockClear(); manager.listPlugins.mockClear();
     const first = await read();
-    // Every synced team starts with the folder DSH was started in as its default workspace.
+    // With no DSH workspace, it starts in the folder DSH was started in.
     const started = realpathSync(process.cwd());
     expect(first.teams.map(t => t.workspace)).toEqual([started]);
     const setWorkspace = (body: unknown) => routes.get('/api/teamwork/workspace')!.fetch(new Request('http://localhost/api/teamwork/workspace', { method: 'POST', body: JSON.stringify(body) }));

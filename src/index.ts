@@ -225,17 +225,26 @@ export async function apply(ctx: Context, config: Config) {
    * Where a session may be started from a phone or the console: the directory DSH was started in, then DSH's own
    * workspaces. A new device, or a member of a shared DSH with no session yet, has no other way to name one.
    */
-  let workspaces: { list(): { id: string; path: string }[] } | undefined;
+  let workspaces: { list(): { id: string; path: string; title: string }[] } | undefined;
   ctx.inject(['workspaceRegistry'], (scoped) => {
     scoped.effect(() => {
-      workspaces = (scoped as unknown as { workspaceRegistry: { list(): { id: string; path: string }[] } }).workspaceRegistry;
+      workspaces = (scoped as unknown as { workspaceRegistry: { list(): { id: string; path: string; title: string }[] } }).workspaceRegistry;
       return () => { workspaces = undefined; };
     });
   });
   const directories = () => startDirectories(process.cwd(), workspaces?.list() ?? []);
   /** Each synced team's default workspace here (src/team-workspaces.ts), where a phone or the console starts a session. */
   const teamWorkspaces = new TeamWorkspaces(teamWorkspacesPath(config.cachePath));
-  const teamDirectories = () => teamWorkspaces.defaults((client.current()?.teams ?? []).map(team => team.teamId), directories());
+  /**
+   * Where a team that has not chosen lands: DSH's own first-use workspace, which DSH recognises by this title
+   * (`DEFAULT_WORKSPACE_DIRECTORY`, @deepseek-ai/dsh-api-workspace-controller), else DSH's first workspace, else the
+   * directory DSH started in. A workspace lists its sessions under it; the start directory leaves them Ungrouped.
+   */
+  const fallbackDirectory = () => {
+    const list = workspaces?.list() ?? [];
+    return (list.find(workspace => workspace.title === 'default-workspace') ?? list[0])?.path ?? directories()[0];
+  };
+  const teamDirectories = () => teamWorkspaces.defaults((client.current()?.teams ?? []).map(team => team.teamId), directories(), fallbackDirectory());
   const owners = new OwnerFilter(roster, (pairingId) => roster.memberOf(pairingId), directories);
   /** Who the server lets reach this shared DSH, as the relay last said; and members whose handsets wait to join. */
   let sharedMembers: SharedMember[] = [];
