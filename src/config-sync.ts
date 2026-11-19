@@ -7,8 +7,9 @@ export class ConfigSync {
   private stopped = false;
   private lastSuccess?: string;
   private lastError?: string;
+  /** `synced` hears every successful sync, manual or scheduled. */
   constructor(private client: TeamworkClient, private overlay: TeamOverlay,
-    private enabled = true, private interval = 60000) {
+    private enabled: boolean, private interval: number, private synced: () => void) {
     if (!Number.isInteger(interval) || interval < 10000 || interval > 86400000) throw new Error('syncIntervalMs must be between 10000 and 86400000');
   }
   status() {
@@ -24,6 +25,7 @@ export class ConfigSync {
       try {
         try { await this.client.sync(); } finally { await this.overlay.apply(this.client.current()); }
         this.lastSuccess = new Date().toISOString(); this.lastError = undefined;
+        this.synced();
       } catch (error) {
         // Do not expose arbitrary transport errors, which can contain credentials.
         this.lastError = this.client.authenticated() ? 'Sync failed; the last synced configuration is kept. Try again later, or run /teamwork sync.' : 'Sign in again, then sync.';

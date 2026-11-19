@@ -5,8 +5,9 @@ function fixture() {
   let authenticated = true;
   const client = { authenticated: () => authenticated, current: () => undefined, sync: vi.fn(async () => {}) };
   const overlay = { apply: vi.fn(async () => {}) };
-  const sync = new ConfigSync(client as unknown as TeamworkClient, overlay as unknown as TeamOverlay, true, 10000);
-  return { client, overlay, sync, revoke: () => { authenticated = false; } };
+  const synced = vi.fn();
+  const sync = new ConfigSync(client as unknown as TeamworkClient, overlay as unknown as TeamOverlay, true, 10000, synced);
+  return { client, overlay, sync, synced, revoke: () => { authenticated = false; } };
 }
 afterEach(() => vi.useRealTimers());
 test('polling waits for authentication and stops on disposal', async () => {
@@ -14,7 +15,7 @@ test('polling waits for authentication and stops on disposal', async () => {
   await vi.advanceTimersByTimeAsync(10000); expect(f.client.sync).not.toHaveBeenCalled();
   f.client.authenticated = () => true;
   await vi.advanceTimersByTimeAsync(10000); expect(f.client.sync).toHaveBeenCalledTimes(1);
-  expect(f.sync.status().lastSuccess).toBeDefined(); await f.sync.stop();
+  expect(f.sync.status().lastSuccess).toBeDefined(); expect(f.synced).toHaveBeenCalledTimes(1); await f.sync.stop();
   await vi.advanceTimersByTimeAsync(30000); expect(f.client.sync).toHaveBeenCalledTimes(1);
 });
 test('manual and background requests share a flight and never pile up', async () => {

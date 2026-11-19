@@ -101,6 +101,18 @@ describe('the relay link', () => {
     }
   });
 
+  it('rejoins after refusing an account in no team, but not after another connection replaced it', async () => {
+    for (const [code, again] of [[RELAY_CLOSE.unauthorized, 2], [RELAY_CLOSE.replaced, 1]] as const) {
+      const { relay } = await link();
+      relay.refresh(); await until(() => FakeSocket.made.length > 0);
+      FakeSocket.made[0]!.emit('close', { code });
+      relay.rejoin();
+      await until(() => FakeSocket.made.length > 1); await tick(40);
+      expect(FakeSocket.made).toHaveLength(again);
+      relay.stop();
+    }
+  });
+
   it('closes the socket on sign-out, and a late close of it changes nothing', async () => {
     const { relay, signOut } = await link();
     relay.refresh(); await until(() => FakeSocket.made.length > 0);
