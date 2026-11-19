@@ -162,8 +162,8 @@ a full database-and-artifact backup managed by the server operator.
 
 Ask the agent for a report, a deck, a dashboard or a diagram and to publish it:
 its `teamwork_page` tool uploads the page to your team, private to you, and the
-conversation shows a card that opens it beside the conversation in the web
-console. Asking for a change adds a version; earlier versions stay. A page is
+agent gives you its link in the console; the conversation also shows a card
+that opens it beside the conversation in the web console. Asking for a change adds a version; earlier versions stay. A page is
 an `index.html` with the files it loads, one `index.md`, or one `index.svg`,
 from a folder in the session's workspace; at most 255 files and 16 MiB a
 version. Only you share a page, from **Pages** in the console, with chosen

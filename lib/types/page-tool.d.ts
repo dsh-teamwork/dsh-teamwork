@@ -2,7 +2,8 @@
  * `teamwork_page`: the agent publishes a page it made (a report, a deck, a dashboard) to its team's server, private to
  * the member whose session made it (docs/tech/pages.md in the platform repository). The tool never shares: only a
  * person does, in the console or the app, so nothing an agent reads can get a page shared. Its result carries no
- * content; clients find the page through `presentationMeta`, which DSH keeps in the session beside the model's text.
+ * content, only the console link the agent gives the member; clients find the page through `presentationMeta`,
+ * which DSH keeps in the session beside the model's text.
  */
 import type { Context } from '@deepseek-ai/cordis';
 import type { Agent } from '@deepseek-ai/dsh-agent';
@@ -43,6 +44,8 @@ export type PageInput = z.infer<typeof input>;
  * among the member's teams. A name outside them, or none where there is a choice, is refused with the choices.
  */
 export declare function pageTeam(snapshot: Snapshot | undefined, presetTeam: string | undefined, requested: string | undefined): string;
+/** Where a member opens a page in the console: the team's Pages, the page selected. Only who may read it can. */
+export declare function pageUrl(server: string, teamId: string, pageId: string): string;
 /**
  * The files a page holds: `content` as the kind's one entry file, or every file under `directory`, which must resolve
  * inside the session's folder after following links. Hidden files and anything past the limits are refused before

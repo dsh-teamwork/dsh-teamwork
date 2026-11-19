@@ -2,7 +2,8 @@
  * `teamwork_page`: the agent publishes a page it made (a report, a deck, a dashboard) to its team's server, private to
  * the member whose session made it (docs/tech/pages.md in the platform repository). The tool never shares: only a
  * person does, in the console or the app, so nothing an agent reads can get a page shared. Its result carries no
- * content; clients find the page through `presentationMeta`, which DSH keeps in the session beside the model's text.
+ * content, only the console link the agent gives the member; clients find the page through `presentationMeta`,
+ * which DSH keeps in the session beside the model's text.
  */
 import type { Context } from '@deepseek-ai/cordis';
 import type { Agent } from '@deepseek-ai/dsh-agent';
@@ -55,6 +56,11 @@ export function pageTeam(snapshot: Snapshot | undefined, presetTeam: string | un
   if (teams.length === 1) return teams[0].teamId;
   if (!teams.length) throw new Error('Sign in to Teamwork and join a team first');
   throw new Error(`Name the team with teamId: ${names()}`);
+}
+
+/** Where a member opens a page in the console: the team's Pages, the page selected. Only who may read it can. */
+export function pageUrl(server: string, teamId: string, pageId: string) {
+  return `${server}/teams/${encodeURIComponent(teamId)}/pages/${encodeURIComponent(pageId)}`;
 }
 
 /**
@@ -162,17 +168,17 @@ export function registerPageTool(ctx: Context, options: PageToolOptions) {
         schema: {
           type: 'object',
           properties: {
-            teamId: { type: 'string' }, pageId: { type: 'string' }, version: { type: 'integer' }, title: { type: 'string' }, kind: { type: 'string' },
+            teamId: { type: 'string' }, pageId: { type: 'string' }, version: { type: 'integer' }, title: { type: 'string' }, kind: { type: 'string' }, url: { type: 'string' },
             directory: { type: 'string' }, files: { type: 'array', items: { type: 'string' } },
           },
           required: ['teamId', 'pageId', 'version'],
           additionalProperties: false,
         },
         render: (_args, value) => {
-          const v = value as { pageId: string; version: number; title?: string; directory?: string; files?: string[] };
+          const v = value as { pageId: string; version: number; title?: string; url?: string; directory?: string; files?: string[] };
           const text = v.files
             ? `Opened page ${v.pageId}, version ${v.version}, into ${v.directory}: ${v.files.join(', ')}. Change it there, then publish with action update, pageId ${v.pageId} and baseVersion ${v.version}.`
-            : `Published "${v.title}" as page ${v.pageId}, version ${v.version}. It is private to the member until they share it from Pages in Teamwork.`;
+            : `Published "${v.title}" as page ${v.pageId}, version ${v.version}, at ${v.url} — give the member this link to open it. It is private to them until they share it there.`;
           return [{ type: 'text', text }];
         },
         // Only a published page is a card in the conversation; an opened one is the agent's working copy.
@@ -202,7 +208,7 @@ export function registerPageTool(ctx: Context, options: PageToolOptions) {
             pageId: args.pageId, title: args.title, kind: args.kind!, note: args.note, sessionId, computer: computer(),
             baseVersion: args.action === 'update' ? args.baseVersion : undefined, starter,
           }, files, exec.signal);
-          return { teamId, pageId: page.id, version: page.version, title: page.title, kind: page.kind };
+          return { teamId, pageId: page.id, version: page.version, title: page.title, kind: page.kind, url: pageUrl(client.endpoint, teamId, page.id) };
         } catch (error) {
           if (error instanceof PageError && error.code === 'page_stale')
             throw new Error(`Version ${args.baseVersion} is no longer the newest: someone added a version since. Ask the member before replacing their change.`);

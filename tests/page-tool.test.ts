@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { mkdtemp, mkdir, readFile, writeFile, symlink, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pageFiles, pageTeam, writePage, LIMITS } from '../src/page-tool.js';
+import { pageFiles, pageTeam, pageUrl, writePage, LIMITS } from '../src/page-tool.js';
 import type { Snapshot } from '../src/client.js';
 
 const team = (teamId: string) => ({ teamId, teamName: teamId.toUpperCase(), role: 'member' as const, configs: [] });
@@ -66,4 +66,8 @@ test('an opened page is written into a new or empty folder of the workspace, and
     await rm(cwd, { recursive: true, force: true });
     await rm(outside, { recursive: true, force: true });
   }
+});
+
+test('a published page links to the console route that opens it', () => {
+  expect(pageUrl('https://www.dshteamwork.com', 'team_1', '8Ina8H_vD15J66EjAybnS')).toBe('https://www.dshteamwork.com/teams/team_1/pages/8Ina8H_vD15J66EjAybnS');
 });
