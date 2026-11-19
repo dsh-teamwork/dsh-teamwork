@@ -34,7 +34,7 @@ export function namedSession(body: unknown): string | undefined {
 }
 
 /** Calls that act on one session; each must name one the member owns. */
-const SESSION_CALLS = new Set(['session/state', 'session/page', 'session/prompt', 'session/cancel', 'teamwork/selectModel',
+const SESSION_CALLS = new Set(['session/state', 'session/page', 'session/prompt', 'session/cancel', 'teamwork/selectModel', 'teamwork/selectPermission',
   'teamwork/uploadStart', 'teamwork/uploadChunk', 'teamwork/uploadFinish', 'teamwork/uploadCancel', 'userQuestions/answer',
   'session/rename', 'workspace/pinSession', 'workspace/unpinSession', 'workspace/archiveSession', 'workspace/unarchiveSession']);
 

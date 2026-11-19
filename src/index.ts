@@ -22,6 +22,7 @@ import { hostname } from 'node:os';
 import { platformAdapter, platformProvider } from './platform-models.js';
 import { Bridge, bridgeRoute } from './bridge.js';
 import { PhoneSessionError, phonePresets } from './phone-session.js';
+import { phonePermissions, type PermissionPresets } from './phone-permission.js';
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm';
 import { listenForCode, type LoginCallback } from './login-callback.js';
 import { offerSchema, pairingSchema, RelayError, RelayLink, relayClientIdPath, type SharedMember } from './relay.js';
@@ -231,6 +232,9 @@ export async function apply(ctx: Context, config: Config) {
     });
   });
   const directories = () => startDirectories(process.cwd(), workspaces?.list() ?? []);
+  /** DSH's permission presets and its command registry, where it composes them (src/phone-permission.ts). */
+  const permissionPresets = () => (ctx as unknown as { get(name: string): unknown }).get('permissionPresets') as PermissionPresets | undefined;
+  let commandRegistry: { execute(agent: unknown, line: string, attachments: readonly unknown[], signal: AbortSignal): Promise<{ result: { kind: string } } | undefined> } | undefined;
   /** Each synced team's default workspace here (src/team-workspaces.ts), where a phone or the console starts a session. */
   const teamWorkspaces = new TeamWorkspaces(teamWorkspacesPath(config.cachePath));
   const teamDirectories = () => teamWorkspaces.defaults((client.current()?.teams ?? []).map(team => team.teamId), directories());
@@ -253,7 +257,11 @@ export async function apply(ctx: Context, config: Config) {
         if (sessionId && !agent) throw new PhoneSessionError('busy');
         const state = await panel.state(sessionId);
         const roster = await ctx.agentPresets.remoteExportList();
-        return { presets: phonePresets(state, [...roster.presets]), directories: directories(), teamDirectories: await teamDirectories(), current: agent ? {
+        const presets = permissionPresets();
+        return { presets: phonePresets(state, [...roster.presets]), directories: directories(), teamDirectories: await teamDirectories(),
+          // A session's permission preset and those a remote device may pick; none where DSH composes no presets.
+          permissions: presets ? phonePermissions(presets, shared?.enabled === true, agent?.session) : null,
+          current: agent ? {
           sessionId: String(agent.id), cwd: agent.session.header.cwd,
           agentPreset: ctx.agentPresets.presetForSession(agent.session), model: agent.model.current() ?? null,
           started: state.session?.started ?? false, running: agent.status !== 'idle',
@@ -272,6 +280,21 @@ export async function apply(ctx: Context, config: Config) {
           agent.model.select(selection);
           return { selected: agent.model.current() };
         } catch (error) { if (error instanceof PhoneSessionError) throw error; throw new PhoneSessionError('model_unavailable'); }
+      },
+      async selectPermission(request) {
+        const agent = sessionAgent(request.sessionId);
+        if (!agent) throw new PhoneSessionError('not_found');
+        if (agent.status !== 'idle' || agent.inbox.nextTurn.length || agent.inbox.nextStep.length) throw new PhoneSessionError('busy');
+        const presets = permissionPresets();
+        if (!presets || !commandRegistry) throw new PhoneSessionError('unavailable');
+        const option = phonePermissions(presets, shared?.enabled === true).options.find(item => item.id === request.preset);
+        if (!option) throw new PhoneSessionError('invalid_request');
+        // A shared DSH is the team's machine: what reaches past the workspace or skips approval is set at its keyboard.
+        if (!option.allowed) throw new PhoneSessionError('permission_refused');
+        // The way DSH's own picker switches it: its `/permission` command, logged in the session like any other.
+        const run = await commandRegistry.execute(agent, `/permission ${request.preset}`, [], AbortSignal.timeout(10_000));
+        if (!run || run.result.kind !== 'success') throw new PhoneSessionError('unavailable');
+        return { current: presets.current(agent.session) };
       },
       accepted(sessionId, requestId) {
         const agent = sessionAgent(sessionId);
@@ -667,6 +690,10 @@ export async function apply(ctx: Context, config: Config) {
     });
   });
   ctx.inject(['commands'], (child) => {
+    child.effect(() => {
+      commandRegistry = child.commands as unknown as typeof commandRegistry;
+      return () => { commandRegistry = undefined; };
+    });
     child.effect(() => child.commands.register({
       name: 'teamwork', description: 'Team sign-in, configuration sync and model selection',
       input: { hint: 'login | authorize <code> | share enable <key> | share disable | share status | share invite <email> | share members | share unlock <email> | share audit-key <key> | pin reset | sync | status | session [check] | continue <instruction> | cancel | retry [confirm] | list | tools | plugins [presetId] | info [id] | new <id> | use <id> | install <id> confirm | logout' },

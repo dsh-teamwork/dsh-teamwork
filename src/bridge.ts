@@ -20,6 +20,7 @@
  */
 import { z } from 'zod';
 import { PhoneSessionError, type PhoneSessionOps } from './phone-session.js';
+import { PRESET_NAME } from './phone-permission.js';
 import { PhoneUploads, uploadLimits, uploadSchemas } from './phone-uploads.js';
 import type { OwnerFilter } from './shared-owner.js';
 import { MAX_MESSAGE } from './secure-channel.js';
@@ -28,7 +29,7 @@ import { ROUTE_PREFIX, type FetchRoute } from './panel.js';
 /** Unary methods a phone may call. A test holds this list. */
 export const ALLOWED_CALLS: ReadonlySet<string> = new Set([
   'session/list', 'session/create', 'session/prompt', 'session/state', 'session/page', 'session/cancel',
-  'session/modelCatalog', 'teamwork/configuration', 'teamwork/selectModel',
+  'session/modelCatalog', 'teamwork/configuration', 'teamwork/selectModel', 'teamwork/selectPermission',
   'teamwork/uploadStart', 'teamwork/uploadChunk', 'teamwork/uploadFinish', 'teamwork/uploadCancel',
   'userQuestions/answer',
   '$events/result',
@@ -231,7 +232,9 @@ export class Bridge {
         if (!operations) return answer(503, { error: 'configuration_unsupported' });
         const schema = frame.method === 'teamwork/configuration'
           ? z.object({ sessionId: z.string().min(1).max(256).optional() }).strict()
-          : z.object({ sessionId: z.string().min(1).max(256), provider: z.string().min(1), model: z.string().min(1), reasoningEffort: z.string().optional() }).strict();
+          : frame.method === 'teamwork/selectPermission'
+            ? z.object({ sessionId: z.string().min(1).max(256), preset: z.string().regex(PRESET_NAME) }).strict()
+            : z.object({ sessionId: z.string().min(1).max(256), provider: z.string().min(1), model: z.string().min(1), reasoningEffort: z.string().optional() }).strict();
         const input = schema.safeParse(request);
         if (!input.success) throw new PhoneSessionError('invalid_request');
         await this.cookie(link, origin);
@@ -243,7 +246,9 @@ export class Bridge {
         if (this.links.get(frame.pairingId) !== link) throw new PhoneSessionError('not_found');
         const value = frame.method === 'teamwork/configuration'
           ? { ...await operations.configuration(input.data.sessionId) as object, uploads: uploadLimits }
-          : await operations.selectModel(input.data as Parameters<PhoneSessionOps['selectModel']>[0]);
+          : frame.method === 'teamwork/selectPermission'
+            ? await operations.selectPermission(input.data as Parameters<PhoneSessionOps['selectPermission']>[0])
+            : await operations.selectModel(input.data as Parameters<PhoneSessionOps['selectModel']>[0]);
         return answer(200, { result: { ok: true, value } });
       }
       let uploaded: string[] = [];

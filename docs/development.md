@@ -258,6 +258,19 @@ call naming a session, reaches only the member's own sessions, though pins and
 archives land in the DSH's one registry, seen at its keyboard as well. Forking
 and opening a session in another app stay on the desktop.
 
+A session's permission preset (DSH's `@deepseek-ai/dsh-permission-presets`:
+read-only, workspace write, full access and whatever else DSH composes) is in
+`teamwork/configuration`'s `permissions` (`src/phone-permission.ts`): the
+offered presets, the session's current one and the default. Each is `risky`
+when it leaves the workspace's sandbox or skips approval, which a client
+confirms once, and `allowed` unless the DSH is shared and the preset risky:
+a Team DSH's members pick only read-only or workspace write, and the rest is
+set at its keyboard. `teamwork/selectPermission` (`{ sessionId, preset }`, the
+preset one word) switches an idle session by running DSH's own `/permission`
+command in process (`commands.execute`), as DSH's picker does, so the switch is
+logged in the session; `teamwork/permission_refused` answers a preset that is
+not `allowed`.
+
 ## Publishing
 
 Update `package.json`, build and commit the matching `lib/`, and merge reviewed

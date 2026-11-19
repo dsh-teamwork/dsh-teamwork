@@ -55,7 +55,7 @@ describe('sessions belong to their starter', () => {
     await filter.afterCall('pa', 'session/create', created('session-a'));
     expect(await filter.admitCall('pa', 'session/prompt', call('session-a'))).toBe(true);
     for (const method of ['session/prompt', 'session/state', 'session/cancel', 'teamwork/uploadStart', 'teamwork/selectModel',
-      'session/rename', 'workspace/pinSession', 'workspace/unpinSession', 'workspace/archiveSession', 'workspace/unarchiveSession'])
+      'session/rename', 'teamwork/selectPermission', 'workspace/pinSession', 'workspace/unpinSession', 'workspace/archiveSession', 'workspace/unarchiveSession'])
       expect(await filter.admitCall('pb', method, call('session-a'))).toBe(false);
     expect(await filter.admitCall('pa', 'workspace/archiveSession', call('session-a'))).toBe(true);
     expect(await filter.admitCall('pa', 'session/rename', call('session-keyboard'))).toBe(false);
