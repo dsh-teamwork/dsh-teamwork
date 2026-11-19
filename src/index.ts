@@ -143,9 +143,26 @@ export async function apply(ctx: Context, config: Config) {
   });
   ctx.inject(['tools'], child => registerAssistantTools(child, client, activePreset, () => configSync.sync(), async(id,version)=>{const item=pinnedPlugin(client.current(),id,version);if(!item)throw Error('Plugin version is unavailable');return installPlugin(item);}));
   const configSync = new ConfigSync(client, overlay, config.autoSync ?? true, config.syncIntervalMs ?? 60000);
+  /** Whether DSH offers a local model here, as its own catalogue decides: a provider with no key lists none. */
+  const localCallable = async (selection: { provider: string; model: string }) => {
+    if (!ctx.llm.listProviders().some(provider => provider.id === selection.provider)) return false;
+    try { return (await ctx.llm.listModels(selection.provider)).some(model => model.id === selection.model); } catch { return false; }
+  };
+  /**
+   * A cloud computer (tokenFile) has no local key, so a session with no model, or one it cannot call (DSH's own
+   * default among them), answers with the team's first model that can run. Called as a session is made and before a prompt.
+   */
+  const adoptTeamModel = async (agent: Agent) => {
+    if (!config.tokenFile || agent.status !== 'idle') return;
+    const current = agent.model.current(), snapshot = client.current();
+    if (current?.provider === platformProvider || (current && await localCallable(current)) || !snapshot) return;
+    const fallback = allConfigs(snapshot).find(c => c.kind === 'model' && modelData(snapshot, c) && !modelLimitProblem(snapshot, c));
+    if (fallback && agent.status === 'idle') agent.model.select({ provider: platformProvider, model: fallback.id });
+  };
   const readiness = async (agent:Agent, fresh=false) => {
     const selection=agent.model.current();
     if(!selection) throw new PhoneSessionError('model_unavailable', 'No model is selected. Choose a local model, or run /teamwork use <id>.');
+    if(selection.provider!==platformProvider && !await localCallable(selection)) throw new PhoneSessionError('model_unavailable', 'The session’s model is not available on this computer (it has no key here). Choose another model.');
     if(selection.provider===platformProvider) {
       if(!client.authenticated()) throw new PhoneSessionError('not_authenticated', 'Not signed in to the team model, or the sign-in expired. Run /teamwork login.');
       if(fresh) { try {await configSync.sync();} catch {throw new PhoneSessionError('unavailable', 'Could not verify team access. Check the connection and /teamwork status, and sign in again if needed.');} }
@@ -256,6 +273,7 @@ export async function apply(ctx: Context, config: Config) {
         const agent = sessionAgent(sessionId);
         if (!agent) throw new PhoneSessionError('not_found');
         if (agent.status !== 'idle' || agent.inbox.nextTurn.length || agent.inbox.nextStep.length) throw new PhoneSessionError('busy');
+        await adoptTeamModel(agent);
         await readiness(agent, true);
       },
     },
@@ -454,11 +472,7 @@ export async function apply(ctx: Context, config: Config) {
     const preset = activePreset(agent);
     if (preset && !stamps.get(String(agent.id))) stamp(agent,preset);
     if (source !== 'resume' && item && item.kind !== 'plugin' && !inheritsModel(item)) agent.model.select({ provider: platformProvider, model: item.id });
-    // A cloud computer (tokenFile) has no local model of its own: a session that names none answers with the team's first model that can run.
-    if (config.tokenFile && !agent.model.current() && snapshot) {
-      const fallback = allConfigs(snapshot).find(c => c.kind === 'model' && modelData(snapshot, c) && !modelLimitProblem(snapshot, c));
-      if (fallback) agent.model.select({ provider: platformProvider, model: fallback.id });
-    }
+    adoptTeamModel(agent).catch(error => ctx.logger.warn('Could not choose a team model: %s', (error as Error).message));
     return undefined;
   });
   ctx.effect(() => async () => { await configSync.stop(); await overlay.apply(); });
