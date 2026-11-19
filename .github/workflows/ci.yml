@@ -29,4 +29,4 @@ jobs:
       - name: Install real DSH host
         run: npm install --prefix "$RUNNER_TEMP/dsh-runtime" --no-package-lock @deepseek-ai/dsh@${{ matrix.dsh }}
       - name: Host integration and package installation
-        run: DSH_CLI="$RUNNER_TEMP/dsh-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js" pnpm test:host && DSH_CLI="$RUNNER_TEMP/dsh-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js" pnpm test:presets && DSH_CLI="$RUNNER_TEMP/dsh-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js" pnpm test:assistant
+        run: DSH_CLI="$RUNNER_TEMP/dsh-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js" pnpm test:host && DSH_CLI="$RUNNER_TEMP/dsh-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js" pnpm test:presets && DSH_CLI="$RUNNER_TEMP/dsh-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js" pnpm test:assistant && DSH_CLI="$RUNNER_TEMP/dsh-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js" pnpm test:cloud

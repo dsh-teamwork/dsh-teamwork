@@ -454,6 +454,11 @@ export async function apply(ctx: Context, config: Config) {
     const preset = activePreset(agent);
     if (preset && !stamps.get(String(agent.id))) stamp(agent,preset);
     if (source !== 'resume' && item && item.kind !== 'plugin' && !inheritsModel(item)) agent.model.select({ provider: platformProvider, model: item.id });
+    // A cloud computer (tokenFile) has no local model of its own: a session that names none answers with the team's first model that can run.
+    if (config.tokenFile && !agent.model.current() && snapshot) {
+      const fallback = allConfigs(snapshot).find(c => c.kind === 'model' && modelData(snapshot, c) && !modelLimitProblem(snapshot, c));
+      if (fallback) agent.model.select({ provider: platformProvider, model: fallback.id });
+    }
     return undefined;
   });
   ctx.effect(() => async () => { await configSync.stop(); await overlay.apply(); });

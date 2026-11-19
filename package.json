@@ -1,6 +1,6 @@
 {
   "name": "@dsh-teamwork/dsh-teamwork",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Shared team models, agent presets, and approved plugins for DeepSeek Harness",
   "icon": "icon.svg",
   "license": "Apache-2.0",
@@ -41,7 +41,8 @@
     "dev:reset": "node scripts/dev.mjs reset",
     "test:host": "node tests/host/run.mjs",
     "test:presets": "node tests/host/run.mjs --presets",
-    "test:assistant": "node tests/host/run.mjs --assistant"
+    "test:assistant": "node tests/host/run.mjs --assistant",
+    "test:cloud": "node tests/host/run.mjs --cloud"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.1.0",
