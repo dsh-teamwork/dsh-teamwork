@@ -9,6 +9,8 @@ import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 const presetsOnly = process.argv.includes('--presets');
 const assistantOnly = process.argv.includes('--assistant');
+// A cloud computer's plugin: a host-written token file, no sign-in of its own.
+const cloudOnly = process.argv.includes('--cloud');
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const cli = process.env.DSH_CLI;
 if (!cli) throw new Error('Set DSH_CLI to the installed @deepseek-ai/dsh CLI entry (lib/bin.js).');
@@ -66,12 +68,13 @@ await writeFile(localArchive, packages.get('fixture').tarball);
 await writeFile(expectedSnapshot, JSON.stringify(snapshot));
 await writeFile(cache, 'invalid-cache-json');
 const patch = join(work, 'patch.yml');
-await writeFile(patch, `- id: plugin-manager\n  config:\n    registry: ${registryUrl}\n    fallbackRegistries: []\n- id: dsh-teamwork\n  config:\n    apiEndpoint: http://localhost:3000\n    cachePath: ${JSON.stringify(cache)}\n- insert:\n    - id: teamwork-test\n      name: ${JSON.stringify(join(repo, assistantOnly ? 'tests/host/assistant.mjs' : presetsOnly ? 'tests/host/presets.mjs' : 'tests/host/validate.mjs'))}\n`);
+await writeFile(patch, `- id: plugin-manager\n  config:\n    registry: ${registryUrl}\n    fallbackRegistries: []\n- id: dsh-teamwork\n  config:\n    apiEndpoint: http://localhost:3000\n    cachePath: ${JSON.stringify(cache)}\n${cloudOnly ? `    tokenFile: ${JSON.stringify(join(work, 'token'))}\n` : ''}- insert:\n    - id: teamwork-test\n      name: ${JSON.stringify(join(repo, cloudOnly ? 'tests/host/cloud.mjs' : assistantOnly ? 'tests/host/assistant.mjs' : presetsOnly ? 'tests/host/presets.mjs' : 'tests/host/validate.mjs'))}\n`);
 // Every cache and store the host writes stays under `work`. pnpm puts its store under
 // $PNPM_HOME before $XDG_DATA_HOME, and CI sets PNPM_HOME and caches that store, so the
 // store directory is named explicitly; otherwise a fixture left there by an earlier run
 // is reused and the tarball is never downloaded.
 const env = { ...process.env, DSH_HOME: home, PNPM_HOME: join(work,'pnpm-home'), XDG_DATA_HOME: join(work, 'data'), XDG_CACHE_HOME: join(work, 'cache'), npm_config_ignore_workspace_root_check: 'true', npm_config_cache: join(work, 'npm-cache'), npm_config_store_dir: join(work, 'pnpm-store'), TEAMWORK_TEST_ARCHIVE: localArchive, TEAMWORK_TEST_CACHE: cache, TEAMWORK_TEST_SNAPSHOT: expectedSnapshot, TEAMWORK_TEST_RESULT: result, TEAMWORK_TEST_CWD: work };
+if (cloudOnly) await writeFile(join(work, 'token'), 'host-written-token');
 let child, logs = '';
 let success = false;
 try {
@@ -87,7 +90,7 @@ try {
     try {
       const report = JSON.parse(await readFile(result, 'utf8'));
       if (!report.passed) throw new Error(report.error);
-      if (!presetsOnly && !assistantOnly && !downloads) throw new Error('Package manager did not download the fixture tarball');
+      if (!presetsOnly && !assistantOnly && !cloudOnly && !downloads) throw new Error('Package manager did not download the fixture tarball');
       console.log(JSON.stringify({ ...report, pluginInstalled: true, tarballDownloads: downloads }, null, 2)); success = true; break;
     } catch (error) { if (error.code !== 'ENOENT') throw error; }
     if (child.exitCode !== null) throw new Error(`DSH exited: ${child.exitCode}`);
