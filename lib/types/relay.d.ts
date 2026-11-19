@@ -100,6 +100,8 @@ export declare class RelayLink {
     /** Bumped by every refresh and stop, so a late callback of an older run changes nothing. */
     private run;
     private hostId?;
+    /** Why the relay refused this computer: a token that names no team member can recover, a replaced socket cannot. */
+    private refusal?;
     private requests;
     constructor(options: RelayLinkOptions);
     get status(): RelayStatus;
@@ -107,6 +109,12 @@ export declare class RelayLink {
     get host(): string | undefined;
     /** Start over: after sign-in, sign-out or a change of server. */
     refresh(): void;
+    /**
+     * After a sync found this account in a team: a relay that refused it as no member (it was in none, say after its
+     * last team was deleted) tries again. A computer replaced by another connection stays refused, so the two do not
+     * take turns kicking each other off.
+     */
+    rejoin(): void;
     stop(): void;
     /** Ask the relay something, once connected; rejects when it is not, or does not answer in time. */
     request(request: RelayRequest): Promise<unknown>;

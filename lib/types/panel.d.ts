@@ -54,8 +54,9 @@ export interface PanelPreset {
  * The outbound link to the hosted mobile relay (`src/relay.ts`). `off`: not
  * signed in, or the server runs no relay. `connecting`: discovering or dialling.
  * `connected`: the relay welcomed this computer. `refused`: the relay refused
- * the sign-in, or another connection from this computer replaced this one; it
- * waits for the member to sign in again.
+ * the sign-in (expired, or the account is in no team), or another connection
+ * from this computer replaced this one; it waits for the member to sign in
+ * again, or, refused for want of a team, for a sync that finds one.
  */
 export type RelayStatus = 'off' | 'connecting' | 'connected' | 'refused';
 /** A phone paired with this computer through the relay; `pending` until the member confirms it here. */

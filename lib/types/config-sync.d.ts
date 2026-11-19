@@ -5,12 +5,14 @@ export declare class ConfigSync {
     private overlay;
     private enabled;
     private interval;
+    private synced;
     private timer?;
     private flight?;
     private stopped;
     private lastSuccess?;
     private lastError?;
-    constructor(client: TeamworkClient, overlay: TeamOverlay, enabled?: boolean, interval?: number);
+    /** `synced` hears every successful sync, manual or scheduled. */
+    constructor(client: TeamworkClient, overlay: TeamOverlay, enabled: boolean, interval: number, synced: () => void);
     status(): {
         authenticated: boolean;
         autoSync: boolean;
