@@ -2,7 +2,7 @@ import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { RELAY_CLOSE, RelayLink, relayClientIdPath, type RelayStatus } from '../src/relay';
+import { hostOs, RELAY_CLOSE, RelayLink, relayClientIdPath, type RelayStatus } from '../src/relay';
 
 /** A WebSocket the test drives by hand: what the plugin sent, and what the relay answers. */
 class FakeSocket {
@@ -58,13 +58,17 @@ describe('the relay link', () => {
     relay.stop();
   });
 
+  it('names its operating system as the relay does, and none the relay does not know', () => {
+    expect([hostOs('darwin'), hostOs('win32'), hostOs('linux'), hostOs('freebsd')]).toEqual(['macos', 'windows', 'linux', undefined]);
+  });
+
   it('introduces this computer and reports connected once the relay welcomes it', async () => {
     const { relay, dir } = await link();
     relay.refresh(); await until(() => FakeSocket.made.length > 0);
     const socket = FakeSocket.made[0]!;
     expect(socket.url).toBe('wss://relay.example.test/plugin');
     socket.emit('open');
-    expect(socket.sent[0]).toMatchObject({ t: 'hello', token: 'bearer-1', name: 'laptop', dshVersion: '0.2.2-rc.1', clientId: expect.any(String) });
+    expect(socket.sent[0]).toMatchObject({ t: 'hello', token: 'bearer-1', name: 'laptop', dshVersion: '0.2.2-rc.1', os: hostOs(), clientId: expect.any(String) });
     expect(relay.status).toBe('connecting');
     socket.emit('message', { data: JSON.stringify({ t: 'welcome', hostId: 'host-1' }) });
     expect(relay.status).toBe('connected');

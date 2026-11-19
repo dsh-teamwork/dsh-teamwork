@@ -189,7 +189,7 @@ export class RelayLink {
       this.set('connecting');
       return this.retry(run, this.backoff());
     }
-    const hello = { t: 'hello', token, clientId: await this.clientId(), name: this.options.name ?? hostname(), dshVersion: this.options.dshVersion ?? dshVersion() };
+    const hello = { t: 'hello', token, clientId: await this.clientId(), name: this.options.name ?? hostname(), dshVersion: this.options.dshVersion ?? dshVersion(), os: hostOs() };
     if (run !== this.run) return;
     const Socket = this.options.WebSocket ?? globalThis.WebSocket;
     // Node has a global WebSocket from 22 on; on an older runtime the phone's way in stays closed.
@@ -244,6 +244,14 @@ export class RelayLink {
 
 /** `<cache>.host.json`, beside the cache, like the other per-computer files. */
 export const relayClientIdPath = (cachePath: string) => cachePath.replace(/\.json$/, '') + '.host.json';
+
+/**
+ * This computer's operating system as the relay names it, for the member's phone and browser to show; left out where
+ * the relay names none (it refuses a value it does not know).
+ */
+export function hostOs(platform: NodeJS.Platform = process.platform): 'macos' | 'windows' | 'linux' | undefined {
+  return ({ darwin: 'macos', win32: 'windows', linux: 'linux' } as const)[platform as 'darwin' | 'win32' | 'linux'];
+}
 
 /** The DSH release this plugin runs in, read from a package every release pins to its own version. */
 function dshVersion() {

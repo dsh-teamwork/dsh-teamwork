@@ -31,6 +31,8 @@ export interface PanelPreset {
     teamName: string;
     name: string;
     version: number;
+    /** Its avatar's id in the platform's shared library, which the console and the phone draw; none when the admin chose none. */
+    avatar?: string;
     description: string;
     /** The team model the preset calls, or its own provider/model; null when it runs on the session's own model. */
     model: string | null;
@@ -108,7 +110,11 @@ export interface PanelState {
         name: string;
         role: 'admin' | 'member';
         consoleUrl: string;
+        /** Where a session started for this team from a phone or the web console lands (src/team-workspaces.ts). */
+        workspace: string | null;
     }>;
+    /** The folders a session may start in here, and so a team's default workspace may be: where DSH started, then its workspaces. */
+    directories: string[];
     /** The server this DSH signs in to and syncs from, and the one it uses unless the member picks another. */
     server: string;
     defaultServer: string;
@@ -191,6 +197,8 @@ export interface PanelOps {
     authorize(code: string): Promise<void>;
     sync(): Promise<void>;
     logout(): Promise<void>;
+    /** Sets a team's default workspace to one of `PanelState.directories`. */
+    setWorkspace(teamId: string, path: string): Promise<void>;
     /** Points the plugin at another server, or back to the default with `null`; signs out of the current one. */
     setServer(server: string | null): Promise<void>;
     /** Selects a team model or preset for the session; returns what changed. */
@@ -232,6 +240,6 @@ export interface RouteVoice {
     /** Runs one request in the panel's language. */
     speak<T>(answer: () => T): T;
 }
-type RouteField = 'field.team' | 'field.code' | 'field.server' | 'field.session' | 'field.config' | 'field.plugin' | 'field.version' | 'field.device' | 'field.key' | 'field.email';
+type RouteField = 'field.team' | 'field.code' | 'field.server' | 'field.session' | 'field.config' | 'field.plugin' | 'field.version' | 'field.device' | 'field.key' | 'field.email' | 'field.workspace';
 export declare function panelRoutes(ops: PanelOps, voice: RouteVoice): FetchRoute[];
 //# sourceMappingURL=panel.d.ts.map

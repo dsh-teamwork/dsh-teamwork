@@ -37,13 +37,14 @@ export declare function phonePresets(state: PanelState, roster: {
         version: string;
         state: import("./plugin-status.js").PluginState;
     }[];
-    teamId?: string | undefined;
-    teamName?: string | undefined;
-    version?: number | undefined;
     model?: {
         provider: string;
         model: string;
     } | undefined;
+    avatar?: string | undefined;
+    teamId?: string | undefined;
+    teamName?: string | undefined;
+    version?: number | undefined;
     id: string;
     name: string;
     description: string;

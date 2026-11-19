@@ -4,16 +4,18 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { TeamworkPanel } from '../../src/web/TeamworkPanel.js';
 import { api } from '../../src/web/api.js';
+import { presetAvatar } from '../../src/web/avatars.js';
 import type { PanelState } from '../../src/panel.js';
 import type { Host } from '../../src/web/host.js';
 
-vi.mock('../../src/web/api.js', async (original) => ({ HostUnreachable: (await original<typeof import('../../src/web/api.js')>()).HostUnreachable, api: { summary: vi.fn().mockRejectedValue(new Error("Unavailable")), state: vi.fn(), profile: vi.fn(), updateProfile: vi.fn(), sync: vi.fn(), use: vi.fn(), login: vi.fn(), authorize: vi.fn(), pairPhone: vi.fn(), decidePhone: vi.fn(), revokePhone: vi.fn(), shareEnable: vi.fn(), shareDisable: vi.fn(), shareAuditKey: vi.fn(), shareInvite: vi.fn(), shareUnlock: vi.fn() } }));
+vi.mock('../../src/web/api.js', async (original) => ({ HostUnreachable: (await original<typeof import('../../src/web/api.js')>()).HostUnreachable, api: { summary: vi.fn().mockRejectedValue(new Error("Unavailable")), state: vi.fn(), profile: vi.fn(), updateProfile: vi.fn(), sync: vi.fn(), use: vi.fn(), login: vi.fn(), authorize: vi.fn(), pairPhone: vi.fn(), decidePhone: vi.fn(), revokePhone: vi.fn(), shareEnable: vi.fn(), shareDisable: vi.fn(), shareAuditKey: vi.fn(), shareInvite: vi.fn(), shareUnlock: vi.fn(), setWorkspace: vi.fn() } }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const profile = { id: 'user', name: 'Ada', email: 'ada@example.com', image: null, locale: 'zh-CN' as const };
 const state: PanelState = {
   locale: 'zh-CN', authRevision: 0, authenticated: true, server: 'https://example.com', defaultServer: 'https://example.com',
   sync: { auto: true, running: false }, relay: 'connected', phones: [], session: null, shared: null,
-  teams: [{ id: 'a', name: 'Alpha', role: 'admin', consoleUrl: 'https://example.com/teams/a' }, { id: 'b', name: 'Beta', role: 'member', consoleUrl: 'https://example.com/teams/b' }],
+  teams: [{ id: 'a', name: 'Alpha', role: 'admin', consoleUrl: 'https://example.com/teams/a', workspace: '/home/ada' }, { id: 'b', name: 'Beta', role: 'member', consoleUrl: 'https://example.com/teams/b', workspace: '/home/ada' }],
+  directories: ['/home/ada', '/home/ada/work'],
   presets: ['a', 'b'].map(id => ({ id: `preset-${id}`, teamId: id, teamName: id, name: `Preset ${id}`, version: 1, description: 'Review', model: 'Model', assistant: false, modelAvailable: true, contextWindowMissing: false, tools: [], plugins: [] })),
   models: [], plugins: [],
 };
@@ -122,6 +124,18 @@ test('switches teams and survives a removed membership without changing the phon
   expect(document.body.textContent).toContain('手机或浏览器连接的是这台电脑');
   await click('返回团队资源'); expect(document.querySelector('.twui-select-primary')!.textContent).toContain('全部团队');
   expect(api.use).not.toHaveBeenCalled(); expect(api.decidePhone).not.toHaveBeenCalled();
+});
+
+test('sets a team’s default workspace from the teams page, one team at a time', async () => {
+  vi.mocked(api.setWorkspace).mockResolvedValue(undefined);
+  await mount(); await click('我的团队');
+  const triggers = [...document.querySelectorAll<HTMLButtonElement>('.twui-select-trigger')].filter(b => b.getAttribute('aria-label')?.startsWith('默认工作区'));
+  expect(triggers).toHaveLength(2);
+  expect(triggers[1].textContent).toContain('ada');
+  await act(async () => triggers[1].click());
+  await act(async () => document.querySelector('[role="option"][data-index="1"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  expect(api.setWorkspace).toHaveBeenCalledWith('b', '/home/ada/work');
+  expect(document.body.textContent).toContain('已保存Beta的默认工作区');
 });
 
 test('locks pairing generation and lets the member hide a still-valid code', async () => {
@@ -257,6 +271,13 @@ test('leads with the team assistant, starts a session with it, and names teams o
   await act(async () => document.querySelector('[role="option"][data-index="1"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
   expect(document.querySelector('.twui-resource-list .twui-item-subtitle')).toBeNull();
   expect(document.querySelector('.twui-featured .twui-item-subtitle')).toBeNull();
+});
+
+test('draws each preset with the avatar its admin chose, or the one its name picks', async () => {
+  vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', presets: [{ ...state.presets[0], avatar: 'legal' }, state.presets[1]] });
+  await mount(); await click('Show every team’s resources');
+  const plates = [...document.querySelectorAll('.twui-resource-list .twui-tile-media rect')].map(r => r.getAttribute('fill'));
+  expect(plates).toEqual([presetAvatar('legal', 'Preset a').plate, presetAvatar(undefined, 'Preset b').plate]);
 });
 
 test('shows an admin the reviews waiting in the browsed team, and a member none', async () => {

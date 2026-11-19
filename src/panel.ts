@@ -35,6 +35,8 @@ export interface PanelPreset {
   teamName: string;
   name: string;
   version: number;
+  /** Its avatar's id in the platform's shared library, which the console and the phone draw; none when the admin chose none. */
+  avatar?: string;
   description: string;
   /** The team model the preset calls, or its own provider/model; null when it runs on the session's own model. */
   model: string | null;
@@ -103,7 +105,13 @@ export interface PanelState {
    * Every team the member is in (platform ADR 0013), each with its web console. Teams cached from an earlier
    * sign-in are shown, but not usable, until the member signs in again.
    */
-  teams: Array<{ id: string; name: string; role: 'admin' | 'member'; consoleUrl: string }>;
+  teams: Array<{
+    id: string; name: string; role: 'admin' | 'member'; consoleUrl: string;
+    /** Where a session started for this team from a phone or the web console lands (src/team-workspaces.ts). */
+    workspace: string | null;
+  }>;
+  /** The folders a session may start in here, and so a team's default workspace may be: where DSH started, then its workspaces. */
+  directories: string[];
   /** The server this DSH signs in to and syncs from, and the one it uses unless the member picks another. */
   server: string;
   defaultServer: string;
@@ -163,6 +171,8 @@ export interface PanelOps {
   authorize(code: string): Promise<void>;
   sync(): Promise<void>;
   logout(): Promise<void>;
+  /** Sets a team's default workspace to one of `PanelState.directories`. */
+  setWorkspace(teamId: string, path: string): Promise<void>;
   /** Points the plugin at another server, or back to the default with `null`; signs out of the current one. */
   setServer(server: string | null): Promise<void>;
   /** Selects a team model or preset for the session; returns what changed. */
@@ -205,7 +215,7 @@ export interface RouteVoice {
   /** Runs one request in the panel's language. */
   speak<T>(answer: () => T): T;
 }
-type RouteField = 'field.team' | 'field.code' | 'field.server' | 'field.session' | 'field.config' | 'field.plugin' | 'field.version' | 'field.device' | 'field.key' | 'field.email';
+type RouteField = 'field.team' | 'field.code' | 'field.server' | 'field.session' | 'field.config' | 'field.plugin' | 'field.version' | 'field.device' | 'field.key' | 'field.email' | 'field.workspace';
 
 
 export function panelRoutes(ops: PanelOps, voice: RouteVoice): FetchRoute[] {
@@ -247,6 +257,11 @@ export function panelRoutes(ops: PanelOps, voice: RouteVoice): FetchRoute[] {
     post('authorize', (body) => ops.authorize(text(body.code, 'field.code'))),
     post('sync', () => ops.sync()),
     post('logout', () => ops.logout()),
+    // A path is taken as given, never trimmed: a folder's name may end in a space.
+    post('workspace', (body) => {
+      if (typeof body.path !== 'string' || !body.path) throw new Error(say('request.missing', { field: say('field.workspace') }));
+      return ops.setWorkspace(text(body.teamId, 'field.team'), body.path);
+    }),
     post('server', (body) => ops.setServer(body.server === null ? null : text(body.server, 'field.server'))),
     post('use', async (body) => ({ message: await ops.use(text(body.sessionId, 'field.session'), text(body.id, 'field.config')) })),
     post('install', async (body) => ({ message: await ops.install(text(body.id, 'field.plugin'), text(body.version, 'field.version')) })),

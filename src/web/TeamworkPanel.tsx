@@ -7,6 +7,7 @@ import qrcode from 'qrcode-generator';
 import type { Locale } from '../locale.js';
 import type { PanelPairingOffer, PanelPhone, PanelPlugin, PanelPreset, PanelShared, PanelState, PanelProfile, PanelSummary, PluginState, ToolState } from '../panel.js';
 import { api, HostUnreachable } from './api.js';
+import { PresetAvatar } from './PresetAvatar.js';
 import { currentSessionTracker, type Host } from './host.js';
 import { useT, Words, words, type PanelMessage, type Translate } from './messages.js';
 
@@ -282,11 +283,32 @@ export function TeamworkPanel({ host: dsh }: { host: Host }) {
         </>}
         {page === 'devices' && <><PageTitle title={t('phones.title')}>{t('phones.body')}</PageTitle><Phones state={state} run={run} /></>}
         {page === 'shared' && state.shared && <Shared shared={state.shared} run={run} />}
-        {page === 'teams' && <><PageTitle title={t('teams.title')}>{t('teams.body')}</PageTitle>{state.teams.map(x => <Item key={x.id} icon="layers" title={x.name} tags={<Badge tone={x.role === 'admin' ? 'brand' : 'neutral'}>{role(t, x.role)}</Badge>} actions={<><Button onClick={() => selectTeam(x.id)}>{t('teams.browse')}</Button><Button variant="ghost" trailingIcon="external" onClick={() => open(x.consoleUrl)}>{t(x.role === 'admin' ? 'teams.manage' : 'teams.view')}</Button></>} />)}<div><Button trailingIcon="external" onClick={() => open(`${state.server}/teams`)}>{t('teams.joinOrCreate')}</Button></div></>}
+        {page === 'teams' && <><PageTitle title={t('teams.title')}>{t('teams.body')}</PageTitle>{state.teams.map(x => <Item key={x.id} icon="layers" title={x.name} tags={<Badge tone={x.role === 'admin' ? 'brand' : 'neutral'}>{role(t, x.role)}</Badge>} actions={<><Button onClick={() => selectTeam(x.id)}>{t('teams.browse')}</Button><Button variant="ghost" trailingIcon="external" onClick={() => open(x.consoleUrl)}>{t(x.role === 'admin' ? 'teams.manage' : 'teams.view')}</Button></>}><TeamWorkspace team={x} directories={state.directories} run={run} /></Item>)}<div><Button trailingIcon="external" onClick={() => open(`${state.server}/teams`)}>{t('teams.joinOrCreate')}</Button></div></>}
         {page === 'profile' && <Account state={state} profile={profile} error={profileError} retry={() => setProfileAttempt(n => n + 1)} updated={next => { if (identity.current === `teamwork:team:${state.server}:${next.id}`) { setProfile(next); void refresh(); } }} run={run} />}
         {toastNode}
       </Panel>
     </Words.Provider>
+  );
+}
+
+/**
+ * A team's default workspace: where a session started for this team from a phone or the web console lands unless its
+ * member picks another folder there. The choices are where DSH was started and DSH's own workspaces.
+ */
+function TeamWorkspace({ team, directories, run }: { team: PanelState['teams'][number]; directories: string[]; run: Run }) {
+  const t = useT();
+  if (!team.workspace) return null;
+  const folder = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+  return (
+    <ItemBody>
+      <div className="twui-row">
+        <span className="twui-muted">{t('teams.workspace')}</span>
+        <Select label={t('teams.workspace')} value={team.workspace} disabled={directories.length < 2}
+          options={directories.map(path => ({ value: path, label: folder(path), description: path }))}
+          onChange={path => void run(() => api.setWorkspace(team.id, path), t('teams.workspaceSaved', { team: team.name }))} />
+      </div>
+      <p className="twui-muted">{t('teams.workspaceHint')}</p>
+    </ItemBody>
   );
 }
 
@@ -608,7 +630,7 @@ function AssistantItem({ preset, team, state, dsh, run }: { preset: PanelPreset;
   return (
     <div className="twui-featured">
       <Item
-        icon="session"
+        media={<PresetAvatar avatar={preset.avatar} name={preset.name} />}
         title={<>{preset.name}<Badge tone="brand">{t('assistant.label')}</Badge></>}
         subtitle={team}
         description={t('assistant.body')}
@@ -633,7 +655,7 @@ function PresetItem({ preset, team, state, dsh, run, onInstall }: { preset: Pane
   const model = preset.model ?? t('preset.sessionModel');
   return (
     <Item
-      icon="layers"
+      media={<PresetAvatar avatar={preset.avatar} name={preset.name} />}
       title={preset.name}
       subtitle={team}
       description={preset.description || undefined}

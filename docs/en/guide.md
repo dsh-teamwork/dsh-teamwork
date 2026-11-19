@@ -46,6 +46,12 @@ every 60 seconds. Use the team selector to browse one team or all teams.
 Browsing another team does not retarget an existing conversation or restrict
 phone pairing to that team. A person may belong to several teams.
 
+Each synced team has a **default workspace** on this computer: the folder a
+session started for that team from the phone app or the web console opens in,
+unless the member picks another folder there. Until you choose one it is the
+folder DSH was started in. Change it under **My teams**, choosing from that
+folder and DSH's own workspaces; add a workspace in DSH to offer another one.
+
 Create or join teams in the web console. New teams receive a built-in assistant;
 existing teams are unchanged. Team renaming does not automatically rename the
 assistant. It leads the panel's presets: **Ask the assistant** starts a session
@@ -113,6 +119,8 @@ a web browser). When the device shows the same code,
 remove one.
 
 ## Choose a model or preset
+
+Each team preset shows the avatar its admin chose in the web console, the same one the console and the phone app show.
 
 Use **New session** for a team preset. **Use in this blank session** works only
 before the conversation begins. Started sessions keep their preset generation;

@@ -42,6 +42,7 @@ export declare const snapshotSchema: z.ZodObject<{
                 provider: z.ZodOptional<z.ZodString>;
                 model: z.ZodOptional<z.ZodString>;
                 modelConfigId: z.ZodOptional<z.ZodString>;
+                avatar: z.ZodOptional<z.ZodString>;
                 description: z.ZodOptional<z.ZodString>;
                 instructions: z.ZodOptional<z.ZodString>;
                 outputDescription: z.ZodOptional<z.ZodString>;
@@ -102,6 +103,7 @@ export declare const findConfig: (snapshot: Snapshot | undefined, id: string) =>
         provider?: string | undefined;
         model?: string | undefined;
         modelConfigId?: string | undefined;
+        avatar?: string | undefined;
         description?: string | undefined;
         instructions?: string | undefined;
         outputDescription?: string | undefined;
@@ -159,6 +161,7 @@ export declare const teamOf: (snapshot: Snapshot | undefined, configId: string) 
             provider?: string | undefined;
             model?: string | undefined;
             modelConfigId?: string | undefined;
+            avatar?: string | undefined;
             description?: string | undefined;
             instructions?: string | undefined;
             outputDescription?: string | undefined;
@@ -274,6 +277,7 @@ export declare class TeamworkClient {
                     provider?: string | undefined;
                     model?: string | undefined;
                     modelConfigId?: string | undefined;
+                    avatar?: string | undefined;
                     description?: string | undefined;
                     instructions?: string | undefined;
                     outputDescription?: string | undefined;
@@ -346,6 +350,7 @@ export declare class TeamworkClient {
                     provider?: string | undefined;
                     model?: string | undefined;
                     modelConfigId?: string | undefined;
+                    avatar?: string | undefined;
                     description?: string | undefined;
                     instructions?: string | undefined;
                     outputDescription?: string | undefined;
@@ -427,6 +432,7 @@ export declare class TeamworkClient {
                     provider?: string | undefined;
                     model?: string | undefined;
                     modelConfigId?: string | undefined;
+                    avatar?: string | undefined;
                     description?: string | undefined;
                     instructions?: string | undefined;
                     outputDescription?: string | undefined;
@@ -506,6 +512,7 @@ export declare function modelData(snapshot: Snapshot, config: TeamConfig): {
     provider?: string | undefined;
     model?: string | undefined;
     modelConfigId?: string | undefined;
+    avatar?: string | undefined;
     description?: string | undefined;
     instructions?: string | undefined;
     outputDescription?: string | undefined;
