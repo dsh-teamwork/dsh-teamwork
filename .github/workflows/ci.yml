@@ -11,7 +11,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        dsh: [0.2.2-rc.1, 0.2.2-rc.2, 0.2.2-rc.3]
+        # The peer ranges start at rc.3 (`workspace.picker`), so older hosts are not built against.
+        dsh: [0.2.2-rc.3]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
