@@ -1,6 +1,6 @@
 /** The paired phone's session configuration, with no credentials or desktop-default mutation. */
 import type { PanelState } from './panel.js';
-export type PhoneFailure = 'permission_refused' | 'busy' | 'not_found' | 'not_authenticated' | 'missing_tools' | 'missing_plugins' | 'preset_changed' | 'model_unavailable' | 'invalid_request' | 'unavailable' | 'file_name' | 'file_type' | 'file_too_large' | 'invalid_upload' | 'upload_expired' | 'upload_failed';
+export type PhoneFailure = 'not_text' | 'permission_refused' | 'busy' | 'not_found' | 'not_authenticated' | 'missing_tools' | 'missing_plugins' | 'preset_changed' | 'model_unavailable' | 'invalid_request' | 'unavailable' | 'file_name' | 'file_type' | 'file_too_large' | 'invalid_upload' | 'upload_expired' | 'upload_failed';
 export declare class PhoneSessionError extends Error {
     readonly code: PhoneFailure;
     constructor(code: PhoneFailure, message?: string);
@@ -20,6 +20,8 @@ export interface PhoneSessionOps {
         sessionId: string;
         preset: string;
     }): Promise<unknown>;
+    /** The working directory a session's files are browsed under (src/phone-files.ts). */
+    fileRoot(sessionId: string): Promise<string>;
     check(sessionId: string): Promise<void>;
     accepted(sessionId: string, requestId: string): boolean;
 }

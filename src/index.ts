@@ -315,6 +315,12 @@ export async function apply(ctx: Context, config: Config) {
         if (!run || run.result.kind !== 'success') throw new PhoneSessionError('unavailable');
         return { current: presets.current(agent.session) };
       },
+      async fileRoot(sessionId) {
+        const agent = sessionAgent(sessionId);
+        const cwd = agent?.session.header.cwd;
+        if (!cwd) throw new PhoneSessionError('not_found');
+        return cwd;
+      },
       accepted(sessionId, requestId) {
         const agent = sessionAgent(sessionId);
         if (!agent) return false;
