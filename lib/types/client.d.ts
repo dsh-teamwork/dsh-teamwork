@@ -265,6 +265,14 @@ export declare class TeamworkClient {
         title: string;
         kind: "html" | "markdown" | "svg";
     }>;
+    /**
+     * The files of a page's version, fetched through a view address minted for this member (or, on a Team DSH, for the
+     * session's starter), as the console's frame fetches them.
+     */
+    readPage(teamId: string, pageId: string, version: number, starter: string | undefined, signal: AbortSignal): Promise<{
+        path: string;
+        bytes: Uint8Array;
+    }[]>;
     submitPlugin(teamId: string, bytes: Buffer, sha256: string, input: {
         name: string;
         note: string;

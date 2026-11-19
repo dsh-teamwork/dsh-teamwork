@@ -168,7 +168,9 @@ an `index.html` with the files it loads, one `index.md`, or one `index.svg`,
 from a folder in the session's workspace; at most 255 files and 16 MiB a
 version. Only you share a page, from **Pages** in the console, with chosen
 members or the whole team; the agent cannot. On a Team DSH a page belongs to
-the member whose session made it. Pages run sandboxed: a page cannot act as
+the member whose session made it. A page shared with you can be opened into
+your own session's workspace by your agent, changed, and published as a new
+version under your name. Pages run sandboxed: a page cannot act as
 the person viewing it.
 
 ## Commands

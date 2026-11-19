@@ -1,8 +1,8 @@
 import { test, expect } from 'vitest';
-import { mkdtemp, mkdir, writeFile, symlink, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, symlink, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pageFiles, pageTeam, LIMITS } from '../src/page-tool.js';
+import { pageFiles, pageTeam, writePage, LIMITS } from '../src/page-tool.js';
 import type { Snapshot } from '../src/client.js';
 
 const team = (teamId: string) => ({ teamId, teamName: teamId.toUpperCase(), role: 'member' as const, configs: [] });
@@ -44,6 +44,24 @@ test('a page folder is read whole, inside the workspace, and refused before uplo
 
     await writeFile(join(cwd, 'report', 'big.png'), Buffer.alloc(LIMITS.fileBytes + 1));
     await expect(pageFiles(cwd, 'html', undefined, 'report')).rejects.toThrow(/at most 5 MiB: big.png/);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test('an opened page is written into a new or empty folder of the workspace, and nowhere else', async () => {
+  const cwd = await mkdtemp(join(tmpdir(), 'page-open-'));
+  const outside = await mkdtemp(join(tmpdir(), 'page-open-outside-'));
+  const files = [{ path: 'index.html', bytes: new TextEncoder().encode('<h1>x</h1>') }, { path: 'img/a.svg', bytes: new TextEncoder().encode('<svg/>') }];
+  try {
+    expect(await writePage(cwd, 'copy', files)).toEqual(['index.html', 'img/a.svg']);
+    expect(await readFile(join(cwd, 'copy', 'img', 'a.svg'), 'utf8')).toBe('<svg/>');
+    // What was opened publishes again as it was.
+    expect((await pageFiles(cwd, 'html', undefined, 'copy')).map((f) => f.path)).toEqual(['img/a.svg', 'index.html']);
+    await expect(writePage(cwd, 'copy', files)).rejects.toThrow(/not empty/);
+    await expect(writePage(cwd, join(outside, 'x'), files)).rejects.toThrow(/inside this session's workspace/);
+    await expect(writePage(cwd, 'fresh', [{ path: '../escape.html', bytes: new Uint8Array() }])).rejects.toThrow(/outside the page/);
   } finally {
     await rm(cwd, { recursive: true, force: true });
     await rm(outside, { recursive: true, force: true });

@@ -19,18 +19,20 @@ declare const kinds: readonly ["html", "markdown", "svg"];
 type Kind = (typeof kinds)[number];
 declare const input: z.ZodObject<{
     action: z.ZodEnum<{
+        open: "open";
         create: "create";
         update: "update";
     }>;
     pageId: z.ZodOptional<z.ZodString>;
     baseVersion: z.ZodOptional<z.ZodNumber>;
+    version: z.ZodOptional<z.ZodNumber>;
     teamId: z.ZodOptional<z.ZodString>;
     title: z.ZodOptional<z.ZodString>;
-    kind: z.ZodEnum<{
+    kind: z.ZodOptional<z.ZodEnum<{
         html: "html";
         markdown: "markdown";
         svg: "svg";
-    }>;
+    }>>;
     note: z.ZodDefault<z.ZodString>;
     content: z.ZodOptional<z.ZodString>;
     directory: z.ZodOptional<z.ZodString>;
@@ -50,6 +52,14 @@ export declare function pageFiles(cwd: string, kind: Kind, content: string | und
     path: string;
     bytes: Uint8Array;
 }[]>;
+/**
+ * Writes a page's files into `directory`, a folder inside the session's workspace that is new or empty, so an agent
+ * can change a page it did not make and publish the change with `update`.
+ */
+export declare function writePage(cwd: string, directory: string, files: {
+    path: string;
+    bytes: Uint8Array;
+}[]): Promise<string[]>;
 export interface PageToolOptions {
     client: TeamworkClient;
     preset: (agent: Agent) => PresetContext | undefined;
