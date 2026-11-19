@@ -530,11 +530,15 @@ export declare class TeamworkClient {
 /**
  * Reconcile only registrations owned by this plugin, for every team at once. The host's local registry is never
  * enumerated or mutated. A registration is `team:<teamId>:<configId>`, and a team's new name re-registers its entries.
+ * Only presets are registered: a team model is already in the model picker through `platformAdapter`, and an
+ * empty preset that only selected it listed every model a second time in the mode menu.
  */
 export declare class TeamOverlay {
     private register;
     private owned;
-    constructor(register: (id: string, config: TeamConfig, team: TeamSnapshot) => Promise<() => Promise<void>>);
+    constructor(register: (id: string, preset: Extract<TeamConfig, {
+        kind: 'preset';
+    }>, team: TeamSnapshot) => Promise<() => Promise<void>>);
     private operations;
     apply(snapshot?: Snapshot): Promise<void>;
     private reconcile;
