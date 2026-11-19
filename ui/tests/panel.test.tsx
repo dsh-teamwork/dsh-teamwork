@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { TeamworkPanel } from '../../src/web/TeamworkPanel.js';
 import { api } from '../../src/web/api.js';
+import { presetAvatar } from '../../src/web/avatars.js';
 import type { PanelState } from '../../src/panel.js';
 import type { Host } from '../../src/web/host.js';
 
@@ -270,6 +271,13 @@ test('leads with the team assistant, starts a session with it, and names teams o
   await act(async () => document.querySelector('[role="option"][data-index="1"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
   expect(document.querySelector('.twui-resource-list .twui-item-subtitle')).toBeNull();
   expect(document.querySelector('.twui-featured .twui-item-subtitle')).toBeNull();
+});
+
+test('draws each preset with the avatar its admin chose, or the one its name picks', async () => {
+  vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', presets: [{ ...state.presets[0], avatar: 'legal' }, state.presets[1]] });
+  await mount(); await click('Show every team’s resources');
+  const plates = [...document.querySelectorAll('.twui-resource-list .twui-tile-media rect')].map(r => r.getAttribute('fill'));
+  expect(plates).toEqual([presetAvatar('legal', 'Preset a').plate, presetAvatar(undefined, 'Preset b').plate]);
 });
 
 test('shows an admin the reviews waiting in the browsed team, and a member none', async () => {

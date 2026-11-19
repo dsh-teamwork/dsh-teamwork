@@ -41,8 +41,10 @@ export function Card({ children, padding = 20 }: { children: ReactNode; padding?
  * actions on the right, an optional notice under them (why an action is
  * unavailable), and an optional body below a divider (details, a confirmation).
  */
-export function Item({ icon, title, subtitle, description, tags, actions, notice, children }: {
+export function Item({ icon, media, title, subtitle, description, tags, actions, notice, children }: {
   icon?: IconName;
+  /** The caller's own picture in the icon's place and at its size, such as an avatar drawn as an `<svg>`. */
+  media?: ReactNode;
   title: ReactNode;
   subtitle?: ReactNode;
   description?: ReactNode;
@@ -53,8 +55,8 @@ export function Item({ icon, title, subtitle, description, tags, actions, notice
 }) {
   return (
     <article className="twui-item">
-      <div className="twui-item-main" data-no-icon={icon ? undefined : true}>
-        {icon && <span className="twui-tile"><Icon name={icon} size={18} /></span>}
+      <div className="twui-item-main" data-no-icon={icon || media ? undefined : true}>
+        {media ? <span className="twui-tile twui-tile-media">{media}</span> : icon && <span className="twui-tile"><Icon name={icon} size={18} /></span>}
         <div style={{ minWidth: 0 }}>
           <h3 className="twui-item-title">
             {title}

@@ -120,6 +120,8 @@ remove one.
 
 ## Choose a model or preset
 
+Each team preset shows the avatar its admin chose in the web console, the same one the console and the phone app show.
+
 Use **New session** for a team preset. **Use in this blank session** works only
 before the conversation begins. Started sessions keep their preset generation;
 use a new session to adopt an update. A restart cannot promise to reconstruct a

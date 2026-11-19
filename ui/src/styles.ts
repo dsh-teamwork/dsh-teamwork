@@ -317,6 +317,8 @@ export const css = String.raw`
 .twui-featured .twui-item { border-color: var(--twui-border-strong); box-shadow: inset 3px 0 0 var(--twui-brand); }
 .twui-featured .twui-item-main { padding: 20px 20px 20px 23px; }
 .twui-featured .twui-tile { background: var(--twui-brand); color: var(--twui-brand-fg); }
+.twui-tile.twui-tile-media { background: none; overflow: hidden; }
+.twui-tile-media > svg { display: block; width: 100%; height: 100%; }
 .twui-featured .twui-item-desc { max-width: 68ch; }
 .twui-account-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; margin-top: 12px; align-items: start; }
 .twui-account-grid > section { gap: 20px; min-width: 0; }
