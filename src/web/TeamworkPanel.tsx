@@ -8,7 +8,7 @@ import type { Locale } from '../locale.js';
 import type { PanelPairingOffer, PanelPhone, PanelPlugin, PanelPreset, PanelShared, PanelState, PanelProfile, PanelSummary, PluginState, ToolState } from '../panel.js';
 import { api, HostUnreachable } from './api.js';
 import { PresetAvatar } from './PresetAvatar.js';
-import { currentSessionTracker, type Host } from './host.js';
+import { currentSessionTracker, workspaceAt, type Host, type RenderFactorySlot } from './host.js';
 import { useT, Words, words, type PanelMessage, type Translate } from './messages.js';
 
 type Tab = 'presets' | 'models' | 'plugins';
@@ -83,7 +83,7 @@ function useSummary(team: string | undefined, revision: string) {
 }
 
 /** The Teamwork screen in DSH's main column: sign-in, or the team's presets, models and plugins for the open session. */
-export function TeamworkPanel({ host: dsh }: { host: Host }) {
+export function TeamworkPanel({ host: dsh, renderFactorySlot }: { host: Host; renderFactorySlot: RenderFactorySlot }) {
   const currentSession = useRef(dsh.currentSession ?? currentSessionTracker(dsh.sessions.list)).current;
   const sessionId = useSyncExternalStore(dsh.sessions.list.subscribe, currentSession);
   const [snapshot, setState] = useState<PanelState>();
@@ -283,7 +283,7 @@ export function TeamworkPanel({ host: dsh }: { host: Host }) {
         </>}
         {page === 'devices' && <><PageTitle title={t('phones.title')}>{t('phones.body')}</PageTitle><Phones state={state} run={run} /></>}
         {page === 'shared' && state.shared && <Shared shared={state.shared} run={run} />}
-        {page === 'teams' && <><PageTitle title={t('teams.title')}>{t('teams.body')}</PageTitle>{state.teams.map(x => <Item key={x.id} icon="layers" title={x.name} tags={<Badge tone={x.role === 'admin' ? 'brand' : 'neutral'}>{role(t, x.role)}</Badge>} actions={<><Button onClick={() => selectTeam(x.id)}>{t('teams.browse')}</Button><Button variant="ghost" trailingIcon="external" onClick={() => open(x.consoleUrl)}>{t(x.role === 'admin' ? 'teams.manage' : 'teams.view')}</Button></>}><TeamWorkspace team={x} directories={state.directories} run={run} /></Item>)}<div><Button trailingIcon="external" onClick={() => open(`${state.server}/teams`)}>{t('teams.joinOrCreate')}</Button></div></>}
+        {page === 'teams' && <><PageTitle title={t('teams.title')}>{t('teams.body')}</PageTitle>{state.teams.map(x => <Item key={x.id} icon="layers" title={x.name} tags={<Badge tone={x.role === 'admin' ? 'brand' : 'neutral'}>{role(t, x.role)}</Badge>} actions={<><Button onClick={() => selectTeam(x.id)}>{t('teams.browse')}</Button><Button variant="ghost" trailingIcon="external" onClick={() => open(x.consoleUrl)}>{t(x.role === 'admin' ? 'teams.manage' : 'teams.view')}</Button></>}><TeamWorkspace team={x} dsh={dsh} renderFactorySlot={renderFactorySlot} run={run} /></Item>)}<div><Button trailingIcon="external" onClick={() => open(`${state.server}/teams`)}>{t('teams.joinOrCreate')}</Button></div></>}
         {page === 'profile' && <Account state={state} profile={profile} error={profileError} retry={() => setProfileAttempt(n => n + 1)} updated={next => { if (identity.current === `teamwork:team:${state.server}:${next.id}`) { setProfile(next); void refresh(); } }} run={run} />}
         {toastNode}
       </Panel>
@@ -292,24 +292,42 @@ export function TeamworkPanel({ host: dsh }: { host: Host }) {
 }
 
 /**
- * A team's default workspace: where a session started for this team from a phone or the web console lands unless its
- * member picks another folder there. The choices are where DSH was started and DSH's own workspaces.
+ * A team's default workspace: where a session for this team opens, from a preset here, a phone or the web console,
+ * unless its member picks another folder there. Until one is picked it is where DSH was started; the choice is DSH's
+ * own workspace menu, whose "Add workspace…" registers any folder as a workspace first.
  */
-function TeamWorkspace({ team, directories, run }: { team: PanelState['teams'][number]; directories: string[]; run: Run }) {
+function TeamWorkspace({ team, dsh, renderFactorySlot, run }: { team: PanelState['teams'][number]; dsh: Host; renderFactorySlot: RenderFactorySlot; run: Run }) {
   const t = useT();
+  const anchor = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const current = useSyncExternalStore(listener => dsh.workspaces.list.subscribe(listener), () => workspaceAt(dsh, team.workspace));
   if (!team.workspace) return null;
-  const folder = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+  const pick = async (workspaceId: string) => {
+    setOpen(false);
+    const path = await workspacePath(dsh, workspaceId);
+    if (path) await run(() => api.setWorkspace(team.id, path), t('teams.workspaceSaved', { team: team.name }));
+  };
   return (
     <ItemBody>
       <div className="twui-row">
         <span className="twui-muted">{t('teams.workspace')}</span>
-        <Select label={t('teams.workspace')} value={team.workspace} disabled={directories.length < 2}
-          options={directories.map(path => ({ value: path, label: folder(path), description: path }))}
-          onChange={path => void run(() => api.setWorkspace(team.id, path), t('teams.workspaceSaved', { team: team.name }))} />
+        <Button ref={anchor} aria-haspopup="menu" aria-expanded={open} title={team.workspace} onClick={() => setOpen(value => !value)}>
+          {current?.title ?? team.workspace.split(/[\\/]/).filter(Boolean).pop() ?? team.workspace}
+        </Button>
+        {renderFactorySlot('workspace.picker', { open, anchorRef: anchor, selectedId: current?.workspaceId, onPick: id => void pick(id), onClose: () => setOpen(false) }) as ReactNode}
       </div>
       <p className="twui-muted">{t('teams.workspaceHint')}</p>
     </ItemBody>
   );
+}
+
+/** A picked workspace's folder. One just added reaches DSH's list a moment after the menu reports it, so wait a little. */
+function workspacePath(dsh: Host, workspaceId: string) {
+  const find = () => dsh.workspaces.list.getSnapshot().items.find(workspace => workspace.workspaceId === workspaceId)?.path;
+  return find() ?? new Promise<string | undefined>(resolve => {
+    const stop = dsh.workspaces.list.subscribe(() => { const path = find(); if (path) { stop(); clearTimeout(timer); resolve(path); } });
+    const timer = setTimeout(() => { stop(); resolve(undefined); }, 5000);
+  });
 }
 
 function PageTitle({ title, children }: { title: string; children: ReactNode }) {
@@ -618,8 +636,10 @@ function presetState(t: Translate, preset: PanelPreset, state: PanelState) {
   return { missing, plugins, active, blocked, useBlocked, blank };
 }
 
-function startSession(dsh: Host, preset: PanelPreset) {
-  dsh.uiWorkspace.startSession(undefined, { agentPreset: `team:${preset.teamId}:${preset.id}` });
+/** A preset's new session opens in its team's default workspace when that folder is one of DSH's workspaces. */
+function startSession(dsh: Host, preset: PanelPreset, state: PanelState) {
+  const workspace = workspaceAt(dsh, state.teams.find(team => team.id === preset.teamId)?.workspace);
+  dsh.uiWorkspace.startSession(workspace?.workspaceId, { agentPreset: `team:${preset.teamId}:${preset.id}` });
   dsh.layout.selectPanel(null);
 }
 
@@ -640,7 +660,7 @@ function AssistantItem({ preset, team, state, dsh, run }: { preset: PanelPreset;
         </>}
         actions={active ? <Badge tone="accent" dot>{t('preset.inUse')}</Badge> : <>
           {blank && <Button size="sm" disabled={useBlocked !== undefined} onClick={() => run(() => api.use(state.session!.id, preset.id), t('preset.selected', { name: preset.name }))}>{t('preset.useHere')}</Button>}
-          <Button variant="primary" size="sm" icon="plus" disabled={!!blocked} onClick={() => startSession(dsh, preset)}>{t('assistant.ask')}</Button>
+          <Button variant="primary" size="sm" icon="plus" disabled={!!blocked} onClick={() => startSession(dsh, preset, state)}>{t('assistant.ask')}</Button>
         </>}
         notice={blocked ? <Notice tone="warning">{blocked}</Notice> : undefined}
       />
@@ -674,7 +694,7 @@ function PresetItem({ preset, team, state, dsh, run, onInstall }: { preset: Pane
               {t('preset.useHere')}
             </Button>
           )}
-          <Button size="sm" icon="plus" disabled={!!blocked} onClick={() => startSession(dsh, preset)}>{t('preset.newSession')}</Button>
+          <Button size="sm" icon="plus" disabled={!!blocked} onClick={() => startSession(dsh, preset, state)}>{t('preset.newSession')}</Button>
         </>
       }
       notice={useBlocked && !active ? (

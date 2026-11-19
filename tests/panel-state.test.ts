@@ -46,12 +46,12 @@ test('a panel request reads one inventory for every preset and sees changes on t
     };
     const first = await read();
     // Every synced team starts with the folder DSH was started in as its default workspace.
-    expect(first.directories).toEqual([realpathSync(process.cwd())]);
-    expect(first.teams.map(t => t.workspace)).toEqual([realpathSync(process.cwd())]);
+    const started = realpathSync(process.cwd());
+    expect(first.teams.map(t => t.workspace)).toEqual([started]);
     const setWorkspace = (body: unknown) => routes.get('/api/teamwork/workspace')!.fetch(new Request('http://localhost/api/teamwork/workspace', { method: 'POST', body: JSON.stringify(body) }));
     expect((await setWorkspace({ teamId: 'team', path: '/not/a/workspace' })).status).toBe(400);
-    expect((await setWorkspace({ teamId: 'other', path: first.directories[0] })).status).toBe(400);
-    expect((await setWorkspace({ teamId: 'team', path: first.directories[0] })).status).toBe(200);
+    expect((await setWorkspace({ teamId: 'other', path: started })).status).toBe(400);
+    expect((await setWorkspace({ teamId: 'team', path: started })).status).toBe(200);
     expect(first.presets).toHaveLength(8);
     expect(first.presets.every(p => p.plugins[0].state === 'ready')).toBe(true);
     expect(manager.listBundles).toHaveBeenCalledTimes(1);

@@ -113,8 +113,6 @@ export interface PanelState {
         /** Where a session started for this team from a phone or the web console lands (src/team-workspaces.ts). */
         workspace: string | null;
     }>;
-    /** The folders a session may start in here, and so a team's default workspace may be: where DSH started, then its workspaces. */
-    directories: string[];
     /** The server this DSH signs in to and syncs from, and the one it uses unless the member picks another. */
     server: string;
     defaultServer: string;
@@ -197,7 +195,7 @@ export interface PanelOps {
     authorize(code: string): Promise<void>;
     sync(): Promise<void>;
     logout(): Promise<void>;
-    /** Sets a team's default workspace to one of `PanelState.directories`. */
+    /** Sets a team's default workspace: where DSH started, or one of DSH's workspaces (the panel picks from DSH's own menu). */
     setWorkspace(teamId: string, path: string): Promise<void>;
     /** Points the plugin at another server, or back to the default with `null`; signs out of the current one. */
     setServer(server: string | null): Promise<void>;

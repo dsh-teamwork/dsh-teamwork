@@ -60,6 +60,8 @@ export interface BridgeOptions {
     session?: PhoneSessionOps;
     /** On a shared DSH, whose sessions each pairing's member may reach (src/shared-owner.ts); none on a personal computer. */
     owners?: () => OwnerFilter | undefined;
+    /** The DSH workspace registered at exactly this folder, if any (see `session/create` in `call`). */
+    workspaceAt?: (path: string) => string | undefined;
 }
 export declare class Bridge {
     private readonly options;

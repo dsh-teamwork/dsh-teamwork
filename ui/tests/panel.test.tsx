@@ -6,7 +6,7 @@ import { TeamworkPanel } from '../../src/web/TeamworkPanel.js';
 import { api } from '../../src/web/api.js';
 import { presetAvatar } from '../../src/web/avatars.js';
 import type { PanelState } from '../../src/panel.js';
-import type { Host } from '../../src/web/host.js';
+import type { Host, RenderFactorySlot } from '../../src/web/host.js';
 
 vi.mock('../../src/web/api.js', async (original) => ({ HostUnreachable: (await original<typeof import('../../src/web/api.js')>()).HostUnreachable, api: { summary: vi.fn().mockRejectedValue(new Error("Unavailable")), state: vi.fn(), profile: vi.fn(), updateProfile: vi.fn(), sync: vi.fn(), use: vi.fn(), login: vi.fn(), authorize: vi.fn(), pairPhone: vi.fn(), decidePhone: vi.fn(), revokePhone: vi.fn(), shareEnable: vi.fn(), shareDisable: vi.fn(), shareAuditKey: vi.fn(), shareInvite: vi.fn(), shareUnlock: vi.fn(), setWorkspace: vi.fn() } }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -14,19 +14,31 @@ const profile = { id: 'user', name: 'Ada', email: 'ada@example.com', image: null
 const state: PanelState = {
   locale: 'zh-CN', authRevision: 0, authenticated: true, server: 'https://example.com', defaultServer: 'https://example.com',
   sync: { auto: true, running: false }, relay: 'connected', phones: [], session: null, shared: null,
-  teams: [{ id: 'a', name: 'Alpha', role: 'admin', consoleUrl: 'https://example.com/teams/a', workspace: '/home/ada' }, { id: 'b', name: 'Beta', role: 'member', consoleUrl: 'https://example.com/teams/b', workspace: '/home/ada' }],
-  directories: ['/home/ada', '/home/ada/work'],
+  teams: [{ id: 'a', name: 'Alpha', role: 'admin', consoleUrl: 'https://example.com/teams/a', workspace: '/home/ada/work' }, { id: 'b', name: 'Beta', role: 'member', consoleUrl: 'https://example.com/teams/b', workspace: '/home/ada' }],
   presets: ['a', 'b'].map(id => ({ id: `preset-${id}`, teamId: id, teamName: id, name: `Preset ${id}`, version: 1, description: 'Review', model: 'Model', assistant: false, modelAvailable: true, contextWindowMissing: false, tools: [], plugins: [] })),
   models: [], plugins: [],
 };
-const host: Host = { sessions: { list: { getSnapshot: () => ({ byId: {} }), subscribe: () => () => {} } }, layout: { selectPanel: vi.fn() }, uiWorkspace: { startSession: vi.fn() } };
+/** DSH's workspaces: '/home/ada/work' is one, '/home/ada' (where DSH started) is not. */
+let workspaces = { items: [{ workspaceId: 'ws-work', path: '/home/ada/work', title: 'Work' }] };
+const listeners = new Set<() => void>();
+const addWorkspace = (workspace: { workspaceId: string; path: string; title: string }) => { workspaces = { items: [...workspaces.items, workspace] }; listeners.forEach(listener => listener()); };
+const host: Host = {
+  sessions: { list: { getSnapshot: () => ({ byId: {} }), subscribe: () => () => {} } }, layout: { selectPanel: vi.fn() }, uiWorkspace: { startSession: vi.fn() },
+  // DSH's list is a class instance whose methods use `this`, so the panel must not call them detached.
+  workspaces: { list: new class { listeners = listeners; getSnapshot() { return workspaces; } subscribe(listener: () => void) { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; } }() },
+};
+/** Stands in for DSH's `workspace.picker`: open, it offers the existing workspace and "Add workspace…", which reports a new one. */
+const renderFactorySlot: RenderFactorySlot = (_name, props) => props.open ? <div role="menu">
+  <button onClick={() => props.onPick('ws-work')}>Pick Work</button>
+  <button onClick={() => props.onPick('ws-new')}>Add workspace…</button>
+</div> : null;
 let root: ReturnType<typeof createRoot>;
 let scenario = 0;
 beforeEach(() => { vi.resetAllMocks(); profile.id = `user-${++scenario}`; vi.mocked(api.state).mockResolvedValue(state); vi.mocked(api.profile).mockResolvedValue(profile); });
 afterEach(() => { act(() => root?.unmount()); document.body.innerHTML = ''; localStorage.clear(); vi.clearAllMocks(); vi.useRealTimers(); });
 async function mount() {
   const container = document.createElement('div'); document.body.append(container); root = createRoot(container);
-  await act(async () => { root.render(<TeamworkPanel host={host} />); });
+  await act(async () => { root.render(<TeamworkPanel host={host} renderFactorySlot={renderFactorySlot} />); });
 }
 async function click(text: string) {
   const button = [...document.querySelectorAll('button')].find(b => b.textContent?.trim() === text);
@@ -126,16 +138,19 @@ test('switches teams and survives a removed membership without changing the phon
   expect(api.use).not.toHaveBeenCalled(); expect(api.decidePhone).not.toHaveBeenCalled();
 });
 
-test('sets a team’s default workspace from the teams page, one team at a time', async () => {
+test('sets a team’s default workspace from DSH’s own workspace menu, including a folder added there', async () => {
   vi.mocked(api.setWorkspace).mockResolvedValue(undefined);
   await mount(); await click('我的团队');
-  const triggers = [...document.querySelectorAll<HTMLButtonElement>('.twui-select-trigger')].filter(b => b.getAttribute('aria-label')?.startsWith('默认工作区'));
-  expect(triggers).toHaveLength(2);
-  expect(triggers[1].textContent).toContain('ada');
-  await act(async () => triggers[1].click());
-  await act(async () => document.querySelector('[role="option"][data-index="1"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  // A workspace shows by its title; where DSH started, which is not one, by its folder name.
+  expect([...document.querySelectorAll('button')].map(b => b.textContent).filter(text => text === 'Work' || text === 'ada')).toEqual(['Work', 'ada']);
+  await click('ada'); await click('Pick Work');
   expect(api.setWorkspace).toHaveBeenCalledWith('b', '/home/ada/work');
   expect(document.body.textContent).toContain('已保存Beta的默认工作区');
+  // A folder added in the menu reaches DSH's list just after the menu reports it.
+  await click('ada'); await click('Add workspace…');
+  expect(api.setWorkspace).toHaveBeenCalledTimes(1);
+  await act(async () => addWorkspace({ workspaceId: 'ws-new', path: '/home/ada/new', title: 'New' }));
+  expect(api.setWorkspace).toHaveBeenLastCalledWith('b', '/home/ada/new');
 });
 
 test('locks pairing generation and lets the member hide a still-valid code', async () => {
@@ -266,7 +281,8 @@ test('leads with the team assistant, starts a session with it, and names teams o
   // Only the assistant's action is primary; every other row's new session is secondary.
   expect([...document.querySelectorAll('.twui-btn[data-variant="primary"]')].map(b => b.textContent)).toEqual(['Ask the assistant']);
   await click('Ask the assistant');
-  expect(host.uiWorkspace.startSession).toHaveBeenCalledWith(undefined, { agentPreset: 'team:a:assistant-a' });
+  // Team a's default folder is a DSH workspace, so the session opens there.
+  expect(host.uiWorkspace.startSession).toHaveBeenCalledWith('ws-work', { agentPreset: 'team:a:assistant-a' });
   await act(async () => document.querySelector<HTMLButtonElement>('.twui-select-trigger')!.click());
   await act(async () => document.querySelector('[role="option"][data-index="1"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
   expect(document.querySelector('.twui-resource-list .twui-item-subtitle')).toBeNull();

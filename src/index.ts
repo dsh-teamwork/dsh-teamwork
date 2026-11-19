@@ -225,10 +225,10 @@ export async function apply(ctx: Context, config: Config) {
    * Where a session may be started from a phone or the console: the directory DSH was started in, then DSH's own
    * workspaces. A new device, or a member of a shared DSH with no session yet, has no other way to name one.
    */
-  let workspaces: { list(): { path: string }[] } | undefined;
+  let workspaces: { list(): { id: string; path: string }[] } | undefined;
   ctx.inject(['workspaceRegistry'], (scoped) => {
     scoped.effect(() => {
-      workspaces = (scoped as unknown as { workspaceRegistry: { list(): { path: string }[] } }).workspaceRegistry;
+      workspaces = (scoped as unknown as { workspaceRegistry: { list(): { id: string; path: string }[] } }).workspaceRegistry;
       return () => { workspaces = undefined; };
     });
   });
@@ -243,6 +243,7 @@ export async function apply(ctx: Context, config: Config) {
   const bridge = new Bridge({
     launchUrl: () => launchUrl?.(),
     owners: () => shared?.enabled ? owners : undefined,
+    workspaceAt: (path) => workspaces?.list().find(workspace => workspace.path === path)?.id,
     send: (frame) => { audit(frame, 'out'); security.send(frame); },
     log: (message, error) => ctx.logger.warn('%s: %s', message, (error as Error | undefined)?.message ?? ''),
     session: {
@@ -563,7 +564,6 @@ export async function apply(ctx: Context, config: Config) {
         authRevision: client.sessionRevision(),
         authenticated: status.authenticated,
         teams: (snapshot?.teams ?? []).map(team => ({ id: team.teamId, name: team.teamName, role: team.role, consoleUrl: `${client.endpoint}/teams/${team.teamId}`, workspace: defaults[team.teamId] ?? null })),
-        directories: directories(),
         server: client.endpoint,
         defaultServer: serverAddress(config.apiEndpoint),
         sync: { auto: status.autoSync, running: status.syncing, lastSuccess: status.lastSuccess, lastError: status.lastError },
