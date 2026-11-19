@@ -211,6 +211,13 @@ export declare const teamOf: (snapshot: Snapshot | undefined, configId: string) 
  * this machine, no query or fragment, no trailing slash. Throws a message for the member.
  */
 export declare function serverAddress(input: string): string;
+/** A page the server refused: its status, code (`page_stale`, `page_too_large`, …) and what it said was wrong. */
+export declare class PageError extends Error {
+    readonly status: number;
+    readonly code: string;
+    readonly detail: string;
+    constructor(status: number, code: string, detail: string);
+}
 export declare class TeamworkClient {
     readonly cachePath: string;
     private request;
@@ -235,6 +242,29 @@ export declare class TeamworkClient {
     completeLogin(pasted: string): Promise<void>;
     private api;
     downloadArtifact(teamId: string, id: string, digest: string): Promise<string>;
+    /**
+     * Publishes a page (docs/tech/pages.md in the platform repository): a new one, or a version on top of `baseVersion`.
+     * `files` are paths within the page and their bytes; the server holds every rule and limit, and says which broke.
+     */
+    publishPage(teamId: string, input: {
+        pageId?: string;
+        title?: string;
+        kind: 'html' | 'markdown' | 'svg';
+        note: string;
+        sessionId: string;
+        computer: string;
+        baseVersion?: number;
+        starter?: string;
+    }, files: {
+        path: string;
+        bytes: Uint8Array;
+    }[], signal: AbortSignal): Promise<{
+        id: string;
+        teamId: string;
+        version: number;
+        title: string;
+        kind: "html" | "markdown" | "svg";
+    }>;
     submitPlugin(teamId: string, bytes: Buffer, sha256: string, input: {
         name: string;
         note: string;

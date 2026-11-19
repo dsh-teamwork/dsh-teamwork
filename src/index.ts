@@ -17,6 +17,8 @@ import { taskProjection, stepProjection, TaskActions, recoveryHint, retryInstruc
 import { pluginState, stateText, type PluginState } from './plugin-status.js';
 import { panelRoutes, type FetchRoute, type PanelOps, type PanelPreset } from './panel.js';
 import { registerAssistantTools } from './assistant-tools.js';
+import { registerPageTool } from './page-tool.js';
+import { hostname } from 'node:os';
 import { platformAdapter, platformProvider } from './platform-models.js';
 import { Bridge } from './bridge.js';
 import { PhoneSessionError, phonePresets } from './phone-session.js';
@@ -276,6 +278,12 @@ export async function apply(ctx: Context, config: Config) {
     log: message => ctx.logger.warn('%s', message),
   });
   ctx.effect(() => () => shared?.stop());
+  // Pages an agent publishes (src/page-tool.ts): on a Team DSH, for the member whose session it is.
+  ctx.inject(['tools'], child => registerPageTool(child, {
+    client, preset: activePreset,
+    starterOf: (sessionId) => shared?.enabled ? roster.ownerOf(sessionId) : undefined,
+    computer: () => (shared?.enabled && shared.status().name) || hostname(),
+  }));
   const security = new PhoneSecurity({
     keys: phoneKeys,
     scope: () => {
