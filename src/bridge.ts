@@ -69,6 +69,8 @@ export interface BridgeOptions {
   session?: PhoneSessionOps;
   /** On a shared DSH, whose sessions each pairing's member may reach (src/shared-owner.ts); none on a personal computer. */
   owners?: () => OwnerFilter | undefined;
+  /** The DSH workspace registered at exactly this folder, if any (see `session/create` in `call`). */
+  workspaceAt?: (path: string) => string | undefined;
 }
 
 interface Link {
@@ -234,7 +236,13 @@ export class Bridge {
           if (Array.isArray(prompt.content)) uploaded = this.uploads.validate(frame.pairingId, promptSession, prompt.content);
         }
       }
-      const response = await post();
+      // A phone or the console names a folder; DSH files a session under a workspace only when it is named by id, so a
+      // folder that is a workspace goes as that workspace, and the session is listed there instead of under Ungrouped.
+      const created = frame.method === 'session/create' ? request as { cwd?: unknown; workspaceId?: unknown } | undefined : undefined;
+      const workspaceId = typeof created?.cwd === 'string' && created.workspaceId === undefined ? this.options.workspaceAt?.(created.cwd) : undefined;
+      const response = workspaceId
+        ? await post(frame.method, { ...frame.body as object, args: { ...(frame.body as { args: object }).args, request: { ...Object.fromEntries(Object.entries(created!).filter(([key]) => key !== 'cwd')), workspaceId } } })
+        : await post();
       const text = await response.text();
       if (promptSession && response.ok && (parseJson(text) as { result?: { ok?: boolean } } | null)?.result?.ok) {
         for (const id of uploaded) this.uploads.cancel(frame.pairingId, promptSession, id);

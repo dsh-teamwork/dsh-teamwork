@@ -17,6 +17,7 @@ test('a panel request reads one inventory for every preset and sees changes on t
   const snapshot = { teams: [{ teamId: 'team', teamName: 'Team', role: 'member', configs }] };
   await writeFile(cachePath, JSON.stringify(snapshot));
   let enabled = true;
+  const registry = { items: [] as { id: string; path: string; title: string }[], list() { return this.items; } };
   const manager = {
     listBundles: vi.fn(async () => [{ name: 'fixture', version: '1.0.0', availability: 'profile', enabled, rows: [{ entryId: 'entry' }] }]),
     listPlugins: vi.fn(async () => [{ entryId: 'entry', enabled, fiberPhase: 'active' }]),
@@ -25,7 +26,7 @@ test('a panel request reads one inventory for every preset and sees changes on t
   const cleanup: Array<() => unknown> = [];
   const services: Record<string, any> = { pluginManager: manager };
   const ctx: any = {
-    llm: { registerAdapter: () => () => {} },
+    llm: { registerAdapter: () => Object.assign(() => {}, { replace() {} }) },
     sessionProjections: { register: async () => ({ dispose() {} }) },
     agentPresets: { register: async () => async () => {} },
     agents: { get: () => undefined },
@@ -35,7 +36,10 @@ test('a panel request reads one inventory for every preset and sees changes on t
     on: () => () => {},
     effect: (fn: () => (() => unknown)) => { cleanup.push(fn()); },
     connection: { fetch: { register: (route: FetchRoute) => { routes.set(route.path, route); return async () => {}; } } },
-    inject: (names: string[], fn: (ctx: unknown) => void) => { if (names.length === 1 && names[0] === 'connection') fn(ctx); },
+    inject: (names: string[], fn: (ctx: unknown) => void) => {
+      if (names.length === 1 && names[0] === 'connection') fn(ctx);
+      if (names.length === 1 && names[0] === 'workspaceRegistry') fn({ workspaceRegistry: registry, effect: ctx.effect });
+    },
   };
   try {
     await apply(ctx, { apiEndpoint: 'http://localhost:3800', cachePath, autoSync: false });
@@ -44,14 +48,21 @@ test('a panel request reads one inventory for every preset and sees changes on t
       expect(response.status).toBe(200);
       return response.json();
     };
+    // A team that never chose lands in DSH's own default workspace, else DSH's first, so its sessions are grouped.
+    registry.items = [{ id: 'w1', path: '/work/first', title: 'first' }, { id: 'w2', path: '/docs/deepseek-harness/default-workspace', title: 'default-workspace' }];
+    expect((await read()).teams.map(t => t.workspace)).toEqual(['/docs/deepseek-harness/default-workspace']);
+    registry.items = registry.items.slice(0, 1);
+    expect((await read()).teams.map(t => t.workspace)).toEqual(['/work/first']);
+    registry.items = [];
+    manager.listBundles.mockClear(); manager.listPlugins.mockClear();
     const first = await read();
-    // Every synced team starts with the folder DSH was started in as its default workspace.
-    expect(first.directories).toEqual([realpathSync(process.cwd())]);
-    expect(first.teams.map(t => t.workspace)).toEqual([realpathSync(process.cwd())]);
+    // With no DSH workspace, it starts in the folder DSH was started in.
+    const started = realpathSync(process.cwd());
+    expect(first.teams.map(t => t.workspace)).toEqual([started]);
     const setWorkspace = (body: unknown) => routes.get('/api/teamwork/workspace')!.fetch(new Request('http://localhost/api/teamwork/workspace', { method: 'POST', body: JSON.stringify(body) }));
     expect((await setWorkspace({ teamId: 'team', path: '/not/a/workspace' })).status).toBe(400);
-    expect((await setWorkspace({ teamId: 'other', path: first.directories[0] })).status).toBe(400);
-    expect((await setWorkspace({ teamId: 'team', path: first.directories[0] })).status).toBe(200);
+    expect((await setWorkspace({ teamId: 'other', path: started })).status).toBe(400);
+    expect((await setWorkspace({ teamId: 'team', path: started })).status).toBe(200);
     expect(first.presets).toHaveLength(8);
     expect(first.presets.every(p => p.plugins[0].state === 'ready')).toBe(true);
     expect(manager.listBundles).toHaveBeenCalledTimes(1);
@@ -83,7 +94,7 @@ test('a team model without its context window is shown as not ready and stops a 
   const listeners = new Map<string, (...args: any[]) => unknown>();
   const services: Record<string, any> = {};
   const ctx: any = {
-    llm: { registerAdapter: () => () => {} },
+    llm: { registerAdapter: () => Object.assign(() => {}, { replace() {} }) },
     sessionProjections: { register: async () => ({ dispose() {} }) },
     agentPresets: { register: async () => async () => {}, presetForSession: () => undefined, serviceFor: () => undefined },
     agents: { get: () => undefined },
@@ -104,7 +115,7 @@ test('a team model without its context window is shown as not ready and stops a 
     expect(state.presets[0]).toMatchObject({ model: 'DeepSeek Flash', modelAvailable: false, contextWindowMissing: true });
 
     const request = listeners.get('agent/request')!;
-    const agent = (model: string) => ({ id: 's', model: { current: () => ({ provider: 'teamwork-platform', model }) }, session: {} });
+    const agent = (model: string) => ({ id: 's', model: { current: () => ({ provider: 'teamwork-platform-team', model }) }, session: {} });
     const next = vi.fn(async () => 'config');
     await expect(request({ agent: agent('unsized') }, next)).rejects.toThrow('“DeepSeek Flash” has no context window');
     expect(next).not.toHaveBeenCalled();

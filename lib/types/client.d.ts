@@ -535,10 +535,12 @@ export declare class TeamworkClient {
  */
 export declare class TeamOverlay {
     private register;
+    private teams;
     private owned;
+    /** `teams` runs first on every apply, with the teams as synced: the plugin keeps one model provider per team there. */
     constructor(register: (id: string, preset: Extract<TeamConfig, {
         kind: 'preset';
-    }>, team: TeamSnapshot) => Promise<() => Promise<void>>);
+    }>, team: TeamSnapshot) => Promise<() => Promise<void>>, teams: () => void);
     private operations;
     apply(snapshot?: Snapshot): Promise<void>;
     private reconcile;

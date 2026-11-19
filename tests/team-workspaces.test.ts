@@ -10,27 +10,27 @@ const store = async () => {
 };
 
 describe('team workspaces', () => {
-  it('gives every team the directory DSH started in until one is chosen', async () => {
+  it('gives every team the fallback until one is chosen', async () => {
     const { workspaces } = await store();
-    expect(await workspaces.defaults(['a', 'b'], ['/start', '/work'])).toEqual({ a: '/start', b: '/start' });
+    expect(await workspaces.defaults(['a', 'b'], ['/start', '/work'], '/work')).toEqual({ a: '/work', b: '/work' });
   });
 
   it('keeps a chosen default across instances, in a private file', async () => {
     const { path, workspaces } = await store();
     await workspaces.set('b', '/work');
-    expect(await new TeamWorkspaces(path).defaults(['a', 'b'], ['/start', '/work'])).toEqual({ a: '/start', b: '/work' });
+    expect(await new TeamWorkspaces(path).defaults(['a', 'b'], ['/start', '/work'], '/start')).toEqual({ a: '/start', b: '/work' });
     expect(JSON.parse(await readFile(path, 'utf8'))).toEqual({ b: '/work' });
     if (process.platform !== 'win32') expect((await stat(path)).mode & 0o777).toBe(0o600);
   });
 
-  it('falls back to the start directory when a chosen one is no longer offered', async () => {
+  it('falls back when a chosen one is no longer offered', async () => {
     const { workspaces } = await store();
     await workspaces.set('a', '/gone');
-    expect(await workspaces.defaults(['a'], ['/start', '/work'])).toEqual({ a: '/start' });
+    expect(await workspaces.defaults(['a'], ['/start', '/work'], '/work')).toEqual({ a: '/work' });
   });
 
   it('names no default where no directory is offered', async () => {
     const { workspaces } = await store();
-    expect(await workspaces.defaults(['a'], [])).toEqual({});
+    expect(await workspaces.defaults(['a'], [], undefined)).toEqual({});
   });
 });

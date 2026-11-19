@@ -6,7 +6,7 @@ describe('phone preset catalog', () => {
   const row={id:'team:t1:p1',name:'Review',isDefault:false};
   const state=(patch: Record<string,unknown>={})=>({presets:[{id:'p1',teamId:'t1',teamName:'Team',version:3,modelAvailable:true,tools:[],plugins:[],...patch}]} as unknown as PanelState);
   it('uses native ids and enriches only a preset from its exact team', () => {
-    expect(phonePresets(state(),[row])[0]).toMatchObject({id:row.id,teamId:'t1',version:3,model:{provider:'teamwork-platform',model:'p1'},blocked:null});
+    expect(phonePresets(state(),[row])[0]).toMatchObject({id:row.id,teamId:'t1',version:3,model:{provider:'teamwork-platform-t1',model:'p1'},blocked:null});
     expect(phonePresets(state(),[{...row,id:'team:t2:p1'}])[0]).not.toHaveProperty('teamId');
   });
   it('passes the team preset\'s avatar to the phone, and none it did not choose', () => {

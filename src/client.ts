@@ -297,10 +297,13 @@ export class TeamworkClient {
  */
 export class TeamOverlay {
   private owned = new Map<string, { signature: string; dispose: () => Promise<void> }>();
-  constructor(private register: (id: string, preset: Extract<TeamConfig, { kind: 'preset' }>, team: TeamSnapshot) => Promise<() => Promise<void>>) {}
+  /** `teams` runs first on every apply, with the teams as synced: the plugin keeps one model provider per team there. */
+  constructor(private register: (id: string, preset: Extract<TeamConfig, { kind: 'preset' }>, team: TeamSnapshot) => Promise<() => Promise<void>>,
+    private teams: () => void) {}
   private operations: Promise<void> = Promise.resolve();
   apply(snapshot?: Snapshot) { const next = this.operations.then(() => this.reconcile(snapshot)); this.operations = next.catch(() => {}); return next; }
   private async reconcile(snapshot?: Snapshot) {
+    this.teams();
     const desired = new Map((snapshot?.teams ?? []).flatMap(team => team.configs.filter((c): c is Extract<TeamConfig, { kind: 'preset' }> => c.kind === 'preset')
       .map(config => [`team:${team.teamId}:${config.id}` as string, { config, team, signature: JSON.stringify([team.teamName, config]) }] as const)));
     for (const [id, old] of this.owned) if (old.signature !== desired.get(id)?.signature) { await old.dispose(); this.owned.delete(id); }

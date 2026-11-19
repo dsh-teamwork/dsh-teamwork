@@ -19,7 +19,7 @@ import { panelRoutes, type FetchRoute, type PanelOps, type PanelPreset } from '.
 import { registerAssistantTools } from './assistant-tools.js';
 import { registerPageTool } from './page-tool.js';
 import { hostname } from 'node:os';
-import { platformAdapter, platformProvider } from './platform-models.js';
+import { isTeamProvider, platformAdapter, teamProvider, teamRoutes } from './platform-models.js';
 import { Bridge, bridgeRoute } from './bridge.js';
 import { PhoneSessionError, phonePresets } from './phone-session.js';
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm';
@@ -49,7 +49,8 @@ export async function apply(ctx: Context, config: Config) {
   // With tokenFile the host names the server in apiEndpoint, and a member's earlier choice does not apply.
   const chosen = config.tokenFile ? undefined : await serverChoice.read();
   if (chosen) await client.setEndpoint(chosen);
-  ctx.effect(() => ctx.llm.registerAdapter([platformProvider], platformAdapter(client)));
+  const providers = teamRoutes(ctx.llm, client, platformAdapter(client));
+  ctx.effect(() => () => providers.dispose());
   const taskState = await ctx.sessionProjections.register(taskProjection);
   ctx.effect(() => () => taskState.dispose());
   const stepState = await ctx.sessionProjections.register(stepProjection);
@@ -65,7 +66,10 @@ export async function apply(ctx: Context, config: Config) {
       ...(item.data.modelConfigId ? {modelConfigId: item.data.modelConfigId} : {}),
       teamId: team.teamId, id: item.id, name: item.name, version: item.version,
     } }] }],
-  }));
+  }), () => {
+    // A refused route set keeps the previous one; the presets still reconcile.
+    try { providers.sync(); } catch (error) { ctx.logger.warn('Could not register the team model providers: %s', (error as Error).message); }
+  });
   const restartRequired = new Set<string>();
   const activePreset = (agent: Agent) => ctx.agentPresets.serviceFor(agent, 'teamworkPreset');
   const requirements = (agent: Agent, preset: PresetContext) => {
@@ -121,12 +125,17 @@ export async function apply(ctx: Context, config: Config) {
       'Install or enable a missing tool in the local plugin manager; a preset never installs a plugin or grants a permission.',
     ].filter(Boolean).join('\n');
   };
+  /** Selects a team model, or a preset's own model, for this session only: under its team's provider. */
+  const selectTeamModel = (agent: Agent, id: string) => {
+    const team = teamOf(client.current(), id);
+    if (team) agent.model.select({ provider: teamProvider(team.teamId), model: id });
+  };
   /** The reason a team model or preset id cannot run here (see modelLimitProblem), if any. */
   const limitProblem = (id: string) => { const snapshot = client.current(), item = findConfig(snapshot, id); return snapshot && item ? modelLimitProblem(snapshot, item) : undefined; };
   // Runs inside the host's model-switch compaction check, so a model without its window gets this reason, not that failure.
   ctx.on('agent/request', async ({agent}, next) => {
     const selection = agent.model.current();
-    const limit = selection?.provider === platformProvider ? limitProblem(selection.model) : undefined;
+    const limit = selection && isTeamProvider(selection.provider) ? limitProblem(selection.model) : undefined;
     if (limit) throw new Error(limit);
     const preset = activePreset(agent);
     if (preset) {
@@ -154,15 +163,15 @@ export async function apply(ctx: Context, config: Config) {
   const adoptTeamModel = async (agent: Agent) => {
     if (!config.tokenFile || agent.status !== 'idle') return;
     const current = agent.model.current(), snapshot = client.current();
-    if (current?.provider === platformProvider || (current && await localCallable(current)) || !snapshot) return;
+    if (isTeamProvider(current?.provider) || (current && await localCallable(current)) || !snapshot) return;
     const fallback = allConfigs(snapshot).find(c => c.kind === 'model' && modelData(snapshot, c) && !modelLimitProblem(snapshot, c));
-    if (fallback && agent.status === 'idle') agent.model.select({ provider: platformProvider, model: fallback.id });
+    if (fallback && agent.status === 'idle') selectTeamModel(agent, fallback.id);
   };
   const readiness = async (agent:Agent, fresh=false) => {
     const selection=agent.model.current();
     if(!selection) throw new PhoneSessionError('model_unavailable', 'No model is selected. Choose a local model, or run /teamwork use <id>.');
-    if(selection.provider!==platformProvider && !await localCallable(selection)) throw new PhoneSessionError('model_unavailable', 'The session’s model is not available on this computer (it has no key here). Choose another model.');
-    if(selection.provider===platformProvider) {
+    if(!isTeamProvider(selection.provider) && !await localCallable(selection)) throw new PhoneSessionError('model_unavailable', 'The session’s model is not available on this computer (it has no key here). Choose another model.');
+    if(isTeamProvider(selection.provider)) {
       if(!client.authenticated()) throw new PhoneSessionError('not_authenticated', 'Not signed in to the team model, or the sign-in expired. Run /teamwork login.');
       if(fresh) { try {await configSync.sync();} catch {throw new PhoneSessionError('unavailable', 'Could not verify team access. Check the connection and /teamwork status, and sign in again if needed.');} }
       const snapshot=client.current(), item=findConfig(snapshot, selection.model);
@@ -180,7 +189,7 @@ export async function apply(ctx: Context, config: Config) {
     }
   };
   const actions=new TaskActions(agent=>readiness(agent,true),agent=>{
-    const model=agent.model.current(), usesTeam=model?.provider===platformProvider || !!activePreset(agent);
+    const model=agent.model.current(), usesTeam=isTeamProvider(model?.provider) || !!activePreset(agent);
     return JSON.stringify({live:ctx.agents.get(agent.id)===agent,seq:agent.session.seq,model,preset:stamps.get(String(agent.id)),
       ...(usesTeam ? {team:client.current(),authenticated:client.authenticated(),authRevision:client.sessionRevision()} : {})});
   });
@@ -216,17 +225,26 @@ export async function apply(ctx: Context, config: Config) {
    * Where a session may be started from a phone or the console: the directory DSH was started in, then DSH's own
    * workspaces. A new device, or a member of a shared DSH with no session yet, has no other way to name one.
    */
-  let workspaces: { list(): { path: string }[] } | undefined;
+  let workspaces: { list(): { id: string; path: string; title: string }[] } | undefined;
   ctx.inject(['workspaceRegistry'], (scoped) => {
     scoped.effect(() => {
-      workspaces = (scoped as unknown as { workspaceRegistry: { list(): { path: string }[] } }).workspaceRegistry;
+      workspaces = (scoped as unknown as { workspaceRegistry: { list(): { id: string; path: string; title: string }[] } }).workspaceRegistry;
       return () => { workspaces = undefined; };
     });
   });
   const directories = () => startDirectories(process.cwd(), workspaces?.list() ?? []);
   /** Each synced team's default workspace here (src/team-workspaces.ts), where a phone or the console starts a session. */
   const teamWorkspaces = new TeamWorkspaces(teamWorkspacesPath(config.cachePath));
-  const teamDirectories = () => teamWorkspaces.defaults((client.current()?.teams ?? []).map(team => team.teamId), directories());
+  /**
+   * Where a team that has not chosen lands: DSH's own first-use workspace, which DSH recognises by this title
+   * (`DEFAULT_WORKSPACE_DIRECTORY`, @deepseek-ai/dsh-api-workspace-controller), else DSH's first workspace, else the
+   * directory DSH started in. A workspace lists its sessions under it; the start directory leaves them Ungrouped.
+   */
+  const fallbackDirectory = () => {
+    const list = workspaces?.list() ?? [];
+    return (list.find(workspace => workspace.title === 'default-workspace') ?? list[0])?.path ?? directories()[0];
+  };
+  const teamDirectories = () => teamWorkspaces.defaults((client.current()?.teams ?? []).map(team => team.teamId), directories(), fallbackDirectory());
   const owners = new OwnerFilter(roster, (pairingId) => roster.memberOf(pairingId), directories);
   /** Who the server lets reach this shared DSH, as the relay last said; and members whose handsets wait to join. */
   let sharedMembers: SharedMember[] = [];
@@ -234,6 +252,7 @@ export async function apply(ctx: Context, config: Config) {
   const bridge = new Bridge({
     launchUrl: () => launchUrl?.(),
     owners: () => shared?.enabled ? owners : undefined,
+    workspaceAt: (path) => workspaces?.list().find(workspace => workspace.path === path)?.id,
     send: (frame) => { audit(frame, 'out'); security.send(frame); },
     log: (message, error) => ctx.logger.warn('%s: %s', message, (error as Error | undefined)?.message ?? ''),
     session: {
@@ -460,7 +479,7 @@ export async function apply(ctx: Context, config: Config) {
     if (!agent) return;
     const active = activePreset(agent);
     if (active) {
-      if (!active.inheritModel) agent.model.select({provider:platformProvider,model:active.id});
+      if (!active.inheritModel) selectTeamModel(agent, active.id);
       if (!sameRevision(stamps.get(String(agent.id)),active)) stamp(agent,active);
     } else keep(stamps.clear(String(agent.id)));
   });
@@ -470,7 +489,7 @@ export async function apply(ctx: Context, config: Config) {
     const item = snapshot?.teams.flatMap(team => team.configs.filter(c => `team:${team.teamId}:${c.id}` === selected))[0];
     const preset = activePreset(agent);
     if (preset && !stamps.get(String(agent.id))) stamp(agent,preset);
-    if (source !== 'resume' && item?.kind === 'preset' && !inheritsModel(item)) agent.model.select({ provider: platformProvider, model: item.id });
+    if (source !== 'resume' && item?.kind === 'preset' && !inheritsModel(item)) selectTeamModel(agent, item.id);
     adoptTeamModel(agent).catch(error => ctx.logger.warn('Could not choose a team model: %s', (error as Error).message));
     return undefined;
   });
@@ -492,7 +511,7 @@ export async function apply(ctx: Context, config: Config) {
       await ctx.agentPresets.select(agent, `team:${team.teamId}:${item.id}`);
       const active = activePreset(agent); if (active && !sameRevision(stamps.get(String(agent.id)),active)) stamp(agent,active);
     }
-    if (!inheritsModel(item)) agent.model.select({ provider: platformProvider, model: item.id });
+    if (!inheritsModel(item)) selectTeamModel(agent, item.id);
     return { preset: item.kind === 'preset', text: say('use.done', { name: item.name }) };
   };
   /** Installs a pinned plugin disabled, enables it only when it adds configuration and overrides nothing. Callers confirm first. */
@@ -554,7 +573,6 @@ export async function apply(ctx: Context, config: Config) {
         authRevision: client.sessionRevision(),
         authenticated: status.authenticated,
         teams: (snapshot?.teams ?? []).map(team => ({ id: team.teamId, name: team.teamName, role: team.role, consoleUrl: `${client.endpoint}/teams/${team.teamId}`, workspace: defaults[team.teamId] ?? null })),
-        directories: directories(),
         server: client.endpoint,
         defaultServer: serverAddress(config.apiEndpoint),
         sync: { auto: status.autoSync, running: status.syncing, lastSuccess: status.lastSuccess, lastError: status.lastError },
@@ -563,7 +581,7 @@ export async function apply(ctx: Context, config: Config) {
         shared: await sharedView(),
         session: agent ? {
           id: String(agent.id),
-          model: selection ? { provider: selection.provider, model: selection.model, team: selection.provider === platformProvider } : null,
+          model: selection ? { provider: selection.provider, model: selection.model, team: isTeamProvider(selection.provider) } : null,
           preset: active ? { id: active.id, name: active.name, version: active.version } : null,
           started: boundary!.openTurnStartSeq !== null || boundary!.lastTurn > 0,
         } : null,

@@ -47,10 +47,14 @@ Browsing another team does not retarget an existing conversation or restrict
 phone pairing to that team. A person may belong to several teams.
 
 Each synced team has a **default workspace** on this computer: the folder a
-session started for that team from the phone app or the web console opens in,
-unless the member picks another folder there. Until you choose one it is the
-folder DSH was started in. Change it under **My teams**, choosing from that
-folder and DSH's own workspaces; add a workspace in DSH to offer another one.
+session started for that team opens in, from one of its presets in the panel,
+the phone app or the web console, unless the member picks another folder there.
+Until you choose one it is DSH's default workspace, or else DSH's first
+workspace; only with no workspace at all is it the folder DSH was started in.
+Change it under
+**My teams** from DSH's own workspace menu, where **Add workspace…** offers any
+folder. A session started in a workspace is listed under it in DSH's sidebar;
+one started in a folder that is not a workspace is listed under Ungrouped.
 
 Create or join teams in the web console. New teams receive a built-in assistant;
 existing teams are unchanged. Team renaming does not automatically rename the

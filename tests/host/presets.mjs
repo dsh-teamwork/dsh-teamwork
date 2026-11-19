@@ -26,7 +26,7 @@ export function apply(ctx) {
       const created=await execute('/teamwork new review');assert.equal(created.result.kind,'success',created.result.text);
       const newId=created.result.text.match(/Created session ([a-z0-9-]+)/)[1];
       const fresh=ctx.agents.get(newId);assert.equal(ctx.agentPresets.serviceFor(fresh,'teamworkPreset').version,2);
-      assert.deepEqual(fresh.model.current(),{provider:'teamwork-platform',model:'review'});
+      assert.deepEqual(fresh.model.current(),{provider:'teamwork-platform-host-smoke',model:'review'});
       preset.version=3; preset.data.requiredTools=['missing-required-fixture']; await save();
       const missing=await ctx.commands.execute(fresh,'/teamwork use review',[],new AbortController().signal);
       assert.equal(missing.result.kind,'error');assert.match(missing.result.text,/Required tools are missing/);
