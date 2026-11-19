@@ -25,7 +25,7 @@ test('a panel request reads one inventory for every preset and sees changes on t
   const cleanup: Array<() => unknown> = [];
   const services: Record<string, any> = { pluginManager: manager };
   const ctx: any = {
-    llm: { registerAdapter: () => () => {} },
+    llm: { registerAdapter: () => Object.assign(() => {}, { replace() {} }) },
     sessionProjections: { register: async () => ({ dispose() {} }) },
     agentPresets: { register: async () => async () => {} },
     agents: { get: () => undefined },
@@ -83,7 +83,7 @@ test('a team model without its context window is shown as not ready and stops a 
   const listeners = new Map<string, (...args: any[]) => unknown>();
   const services: Record<string, any> = {};
   const ctx: any = {
-    llm: { registerAdapter: () => () => {} },
+    llm: { registerAdapter: () => Object.assign(() => {}, { replace() {} }) },
     sessionProjections: { register: async () => ({ dispose() {} }) },
     agentPresets: { register: async () => async () => {}, presetForSession: () => undefined, serviceFor: () => undefined },
     agents: { get: () => undefined },
@@ -104,7 +104,7 @@ test('a team model without its context window is shown as not ready and stops a 
     expect(state.presets[0]).toMatchObject({ model: 'DeepSeek Flash', modelAvailable: false, contextWindowMissing: true });
 
     const request = listeners.get('agent/request')!;
-    const agent = (model: string) => ({ id: 's', model: { current: () => ({ provider: 'teamwork-platform', model }) }, session: {} });
+    const agent = (model: string) => ({ id: 's', model: { current: () => ({ provider: 'teamwork-platform-team', model }) }, session: {} });
     const next = vi.fn(async () => 'config');
     await expect(request({ agent: agent('unsized') }, next)).rejects.toThrow('“DeepSeek Flash” has no context window');
     expect(next).not.toHaveBeenCalled();

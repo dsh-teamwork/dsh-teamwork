@@ -18,7 +18,7 @@ export function apply(ctx) {
    await ctx.agents.create({ sessionId: id, meta: { cwd: process.env.TEAMWORK_TEST_CWD, agentPreset: 'team:host-smoke:review' }, setup: async agentCtx => { await ctx.agentPresets.mount(agentCtx, 'team:host-smoke:review'); } });
    const agent = ctx.agents.get(id);
    assert(ctx.commands.list(agent).some(c => c.name === 'teamwork'));
-   assert.deepEqual(agent.model.current(), { provider: 'teamwork-platform', model: 'review' });
+   assert.deepEqual(agent.model.current(), { provider: 'teamwork-platform-host-smoke', model: 'review' });
    const require = createRequire(process.env.DSH_CLI);
    const { renderPrompt } = await import(pathToFileURL(require.resolve('@deepseek-ai/dsh-system-prompt')).href);
    const promptAssembly = await agent.ctx.systemPrompt.assemble({ agent, scope: agent, modelSelection: agent.model.current() });
@@ -63,7 +63,7 @@ export function apply(ctx) {
    const updated = await ctx.agentPresets.list(); assert(updated.some(p => p.id === 'team:host-smoke:review' && p.name === '[Host smoke] Updated review'));
    assert(updated.some(p => p.id === 'local-review'));
    const use = await execute('/teamwork use review'); assert.equal(use.result.kind, 'success', use.result.text);
-   assert.deepEqual(agent.model.current(), { provider: 'teamwork-platform', model: 'review' });
+   assert.deepEqual(agent.model.current(), { provider: 'teamwork-platform-host-smoke', model: 'review' });
    const login = await execute('/teamwork login'); assert.equal(login.result.kind, 'success', login.result.text);
    const callback = new URL(login.result.text.match(/https?:\/\/\S+/)[0]).searchParams.get('redirect_uri');
    assert.match(callback ?? '', /^http:\/\/127\.0\.0\.1:\d+\/callback$/, 'Login must listen on loopback inside the real host');
