@@ -96,7 +96,12 @@ the mark.
 Multimodal input and other provider protocols are not implemented by this adapter.
 
 Presets use native `agentPresets` registration, mounting, selection and revisions.
-A preset has one of inherited selection, same-team model reference, or legacy
+A team preset composes the plugin rows of the profile's declared default preset
+(DSH's `standard`: its tools, persona, compaction and planning, read from the
+loader as the preset registers) and then its own team context, so a template's
+required tools such as `read`, `bash` or `web_search` are DSH's own. A profile
+whose default is not a `dsh-agent-preset` row gives team presets no host rows,
+and the plugin logs a warning. A preset has one of inherited selection, same-team model reference, or legacy
 explicit provider/model. Human-readable instructions/output notes are not system
 instructions; behavior belongs in `systemPrompt`. Team prompts are additive.
 Required tools and pinned plugin dependencies are checked when selecting and
