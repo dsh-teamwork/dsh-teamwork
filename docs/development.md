@@ -76,8 +76,9 @@ retain the previous snapshot. Sync never installs plugins or uploads conversatio
 
 ## Models and preset generations
 
-Each team is its own provider, `teamwork-platform-<teamId>`, named for the team, so
-DSH's model menu groups a team's models under the team's name; the configuration
+Each team is its own provider, `teamwork-platform-<teamId>`, named `Teamwork <team>`
+(`teamGroupName`), so DSH's model menu groups a team's models under that heading,
+apart from the member's own providers; the configuration
 ID is the wire model. The routes follow the synced teams (`teamRoutes`).
 `src/platform-models.ts` adapts text, tool calls and streamed output to the chosen
 service's `/api/llm/chat/completions`. There is no provider-direct fallback or

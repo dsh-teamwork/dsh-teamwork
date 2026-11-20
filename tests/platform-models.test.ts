@@ -81,7 +81,7 @@ test('a hosted model taken offline stays in the team but is not offered, and say
     expect(modelLimitProblem(client.current()!, findConfig(client.current()!, 'uses-opus')!)).toBeUndefined();
   } finally { await rm(dir,{recursive:true,force:true}); }
 });
-test('each team is its own provider, named for the team, and the routes follow the teams', async () => {
+test('each team is its own provider, headed Teamwork and the team’s name, and the routes follow the teams', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'platform-teams-'));
   const model = (id: string) => ({id,kind:'model',name:'MiniMax-M3',version:1,data:{provider:'minimax',model:'m3',contextWindow:131072}});
   let teams = [{teamId:'a',teamName:'Alpha',role:'member',configs:[model('ma')]},{teamId:'b',teamName:'Beta',role:'admin',configs:[model('mb')]}];
@@ -93,7 +93,7 @@ test('each team is its own provider, named for the team, and the routes follow t
     routes.sync(); expect(registered).toEqual([]);
     client.beginLogin(); await client.completeLogin('code'); await client.sync(); routes.sync();
     expect(registered).toEqual([[teamProvider('a'), teamProvider('b')]]);
-    expect(adapter.providerInfo(teamProvider('a')).name).toBe('Alpha');
+    expect(adapter.providerInfo(teamProvider('a')).name).toBe('Teamwork Alpha');
     expect((await adapter.listModels(teamProvider('a'))).map(m => m.id)).toEqual(['ma']);
     expect((await adapter.listModels(teamProvider('b'))).map(m => m.id)).toEqual(['mb']);
     teams = [teams[1]!]; await client.sync(); routes.sync();

@@ -9,6 +9,9 @@ const prefix = 'teamwork-platform-';
 export const teamProvider = (teamId: string) => prefix + teamId;
 export const isTeamProvider = (provider: string | undefined) => !!provider?.startsWith(prefix);
 /** Provider credentials never exist here: the adapter authenticates only to platform. */
+/** How DSH's model picker heads a team's models: `Teamwork <team>`, apart from the member's own providers. */
+export const teamGroupName = (teamName: string) => `Teamwork ${teamName}`;
+
 export function platformAdapter(client: TeamworkClient) {
   let previous: Snapshot | undefined;
   let profiles = new Map<string, ResolvedPiAiProviderProfile>();
@@ -33,11 +36,11 @@ export function platformAdapter(client: TeamworkClient) {
           }];
         });
         return [provider, {
-          provider, displayName: team.teamName, api: 'openai-completions', baseURL: baseUrl,
+          provider, displayName: teamGroupName(team.teamName), api: 'openai-completions', baseURL: baseUrl,
           streamIdleTimeoutMs: 120000, maxRequestImageBytes: 1048576, maxRequestImages: 1,
           imageOffloadCountQuantum: 1, requestImagePixelBudget: 1048576, requestImageMaxBytes: 1048576,
           retryPolicy: resolveRetryPolicy({ mode: 'normal', maxRetries: 0 }, provider), modelErrors: new Map(), configuredMaxTokens: new Map(models.map(m => [m.id, m.maxTokens])),
-          piProvider: { id: provider, name: team.teamName, baseUrl,
+          piProvider: { id: provider, name: teamGroupName(team.teamName), baseUrl,
             auth: { apiKey: { name: 'Platform session', resolve: async ({ credential }) => ({ auth: { apiKey: credential?.key }, source: 'Platform session' }) } },
             getModels: () => models,
             stream: (model, context, options) => api.stream(model, context, options),

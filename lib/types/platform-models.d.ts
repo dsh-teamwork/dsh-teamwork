@@ -5,6 +5,8 @@ import { type TeamworkClient } from './client.js';
 export declare const teamProvider: (teamId: string) => string;
 export declare const isTeamProvider: (provider: string | undefined) => boolean;
 /** Provider credentials never exist here: the adapter authenticates only to platform. */
+/** How DSH's model picker heads a team's models: `Teamwork <team>`, apart from the member's own providers. */
+export declare const teamGroupName: (teamName: string) => string;
 export declare function platformAdapter(client: TeamworkClient): PiAiAdapter;
 /**
  * Keeps DSH's routes equal to the synced teams: one per team, replaced as teams are joined or left. DSH refuses an
