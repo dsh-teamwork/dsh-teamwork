@@ -57,7 +57,7 @@ test('a slow profile never redirects someone who already opened the phone page',
   vi.mocked(api.profile).mockReturnValue(new Promise(r => { resolve = r; }));
   await mount(); await click('设备连接');
   await act(async () => resolve(profile));
-  expect(document.body.textContent).toContain('手机或浏览器连接的是这台电脑');
+  expect(document.body.textContent).toContain('用手机 App 或网页「我的 DSH」操作');
   expect(document.body.textContent).not.toContain('先从哪个团队开始');
 });
 
@@ -91,7 +91,7 @@ test('explains an expired pairing code and offers a new one', async () => {
   await mount(); await click('设备连接'); await click('配对新设备');
   await act(async () => { await vi.advanceTimersByTimeAsync(1100); });
   expect(document.body.textContent).toContain('配对码已过期');
-  expect([...document.querySelectorAll('button')].some(b => b.textContent === '重新生成配对码')).toBe(true);
+  expect([...document.querySelectorAll('button')].some(b => b.textContent === '重新生成')).toBe(true);
 });
 
 test.each([0, 1, 2])('completes first sign-in and lands correctly with %i teams', async count => {
@@ -133,8 +133,8 @@ test('switches teams and survives a removed membership without changing the phon
   await click('设备连接');
   vi.mocked(api.state).mockResolvedValue({ ...state, teams: state.teams.slice(0, 1), presets: state.presets.slice(0, 1) });
   await act(async () => { await vi.advanceTimersByTimeAsync(5001); });
-  expect(document.body.textContent).toContain('手机或浏览器连接的是这台电脑');
-  await click('返回团队资源'); expect(document.querySelector('.twui-select-primary')!.textContent).toContain('全部团队');
+  expect(document.body.textContent).toContain('用手机 App 或网页「我的 DSH」操作');
+  await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="返回团队资源"]')!.click()); expect(document.querySelector('.twui-select-primary')!.textContent).toContain('全部团队');
   expect(api.use).not.toHaveBeenCalled(); expect(api.decidePhone).not.toHaveBeenCalled();
 });
 
@@ -159,7 +159,7 @@ test('locks pairing generation and lets the member hide a still-valid code', asy
   await mount(); await click('设备连接'); await click('配对新设备'); await click('配对新设备');
   expect(api.pairPhone).toHaveBeenCalledTimes(1);
   await act(async () => resolve({ code: '12345678', link: 'dshteamwork://pair?code=12345678', expiresAt: new Date(Date.now() + 60000).toISOString() }));
-  expect(document.body.textContent).toContain('收起配对码'); await click('收起配对码');
+  expect(document.body.textContent).toContain('扫码或输入'); await click('取消');
   expect(document.querySelector('[aria-label="配对二维码"]')).toBeNull();
 });
 
@@ -172,14 +172,18 @@ test('retries rejecting a request, then confirms a new request and revokes the r
   });
   vi.mocked(api.revokePhone).mockImplementation(async () => { current = { ...current, phones: [] }; });
   await mount(); await click('设备连接 · 1');
-  expect(document.body.textContent).toContain('目前不能只授权一个团队');
+  // The request is step two, its safety code on its own line.
+  expect(document.body.textContent).toContain('Test phone 请求配对');
+  expect(document.body.textContent).toContain('1234 5678');
   await click('拒绝'); expect(document.body.textContent).toContain('等待你确认');
   await click('拒绝'); expect(document.body.textContent).not.toContain('等待你确认');
   current = { ...current, phones: [pending] };
-  await click('刷新'); await click('安全码一致，确认配对');
+  await click('刷新'); await click('确认配对');
+  expect(document.body.textContent).toContain('Test phone 已配对');
   expect(document.body.textContent).not.toContain('等待你确认');
   await click('解除配对'); await act(async () => document.querySelector<HTMLButtonElement>('.twui-confirm button')!.click());
-  expect(document.body.textContent).toContain('尚无已配对设备');
+  // With no device left, the page explains pairing in three steps again.
+  expect(document.body.textContent).toContain('在手机或浏览器上用这台电脑的 DSH');
 });
 
 test('profile read retry stays on the account page instead of opening onboarding', async () => {
@@ -220,8 +224,8 @@ test('chooses a team, filters its resources without changing sessions, and edits
   await act(async () => [...document.querySelectorAll('[role="option"]')].find(o => o.textContent === 'English')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
   expect(api.updateProfile).not.toHaveBeenCalled();
   await click('保存资料'); expect(api.updateProfile).toHaveBeenCalledWith({ name: 'Ada', locale: 'en' });
-  await click('设备连接'); expect(document.body.textContent).toContain('与当前浏览的团队无关');
-  await click('返回团队资源');
+  await click('设备连接'); expect(document.body.textContent).toContain('用手机 App 或网页「我的 DSH」操作');
+  await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="返回团队资源"]')!.click());
   await act(async () => document.querySelectorAll<HTMLButtonElement>('[role="tab"]')[1].click());
   act(() => root.unmount());
   await mount();
@@ -343,6 +347,47 @@ test('marks a hosted model taken offline, and a preset on it, as not ready with 
   expect(row('Opus').querySelector('button:disabled')).not.toBeNull();
   expect(row('Live').textContent).not.toContain('taken offline');
   expect(row('Live').querySelector('button:disabled')).toBeNull();
+});
+
+test('a request waits for the device before it can be confirmed, and says so', async () => {
+  const pending = { id: 'p', deviceName: 'Pixel', safetyCode: '27 81 46', phoneConfirmed: false, status: 'pending' as const, createdAt: new Date().toISOString(), lastUsedAt: null };
+  vi.mocked(api.state).mockResolvedValue({ ...state, phones: [pending] });
+  await mount(); await click('设备连接 · 1');
+  expect(document.body.textContent).toContain('等待设备确认…');
+  expect([...document.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent === '确认配对')!.disabled).toBe(true);
+  // A new code is still one click away while a request waits.
+  expect([...document.querySelectorAll('button')].some(b => b.textContent === '配对新设备')).toBe(true);
+});
+
+test('while the relay reconnects, paired devices stay listed, dimmed and without actions', async () => {
+  const phone = { id: 'phone', deviceName: 'Ada 的 iPhone', deviceKind: 'ios' as const, status: 'confirmed' as const, verified: true, createdAt: new Date().toISOString(), lastUsedAt: null };
+  vi.mocked(api.state).mockResolvedValue({ ...state, relay: 'connecting', phones: [phone] });
+  await mount(); await click('设备连接');
+  expect(document.body.textContent).toContain('正在连接中转服务');
+  expect(document.body.textContent).toContain('Ada 的 iPhone');
+  expect([...document.querySelectorAll('button')].some(b => b.textContent === '解除配对')).toBe(false);
+  expect([...document.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent === '配对新设备')!.disabled).toBe(true);
+});
+
+test('a paired device shows a badge only when it must pair again, and its kind once', async () => {
+  const at = new Date().toISOString();
+  vi.mocked(api.state).mockResolvedValue({ ...state, phones: [
+    { id: 'web', deviceName: '网页浏览器', deviceKind: 'web' as const, status: 'confirmed' as const, verified: true, createdAt: at, lastUsedAt: null },
+    { id: 'old', deviceName: '旧 Pixel', deviceKind: 'android' as const, status: 'confirmed' as const, verified: false, createdAt: at, lastUsedAt: null },
+  ] });
+  await mount(); await click('设备连接');
+  const row = (title: string) => [...document.querySelectorAll('.twui-item')].find(r => r.querySelector('.twui-item-title')?.firstChild?.textContent === title)!;
+  expect(row('网页浏览器').textContent).not.toContain('网页浏览器 ·');
+  expect(row('网页浏览器').querySelector('.twui-badge, [data-tone]')).toBeNull();
+  expect(row('旧 Pixel').textContent).toContain('需重新配对');
+  expect(row('旧 Pixel').textContent).toContain('Android 手机 ·');
+});
+
+test('a page has no back link: the brand mark and the team menu lead back to the team resources', async () => {
+  await mount(); await click('设备连接');
+  expect([...document.querySelectorAll('button')].some(b => b.textContent === '返回团队资源')).toBe(false);
+  await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="返回团队资源"]')!.click());
+  expect(document.querySelector('[role="tab"]')).not.toBeNull();
 });
 
 // Team DSH is offline on the server: the panel offers no way into it, signed out or in.

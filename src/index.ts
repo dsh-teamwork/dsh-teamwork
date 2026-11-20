@@ -405,7 +405,9 @@ export async function apply(ctx: Context, config: Config) {
     onStatus: (status) => {
       ctx.logger.debug('relay: %s', status);
       if (status === 'connected') void readPhones();
-      else { phones = []; security.reset(); bridge.dropAll(); }
+      // Reconnecting, the devices last listed stay for the panel to show, dimmed; off or refused (a sign-out among
+      // them), the list goes with the account it belonged to.
+      else { if (status !== 'connecting') phones = []; security.reset(); bridge.dropAll(); }
     },
     onEvent: (event) => {
       if (event.t === 'members') void sharedList(event.members);
