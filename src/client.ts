@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, writeFile, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import { say } from './messages.js';
-import type { PanelProfile, PanelSummary } from './panel.js';
+import type { PanelProfile, PanelSummary, PanelTeamUsage } from './panel.js';
 import type { Locale } from './locale.js';
 const common = { builtin: z.literal('team-assistant').optional(), id: z.string().min(1), name: z.string(), version: z.number().int().positive() };
 const route = { provider: z.string().min(1), model: z.string().min(1), contextWindow: z.number().int().positive().max(10000000).optional(), maxTokens: z.number().int().positive().max(10000000).optional() };
@@ -46,6 +46,12 @@ export function serverAddress(input: string) {
 export class PageError extends Error {
   constructor(readonly status:number,readonly code:string,readonly detail:string) { super(`Page refused (${status}${code?` ${code}`:''})${detail?`: ${detail}`:''}`); }
 }
+const pointsSchema = z.string().regex(/^\d+(?:\.\d{1,9})?$/);
+const budgetSchema = z.object({
+  remaining: pointsSchema.nullable(),
+  state: z.enum(['known', 'unlimited', 'unconfirmed']), resetAt: z.string().nullable(),
+  tokenLimited: z.boolean(), exhausted: z.boolean(),
+});
 export class TeamworkClient {
   private token?: string;
   private verifier?: string;
@@ -276,16 +282,35 @@ export class TeamworkClient {
       headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(3000),
     });
     if (!response.ok) throw new Error(say('summary.unavailable'));
-    const result = z.object({
-      budget: z.object({
-        remaining: z.string().regex(/^\d+(?:\.\d{1,9})?$/).nullable(),
-        state: z.enum(['known', 'unlimited', 'unconfirmed']), resetAt: z.string().nullable(),
-        tokenLimited: z.boolean(), exhausted: z.boolean(),
-      }),
-      pendingReviews: z.number().int().nonnegative(),
-    }).parse(await response.json());
+    const result = z.object({ budget: budgetSchema, pendingReviews: z.number().int().nonnegative() }).parse(await response.json());
     if (epoch !== this.epoch || endpoint !== this.endpoint || this.token !== token) throw new Error(say('auth.changed'));
     return { budget: result.budget, pendingReviews: result.pendingReviews };
+  }
+  /** The member's own last 30 days in one team, for its settings page; dropped if the account changed meanwhile. */
+  async teamUsage(teamId: string): Promise<PanelTeamUsage> {
+    if (!this.token || !this.snapshot?.teams.some(team => team.teamId === teamId)) throw new Error(say('summary.team'));
+    const epoch = this.epoch, endpoint = this.endpoint, token = this.token;
+    const read = async (path: string) => {
+      const response = await this.request(`${endpoint}/api/teams/${encodeURIComponent(teamId)}/${path}`, {
+        headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000),
+      });
+      if (!response.ok) throw new Error(say('summary.unavailable'));
+      return response.json();
+    };
+    const [summary, stats] = await Promise.all([read('summary'), read('usage/stats')]);
+    const own = z.object({
+      since: z.string(), calls: z.number().int().nonnegative(), points: pointsSchema, unpriced: z.number().int().nonnegative(),
+      budget: budgetSchema,
+      nearLimit: z.array(z.object({ scope: z.enum(['team', 'member', 'provider']), period: z.enum(['day', 'month']), threshold: z.number().int() })),
+    }).parse(summary);
+    const { sources } = z.object({
+      sources: z.array(z.object({
+        kind: z.enum(['model', 'meter']), name: z.string(), labels: z.record(z.string(), z.string()).default({}),
+        calls: z.number().int().nonnegative(), points: pointsSchema,
+      })),
+    }).parse(stats);
+    if (epoch !== this.epoch || endpoint !== this.endpoint || this.token !== token) throw new Error(say('auth.changed'));
+    return { ...own, nearLimit: own.nearLimit.map(({ scope, period, threshold }) => ({ scope, period, threshold })), sources };
   }
   profile(): Promise<PanelProfile> {
     if (!this.token) return Promise.reject(new Error(say('auth.signedOut')));

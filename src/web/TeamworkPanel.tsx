@@ -5,14 +5,14 @@ import {
 } from '@dsh-teamwork/ui';
 import qrcode from 'qrcode-generator';
 import type { Locale } from '../locale.js';
-import type { PanelPairingOffer, PanelPhone, PanelPlugin, PanelPreset, PanelState, PanelProfile, PanelSummary, PluginState, ToolState } from '../panel.js';
+import type { PanelPairingOffer, PanelPhone, PanelPlugin, PanelPreset, PanelState, PanelProfile, PanelSummary, PanelTeamUsage, PluginState, ToolState } from '../panel.js';
 import { api, HostUnreachable } from './api.js';
 import { PresetAvatar } from './PresetAvatar.js';
 import { currentSessionTracker, workspaceAt, type Host, type RenderFactorySlot } from './host.js';
 import { useT, Words, words, type PanelMessage, type Translate } from './messages.js';
 
 type Tab = 'presets' | 'models' | 'plugins';
-type Page = 'resources' | 'devices' | 'profile' | 'teams' | 'choose';
+type Page = 'resources' | 'devices' | 'profile' | 'teams' | 'team' | 'choose';
 type Run = (action: () => Promise<unknown>, done?: string | ((result: any) => string)) => Promise<boolean>;
 
 const REFRESH_MS = 5000;
@@ -92,6 +92,8 @@ export function TeamworkPanel({ host: dsh, renderFactorySlot }: { host: Host; re
   const [loadError, setLoadError] = useState<unknown>();
   const [tab, setTab] = useState<Tab>('presets');
   const [page, setPage] = useState<Page>('resources');
+  /** The team whose settings page is open (`team`). */
+  const [settingsTeam, setSettingsTeam] = useState<string>();
   const [team, setTeam] = useState('all');
   const [query, setQuery] = useState('');
   const [profile, setProfile] = useState<PanelProfile>();
@@ -260,17 +262,24 @@ export function TeamworkPanel({ host: dsh, renderFactorySlot }: { host: Host; re
         {choosing ? <TeamChooser state={state} select={selectTeam} /> : (page === 'resources' || page === 'choose') && <>
           {!state.teams.length ? <EmptyState icon="layers" title={t('noTeam.title')} action={<div className="twui-row"><Button trailingIcon="external" onClick={() => open(`${state.server}/teams`)}>{t('noTeam.open')}</Button><Button icon="refresh" onClick={() => run(() => api.sync(), t('noTeam.refreshed'))}>{t('noTeam.refresh')}</Button></div>}>{t('noTeam.body')}</EmptyState> : <>
             <div className="twui-resource-toolbar"><Tabs<Tab> label={t('tabs.label')} items={tabs} value={tab} onChange={setTab} /><Input aria-label={t('search.label')} placeholder={t('search.placeholder')} value={query} onChange={e => setQuery(e.target.value)} /></div>
-            {tab === 'presets' && assistants.map(p => <AssistantItem key={p.id} preset={p} team={teamLabel(p.teamName)} state={state} dsh={dsh} run={run} />)}
+            {tab === 'presets' && assistants.map(p => <AssistantItem key={p.id} preset={p} team={teamLabel(p.teamName)} state={state} dsh={dsh} />)}
             <div className="twui-resource-list" key={`${team}:${tab}`}>
-              {tab === 'presets' && (listed as PanelPreset[]).map(p => <PresetItem key={p.id} preset={p} team={teamLabel(p.teamName)} state={state} dsh={dsh} run={run} onInstall={() => setTab('plugins')} />)}
-              {tab === 'models' && (listed as PanelState['models']).map(m => <ModelItem key={m.id} model={m} team={teamLabel(m.teamName)} state={state} run={run} />)}
+              {tab === 'presets' && (listed as PanelPreset[]).map(p => <PresetItem key={p.id} preset={p} team={teamLabel(p.teamName)} state={state} dsh={dsh} onInstall={() => setTab('plugins')} />)}
+              {tab === 'models' && (listed as PanelState['models']).map(m => <ModelItem key={m.id} model={m} team={teamLabel(m.teamName)} state={state} dsh={dsh} run={run} />)}
               {tab === 'plugins' && (listed as PanelPlugin[]).map(p => <PluginItem key={p.id} plugin={p} team={teamLabel(p.teamName ?? '')} run={run} />)}
               {!listed.length && !(tab === 'presets' && assistants.length) && <EmptyState icon="layers" title={query ? t('empty.noMatch') : t('empty.none')}>{query ? t('empty.noMatchBody') : t('empty.noneBody')}</EmptyState>}
             </div>
           </>}
         </>}
         {page === 'devices' && <Phones state={state} run={run} />}
-        {page === 'teams' && <><PageTitle title={t('teams.title')}>{t('teams.body')}</PageTitle>{state.teams.map(x => <Item key={x.id} icon="layers" title={x.name} tags={<Badge tone={x.role === 'admin' ? 'brand' : 'neutral'}>{role(t, x.role)}</Badge>} actions={<><Button onClick={() => selectTeam(x.id)}>{t('teams.browse')}</Button><Button variant="ghost" trailingIcon="external" onClick={() => open(x.consoleUrl)}>{t(x.role === 'admin' ? 'teams.manage' : 'teams.view')}</Button></>}><TeamWorkspace team={x} dsh={dsh} renderFactorySlot={renderFactorySlot} run={run} /></Item>)}<div><Button trailingIcon="external" onClick={() => open(`${state.server}/teams`)}>{t('teams.joinOrCreate')}</Button></div></>}
+        {page === 'teams' && <><PageTitle title={t('teams.title')}>{t('teams.body')}</PageTitle>{state.teams.map(x => <Item key={x.id} icon="layers" title={x.name} tags={<Badge tone={x.role === 'admin' ? 'brand' : 'neutral'}>{role(t, x.role)}</Badge>} actions={<><Button onClick={() => { setSettingsTeam(x.id); navigate('team'); }}>{t('teams.settings')}</Button><Button onClick={() => selectTeam(x.id)}>{t('teams.browse')}</Button><Button variant="ghost" trailingIcon="external" onClick={() => open(x.consoleUrl)}>{t(x.role === 'admin' ? 'teams.manage' : 'teams.view')}</Button></>} />)}<div><Button trailingIcon="external" onClick={() => open(`${state.server}/teams`)}>{t('teams.joinOrCreate')}</Button></div></>}
+        {page === 'team' && (() => {
+          // A team left or deleted meanwhile has no settings to show: back to the list.
+          const settings = state.teams.find(x => x.id === settingsTeam);
+          return settings
+            ? <TeamSettings key={settings.id} team={settings} locale={state.locale} dsh={dsh} renderFactorySlot={renderFactorySlot} run={run} browse={() => selectTeam(settings.id)} />
+            : <><PageTitle title={t('teams.title')}>{t('teams.body')}</PageTitle><div><Button onClick={() => navigate('teams')}>{t('nav.teams')}</Button></div></>;
+        })()}
         {page === 'profile' && <Account state={state} profile={profile} error={profileError} retry={() => setProfileAttempt(n => n + 1)} updated={next => { if (identity.current === `teamwork:team:${state.server}:${next.id}`) { setProfile(next); void refresh(); } }} run={run} />}
         {toastNode}
       </Panel>
@@ -295,16 +304,87 @@ function TeamWorkspace({ team, dsh, renderFactorySlot, run }: { team: PanelState
     if (path) await run(() => api.setWorkspace(team.id, path), t('teams.workspaceSaved', { team: team.name }));
   };
   return (
-    <ItemBody>
+    <div className="twui-stack" style={{ gap: 8 }}>
       <div className="twui-row">
-        <span className="twui-muted">{t('teams.workspace')}</span>
         <Button ref={anchor} aria-haspopup="menu" aria-expanded={open} title={team.workspace} onClick={() => setOpen(value => !value)}>
           {current?.title ?? team.workspace.split(/[\\/]/).filter(Boolean).pop() ?? team.workspace}
         </Button>
         {renderFactorySlot('workspace.picker', { open, anchorRef: anchor, selectedId: current?.workspaceId, onPick: id => void pick(id), onClose: () => setOpen(false) }) as ReactNode}
       </div>
       <p className="twui-muted">{t('teams.workspaceHint')}</p>
-    </ItemBody>
+    </div>
+  );
+}
+
+/**
+ * One team's settings, as its member sees them: where its sessions open, what they spent there in the last 30 days and
+ * on which models, and their budget with the limits near their end. The team itself is managed in the web console.
+ */
+function TeamSettings({ team, locale, dsh, renderFactorySlot, run, browse }: {
+  team: PanelState['teams'][number]; locale: string; dsh: Host; renderFactorySlot: RenderFactorySlot; run: Run; browse(): void;
+}) {
+  const t = useT();
+  const [usage, setUsage] = useState<PanelTeamUsage | null>();
+  useEffect(() => {
+    let alive = true;
+    api.teamUsage(team.id).then(next => { if (alive) setUsage(next); }, () => { if (alive) setUsage(null); });
+    return () => { alive = false; };
+  }, [team.id]);
+  const section = (title: string) => <h3 style={{ fontSize: 15, fontWeight: 600 }}>{title}</h3>;
+  return (
+    <>
+      <div className="twui-row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+        <div className="twui-stack" style={{ minWidth: 0, flex: '1 1 240px', gap: 6 }}>
+          <h2 className="twui-page-title">{team.name}</h2>
+          <div><Badge tone={team.role === 'admin' ? 'brand' : 'neutral'}>{role(t, team.role)}</Badge></div>
+        </div>
+        <div className="twui-row" style={{ gap: 8 }}>
+          <Button onClick={browse}>{t('teams.browse')}</Button>
+          <Button variant="ghost" trailingIcon="external" onClick={() => open(team.consoleUrl)}>{t(team.role === 'admin' ? 'teams.manage' : 'teams.view')}</Button>
+        </div>
+      </div>
+
+      {team.workspace && <>{section(t('team.workspaceTitle'))}<Card><TeamWorkspace team={team} dsh={dsh} renderFactorySlot={renderFactorySlot} run={run} /></Card></>}
+
+      {section(t('team.usageTitle'))}
+      <Card>
+        {usage === undefined ? <p className="twui-muted">{t('team.usageLoading')}</p>
+          : usage === null ? <p className="twui-muted">{t('team.usageUnavailable')}</p>
+          : <div className="twui-stack" style={{ gap: 14 }}>
+              <div className="twui-row" style={{ gap: 32, flexWrap: 'wrap' }}>
+                <div className="twui-stack" style={{ gap: 2 }}><span className="twui-subtle">{t('team.points')}</span><span style={{ fontSize: 22, fontWeight: 650 }}>{usage.points}</span></div>
+                <div className="twui-stack" style={{ gap: 2 }}><span className="twui-subtle">{t('team.calls')}</span><span style={{ fontSize: 22, fontWeight: 650 }}>{usage.calls}</span></div>
+              </div>
+              {usage.unpriced > 0 && <span className="twui-muted">{t('team.unpriced', { count: usage.unpriced })}</span>}
+              {usage.sources.length === 0
+                ? <span className="twui-muted">{t('team.noUsage')}</span>
+                : <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 6 }} aria-label={t('team.byModel')}>
+                    {usage.sources.slice(0, 8).map(source => (
+                      <li key={`${source.kind}:${source.name}`} className="twui-row" style={{ justifyContent: 'space-between', gap: 12 }}>
+                        <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{source.labels[locale] ?? source.name}</span>
+                        <span className="twui-subtle" style={{ whiteSpace: 'nowrap' }}>{t('team.pointsCount', { points: source.points })} · {t('team.callsCount', { count: source.calls })}</span>
+                      </li>
+                    ))}
+                  </ul>}
+              <div><Button size="sm" variant="ghost" trailingIcon="external" onClick={() => open(`${team.consoleUrl}/my-usage`)}>{t('team.usageDetail')}</Button></div>
+            </div>}
+      </Card>
+
+      {section(t('team.budgetTitle'))}
+      <Card>
+        {usage === undefined ? <p className="twui-muted">{t('team.usageLoading')}</p>
+          : usage === null ? <p className="twui-muted">{t('team.usageUnavailable')}</p>
+          : <div className="twui-stack" style={{ gap: 8 }}>
+              <span style={{ fontWeight: 600 }}>{budgetLabel(t, usage.budget)}</span>
+              {usage.budget.resetAt && <span className="twui-subtle">{t('team.budgetReset', { time: shortTime(t, usage.budget.resetAt) })}</span>}
+              {usage.nearLimit.map(limit => (
+                <Notice key={`${limit.scope}:${limit.period}:${limit.threshold}`} tone={limit.threshold >= 100 ? 'danger' : 'warning'}>
+                  {t('team.nearLimit', { who: t(`team.scope.${limit.scope}`), period: t(`team.period.${limit.period}`), threshold: String(limit.threshold) })}
+                </Notice>
+              ))}
+            </div>}
+      </Card>
+    </>
   );
 }
 
@@ -578,13 +658,16 @@ function Header({ state, page, team, reviews, reviewUrl, selectTeam, navigate }:
   </>;
 }
 
+/** A member's budget in one team, in a few words: used up, being reconciled, what is left, or no limit. */
+const budgetLabel = (t: Translate, budget: PanelSummary['budget']) => budget.exhausted ? t('budget.exhausted')
+  : budget.state === 'unconfirmed' ? t('budget.unconfirmed')
+  : budget.state === 'known' && budget.remaining !== null ? t('budget.remaining', { points: budget.remaining })
+  : budget.tokenLimited ? t('budget.tokenLimited') : t('budget.unlimited');
+
 /** The browsed team's budget for this member; changing the browsed team never changes a running conversation. */
 function Budget({ budget }: { budget: PanelSummary['budget'] | null | undefined }) {
   const t = useT();
-  const label = budget === undefined ? t('budget.loading') : budget === null ? t('budget.unavailable')
-    : budget.exhausted ? t('budget.exhausted') : budget.state === 'unconfirmed' ? t('budget.unconfirmed')
-    : budget.state === 'known' && budget.remaining !== null ? t('budget.remaining', { points: budget.remaining })
-    : budget.tokenLimited ? t('budget.tokenLimited') : t('budget.unlimited');
+  const label = budget === undefined ? t('budget.loading') : budget === null ? t('budget.unavailable') : budgetLabel(t, budget);
   return <span className="twui-footer-service" role="status" title={t('budget.hint')}>{budget?.exhausted && <span className="twui-signal-dot" aria-hidden="true" />}{label}</span>;
 }
 
@@ -600,33 +683,39 @@ function Footer({ state, budget, run }: { state: PanelState; budget: PanelSummar
   </>;
 }
 
-/** What blocks a preset in this session, and what only stops it from being used in the open one. */
+/** What stops a preset from starting a session. */
 function presetState(t: Translate, preset: PanelPreset, state: PanelState) {
   const missing = missingTools(preset);
   const plugins = pluginsNotReady(preset);
-  const active = state.session?.preset?.id === preset.id;
   const list = (names: string[]) => names.join(t('list.separator'));
   const blocked = !preset.modelAvailable ? preset.modelOffline ? t('model.offline', { name: preset.model ?? '' }) : preset.contextWindowMissing ? t('model.noContextWindow', { name: preset.model ?? '' }) : t('preset.modelGone')
     : plugins.length ? t('preset.pluginsNotReady', { plugins: list(plugins.map((p) => p.name)) })
     : missing.length && state.session ? t('preset.toolsMissing', { tools: list(missing.map((x) => x.name)) })
     : undefined;
-  const useBlocked = blocked ?? (state.session?.started && !active ? t('preset.sessionStarted') : undefined);
-  // The open session is blank, so the preset can go into it instead of a new one.
-  const blank = !!state.session && !state.session.started && !active;
-  return { missing, plugins, active, blocked, useBlocked, blank };
+  return { missing, plugins, blocked };
 }
 
-/** A preset's new session opens in its team's default workspace when that folder is one of DSH's workspaces. */
-function startSession(dsh: Host, preset: PanelPreset, state: PanelState) {
+/**
+ * A preset always opens a session, even while the open one already uses it; DSH reuses an unsent blank session
+ * in the workspace instead of piling up new ones. It opens in its team's default workspace when that folder is
+ * one of DSH's workspaces.
+ * A `prompt` is left in its input, unsent, in place of anything typed there before.
+ * DSH closes this panel itself once the session opens; closing it here first would abort that pending navigation
+ * (`layout.selectPanel` supersedes it) and leave the previous session on screen.
+ */
+function startSession(dsh: Host, preset: PanelPreset, state: PanelState, prompt?: string) {
   const workspace = workspaceAt(dsh, state.teams.find(team => team.id === preset.teamId)?.workspace);
-  dsh.uiWorkspace.startSession(workspace?.workspaceId, { agentPreset: `team:${preset.teamId}:${preset.id}` });
-  dsh.layout.selectPanel(null);
+  const agentPreset = `team:${preset.teamId}:${preset.id}`;
+  dsh.uiWorkspace.startSession(workspace?.workspaceId, prompt === undefined ? { agentPreset } : { agentPreset, prompt, whenDraftExists: 'replace' });
 }
 
-/** The team's assistant, ahead of the other presets: what it is for, what to ask it, and one way to start. */
-function AssistantItem({ preset, team, state, dsh, run }: { preset: PanelPreset; team?: string; state: PanelState; dsh: Host; run: Run }) {
+/**
+ * The team's assistant, ahead of the other presets: what it is for, what to ask it, and how to start; an example
+ * question opens a session with it typed in.
+ */
+function AssistantItem({ preset, team, state, dsh }: { preset: PanelPreset; team?: string; state: PanelState; dsh: Host }) {
   const t = useT();
-  const { active, blocked, useBlocked, blank } = presetState(t, preset, state);
+  const { blocked } = presetState(t, preset, state);
   return (
     <div className="twui-featured">
       <Item
@@ -636,22 +725,21 @@ function AssistantItem({ preset, team, state, dsh, run }: { preset: PanelPreset;
         description={t('assistant.body')}
         tags={<>
           <span className="twui-subtle">{t('assistant.examples')}</span>
-          {(['assistant.example1', 'assistant.example2', 'assistant.example3'] as const).map(key => <Badge key={key} outline>{t(key)}</Badge>)}
+          {(['assistant.example1', 'assistant.example2', 'assistant.example3'] as const).map(key => (
+            <Button key={key} size="sm" disabled={!!blocked} onClick={() => startSession(dsh, preset, state, t(key))}>{t(key)}</Button>
+          ))}
         </>}
-        actions={active ? <Badge tone="accent" dot>{t('preset.inUse')}</Badge> : <>
-          {blank && <Button size="sm" disabled={useBlocked !== undefined} onClick={() => run(() => api.use(state.session!.id, preset.id), t('preset.selected', { name: preset.name }))}>{t('preset.useHere')}</Button>}
-          <Button variant="primary" size="sm" icon="plus" disabled={!!blocked} onClick={() => startSession(dsh, preset, state)}>{t('assistant.ask')}</Button>
-        </>}
+        actions={<Button variant="primary" size="sm" icon="plus" disabled={!!blocked} onClick={() => startSession(dsh, preset, state)}>{t('assistant.ask')}</Button>}
         notice={blocked ? <Notice tone="warning">{blocked}</Notice> : undefined}
       />
     </div>
   );
 }
 
-function PresetItem({ preset, team, state, dsh, run, onInstall }: { preset: PanelPreset; team?: string; state: PanelState; dsh: Host; run: Run; onInstall(): void }) {
+function PresetItem({ preset, team, state, dsh, onInstall }: { preset: PanelPreset; team?: string; state: PanelState; dsh: Host; onInstall(): void }) {
   const t = useT();
   const [expanded, setExpanded] = useState(false);
-  const { missing, plugins, active, blocked, useBlocked, blank } = presetState(t, preset, state);
+  const { missing, plugins, blocked } = presetState(t, preset, state);
   const model = preset.model ?? t('preset.sessionModel');
   return (
     <Item
@@ -662,24 +750,18 @@ function PresetItem({ preset, team, state, dsh, run, onInstall }: { preset: Pane
       tags={
         <>
           <Badge><Icon name="cpu" size={12} />{model}</Badge>
-          {active ? <Badge tone="accent" dot>{t('preset.inUse')}</Badge> : !blocked ? <Badge tone={!state.session && missing.length ? 'neutral' : 'success'} dot>{!state.session && missing.length ? t('preset.checkOnStart') : t('preset.ready')}</Badge> : <Badge tone="warning" dot>{t('preset.notReady')}</Badge>}
+          {!blocked ? <Badge tone={!state.session && missing.length ? 'neutral' : 'success'} dot>{!state.session && missing.length ? t('preset.checkOnStart') : t('preset.ready')}</Badge> : <Badge tone="warning" dot>{t('preset.notReady')}</Badge>}
         </>
       }
       actions={
         <>
           <Button variant="ghost" size="sm" trailingIcon={expanded ? 'chevronDown' : 'chevronRight'} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{t('preset.details')}</Button>
-          {/* One strong action per row at most: filling a blank open session, when there is one. */}
-          {blank && (
-            <Button variant="primary" size="sm" disabled={useBlocked !== undefined} onClick={() => run(() => api.use(state.session!.id, preset.id), t('preset.selected', { name: preset.name }))}>
-              {t('preset.useHere')}
-            </Button>
-          )}
           <Button size="sm" icon="plus" disabled={!!blocked} onClick={() => startSession(dsh, preset, state)}>{t('preset.newSession')}</Button>
         </>
       }
-      notice={useBlocked && !active ? (
+      notice={blocked ? (
         <div className="twui-row" style={{ gap: 6 }}>
-          <Notice tone={blocked ? 'warning' : 'neutral'}>{useBlocked}</Notice>
+          <Notice tone="warning">{blocked}</Notice>
           {plugins.length > 0 && <button type="button" className="twui-link" style={{ fontSize: 12 }} onClick={onInstall}>{t('preset.goInstall')}</button>}
         </div>
       ) : undefined}
@@ -707,10 +789,23 @@ function PresetItem({ preset, team, state, dsh, run, onInstall }: { preset: Pane
   );
 }
 
-function ModelItem({ model, team, state, run }: { model: PanelState['models'][number]; team?: string; state: PanelState; run: Run }) {
+/**
+ * A team model always opens a session on it: DSH reuses an unsent blank session in the workspace or creates one,
+ * the model is chosen there before it is shown, and the session already open keeps its own model. The workspace
+ * is the team's default folder when DSH has it, else the open session's, else DSH's first.
+ */
+async function startModelSession(t: Translate, dsh: Host, model: PanelState['models'][number], state: PanelState) {
+  const workspaces = dsh.workspaces.list.getSnapshot().items, current = dsh.currentSession?.();
+  const workspace = workspaceAt(dsh, state.teams.find(team => team.id === model.teamId)?.workspace)
+    ?? workspaces.find(item => current !== undefined && item.sessionIds?.includes(current)) ?? workspaces[0];
+  if (!workspace) throw new Error(t('model.noWorkspace'));
+  const sessionId = await dsh.uiWorkspace.connectWorkspace(workspace.workspaceId);
+  await api.use(sessionId, model.id);
+  dsh.uiWorkspace.openSession(sessionId);
+}
+
+function ModelItem({ model, team, state, dsh, run }: { model: PanelState['models'][number]; team?: string; state: PanelState; dsh: Host; run: Run }) {
   const t = useT();
-  const s = state.session;
-  const active = !!s?.model?.team && s.model.model === model.id;
   return (
     <Item
       icon="cpu"
@@ -721,11 +816,9 @@ function ModelItem({ model, team, state, run }: { model: PanelState['models'][nu
         <Badge><span className="twui-mono">{model.upstream}</span></Badge>
         {(model.contextWindowMissing || model.modelOffline) && <Badge tone="warning" dot>{t('preset.notReady')}</Badge>}
       </>}
-      actions={active ? <Badge tone="accent" dot>{t('preset.inUse')}</Badge> : (
-        <Button size="sm" disabled={!s || model.contextWindowMissing || model.modelOffline} onClick={() => run(() => api.use(s!.id, model.id), t('preset.selected', { name: model.name }))}>{t('model.use')}</Button>
-      )}
+      actions={<Button size="sm" icon="plus" disabled={model.contextWindowMissing || model.modelOffline} onClick={() => run(() => startModelSession(t, dsh, model, state))}>{t('preset.newSession')}</Button>}
       notice={model.modelOffline ? <Notice tone="warning">{t('model.offline', { name: model.name })}</Notice>
-        : model.contextWindowMissing ? <Notice tone="warning">{t('model.noContextWindow', { name: model.name })}</Notice> : !s ? <Notice>{t('model.openSession')}</Notice> : undefined}
+        : model.contextWindowMissing ? <Notice tone="warning">{t('model.noContextWindow', { name: model.name })}</Notice> : undefined}
     />
   );
 }

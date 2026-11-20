@@ -51,15 +51,22 @@ session started for that team opens in, from one of its presets in the panel,
 the phone app or the web console, unless the member picks another folder there.
 Until you choose one it is DSH's default workspace, or else DSH's first
 workspace; only with no workspace at all is it the folder DSH was started in.
-Change it under
-**My teams** from DSH's own workspace menu, where **Add workspace…** offers any
-folder. A session started in a workspace is listed under it in DSH's sidebar;
-one started in a folder that is not a workspace is listed under Ungrouped.
+Change it on the team's
+**Settings** page (**My teams** → **Settings**) from DSH's own workspace menu,
+where **Add workspace…** offers any folder. A session started in a workspace is
+listed under it in DSH's sidebar; one started in a folder that is not a
+workspace is listed under Ungrouped.
+
+The same **Settings** page shows your own last 30 days in that team: the points
+and calls you spent, which models (and metered services, such as a cloud
+computer) they went to, and your budget with when it resets and any limit near
+its end. The web console's **My usage** has the details.
 
 Create or join teams in the web console. New teams receive a built-in assistant;
 existing teams are unchanged. Team renaming does not automatically rename the
 assistant. It leads the panel's presets: **Ask the assistant** starts a session
-with it. Give it a working model and ask it to inspect real state. While an
+with it, and clicking one of its example questions starts one with that question
+already typed in, ready to edit and send. Give it a working model and ask it to inspect real state. While an
 administrator browses a team, the panel's header shows how many submissions wait
 for review and opens them in the console.
 
@@ -95,8 +102,9 @@ remove one.
 
 Each team preset shows the avatar its admin chose in the web console, the same one the console and the phone app show.
 
-Use **New session** for a team preset. **Use in this blank session** works only
-before the conversation begins. Started sessions keep their preset generation;
+**Start a session** on a team preset or a team model opens a session on it. An
+unsent blank session in that workspace is reused rather than a new one piling
+up, and the session already open is left as it is. Started sessions keep their preset generation;
 use a new session to adopt an update. A restart cannot promise to reconstruct a
 deleted old preset: a version mismatch blocks team inference and gives recovery
 guidance.

@@ -568,6 +568,7 @@ export async function apply(ctx: Context, config: Config) {
   const sessionAgent = (sessionId: string | undefined) => sessionId ? ctx.agents.get(sessionId as SessionId) : undefined;
   const panel: PanelOps = {
     summary: teamId => client.summary(teamId),
+    teamUsage: teamId => client.teamUsage(teamId),
     // The panel reads the profile as it opens, so the host speaks the account's language from then on.
     profile: async () => { const profile = await client.profile(); setLocale(profile.locale); return profile; },
     updateProfile: async (input) => { const profile = await client.updateProfile(input); setLocale(profile.locale); return profile; },

@@ -8,7 +8,7 @@ import { presetAvatar } from '../../src/web/avatars.js';
 import type { PanelState } from '../../src/panel.js';
 import type { Host, RenderFactorySlot } from '../../src/web/host.js';
 
-vi.mock('../../src/web/api.js', async (original) => ({ HostUnreachable: (await original<typeof import('../../src/web/api.js')>()).HostUnreachable, api: { summary: vi.fn().mockRejectedValue(new Error("Unavailable")), state: vi.fn(), profile: vi.fn(), updateProfile: vi.fn(), sync: vi.fn(), use: vi.fn(), login: vi.fn(), authorize: vi.fn(), pairPhone: vi.fn(), decidePhone: vi.fn(), revokePhone: vi.fn(), setWorkspace: vi.fn() } }));
+vi.mock('../../src/web/api.js', async (original) => ({ HostUnreachable: (await original<typeof import('../../src/web/api.js')>()).HostUnreachable, api: { summary: vi.fn().mockRejectedValue(new Error("Unavailable")), state: vi.fn(), profile: vi.fn(), updateProfile: vi.fn(), sync: vi.fn(), use: vi.fn(), login: vi.fn(), authorize: vi.fn(), pairPhone: vi.fn(), decidePhone: vi.fn(), revokePhone: vi.fn(), setWorkspace: vi.fn(), teamUsage: vi.fn() } }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const profile = { id: 'user', name: 'Ada', email: 'ada@example.com', image: null, locale: 'zh-CN' as const };
 const state: PanelState = {
@@ -23,7 +23,7 @@ let workspaces = { items: [{ workspaceId: 'ws-work', path: '/home/ada/work', tit
 const listeners = new Set<() => void>();
 const addWorkspace = (workspace: { workspaceId: string; path: string; title: string }) => { workspaces = { items: [...workspaces.items, workspace] }; listeners.forEach(listener => listener()); };
 const host: Host = {
-  sessions: { list: { getSnapshot: () => ({ byId: {} }), subscribe: () => () => {} } }, layout: { selectPanel: vi.fn() }, uiWorkspace: { startSession: vi.fn() },
+  sessions: { list: { getSnapshot: () => ({ byId: {} }), subscribe: () => () => {} } }, uiWorkspace: { startSession: vi.fn(), connectWorkspace: vi.fn(), openSession: vi.fn() },
   // DSH's list is a class instance whose methods use `this`, so the panel must not call them detached.
   workspaces: { list: new class { listeners = listeners; getSnapshot() { return workspaces; } subscribe(listener: () => void) { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; } }() },
 };
@@ -34,7 +34,7 @@ const renderFactorySlot: RenderFactorySlot = (_name, props) => props.open ? <div
 </div> : null;
 let root: ReturnType<typeof createRoot>;
 let scenario = 0;
-beforeEach(() => { vi.resetAllMocks(); profile.id = `user-${++scenario}`; vi.mocked(api.state).mockResolvedValue(state); vi.mocked(api.profile).mockResolvedValue(profile); });
+beforeEach(() => { vi.resetAllMocks(); profile.id = `user-${++scenario}`; vi.mocked(api.state).mockResolvedValue(state); vi.mocked(api.profile).mockResolvedValue(profile); vi.mocked(api.teamUsage).mockRejectedValue(new Error('Unavailable')); });
 afterEach(() => { act(() => root?.unmount()); document.body.innerHTML = ''; localStorage.clear(); vi.clearAllMocks(); vi.useRealTimers(); });
 async function mount() {
   const container = document.createElement('div'); document.body.append(container); root = createRoot(container);
@@ -138,11 +138,17 @@ test('switches teams and survives a removed membership without changing the phon
   expect(api.use).not.toHaveBeenCalled(); expect(api.decidePhone).not.toHaveBeenCalled();
 });
 
-test('sets a team’s default workspace from DSH’s own workspace menu, including a folder added there', async () => {
+const settingsOf = async (team: string) => {
+  await click('我的团队');
+  const row = [...document.querySelectorAll('.twui-item')].find(r => r.querySelector('.twui-item-title')?.firstChild?.textContent === team)!;
+  await act(async () => [...row.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent === '设置')!.click());
+};
+
+test('sets a team’s default workspace from DSH’s own workspace menu on its settings page, including a folder added there', async () => {
   vi.mocked(api.setWorkspace).mockResolvedValue(undefined);
-  await mount(); await click('我的团队');
-  // A workspace shows by its title; where DSH started, which is not one, by its folder name.
-  expect([...document.querySelectorAll('button')].map(b => b.textContent).filter(text => text === 'Work' || text === 'ada')).toEqual(['Work', 'ada']);
+  await mount(); await settingsOf('Beta');
+  // Where DSH started, which is not a workspace, shows by its folder name.
+  expect([...document.querySelectorAll('button')].some(b => b.textContent === 'ada')).toBe(true);
   await click('ada'); await click('Pick Work');
   expect(api.setWorkspace).toHaveBeenCalledWith('b', '/home/ada/work');
   expect(document.body.textContent).toContain('已保存Beta的默认工作区');
@@ -151,6 +157,32 @@ test('sets a team’s default workspace from DSH’s own workspace menu, includi
   expect(api.setWorkspace).toHaveBeenCalledTimes(1);
   await act(async () => addWorkspace({ workspaceId: 'ws-new', path: '/home/ada/new', title: 'New' }));
   expect(api.setWorkspace).toHaveBeenLastCalledWith('b', '/home/ada/new');
+});
+
+test('a team’s settings show the member’s own usage by model and their budget, and lead to its resources', async () => {
+  vi.mocked(api.teamUsage).mockResolvedValue({
+    since: '2026-10-21T00:00:00Z', calls: 12, points: '3.5', unpriced: 1,
+    sources: [
+      { kind: 'model', name: 'Claude Opus', labels: {}, calls: 10, points: '3' },
+      { kind: 'meter', name: 'cloud.computer', labels: { 'zh-CN': '云电脑' }, calls: 2, points: '0.5' },
+    ],
+    budget: { remaining: '96.5', state: 'known', resetAt: '2026-12-01T00:00:00Z', tokenLimited: false, exhausted: false },
+    nearLimit: [{ scope: 'member', period: 'month', threshold: 80 }],
+  });
+  await mount(); await settingsOf('Alpha');
+  expect(api.teamUsage).toHaveBeenCalledWith('a');
+  const text = document.body.textContent!;
+  for (const shown of ['Alpha', '默认工作区', '3.5', '12', '有 1 次调用还没有定价', 'Claude Opus', '3 积分 · 10 次', '云电脑', '预算剩余 96.5 积分', '你的本月预算已用 80%']) expect(text).toContain(shown);
+  // A meter shows by its name in the panel's language, never by its key.
+  expect(text).not.toContain('cloud.computer');
+  await click('浏览资源');
+  expect(document.querySelector('.twui-select-primary')!.textContent).toContain('Alpha');
+});
+
+test('a team’s settings say so when its usage cannot be read', async () => {
+  await mount(); await settingsOf('Beta');
+  expect(document.body.textContent).toContain('暂时读取不到');
+  expect(document.body.textContent).toContain('默认工作区');
 });
 
 test('locks pairing generation and lets the member hide a still-valid code', async () => {
@@ -287,10 +319,38 @@ test('leads with the team assistant, starts a session with it, and names teams o
   await click('Ask the assistant');
   // Team a's default folder is a DSH workspace, so the session opens there.
   expect(host.uiWorkspace.startSession).toHaveBeenCalledWith('ws-work', { agentPreset: 'team:a:assistant-a' });
+  // An example question opens the same session with the question in its input, unsent.
+  await click('What did I spend this month?');
+  expect(host.uiWorkspace.startSession).toHaveBeenLastCalledWith('ws-work', { agentPreset: 'team:a:assistant-a', prompt: 'What did I spend this month?', whenDraftExists: 'replace' });
   await act(async () => document.querySelector<HTMLButtonElement>('.twui-select-trigger')!.click());
   await act(async () => document.querySelector('[role="option"][data-index="1"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
   expect(document.querySelector('.twui-resource-list .twui-item-subtitle')).toBeNull();
   expect(document.querySelector('.twui-featured .twui-item-subtitle')).toBeNull();
+});
+
+test('still offers a new session with the assistant while the open session already uses it', async () => {
+  const assistant = { ...state.presets[0], id: 'assistant-a', name: 'Alpha assistant', assistant: true };
+  const session = { id: 's1', model: null, preset: { id: 'assistant-a', name: 'Alpha assistant', version: 1 }, started: false };
+  vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', session, presets: [assistant, ...state.presets] });
+  await mount(); await click('Show every team’s resources');
+  const featured = document.querySelector('.twui-featured')!;
+  expect(featured.textContent).not.toContain('In use'); expect(featured.textContent).not.toContain('Use here');
+  await click('Ask the assistant');
+  expect(host.uiWorkspace.startSession).toHaveBeenLastCalledWith('ws-work', { agentPreset: 'team:a:assistant-a' });
+});
+
+test('a preset always starts a session, even the one a started open session uses, and never switches the open one', async () => {
+  const session = { id: 's1', model: null, preset: { id: 'preset-a', name: 'Preset a', version: 1 }, started: true };
+  vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', session });
+  await mount(); await click('Show every team’s resources');
+  const rows = document.querySelector('.twui-resource-list')!;
+  expect(rows.textContent).not.toContain('In use'); expect(rows.textContent).not.toContain('blank session');
+  expect(rows.textContent).not.toContain('has started');
+  const starts = [...rows.querySelectorAll<HTMLButtonElement>('button')].filter(b => b.textContent === 'Start a session');
+  expect(starts.map(b => b.disabled)).toEqual([false, false]);
+  await act(async () => starts[0].click());
+  expect(host.uiWorkspace.startSession).toHaveBeenLastCalledWith('ws-work', { agentPreset: 'team:a:preset-a' });
+  expect(api.use).not.toHaveBeenCalled();
 });
 
 test('draws each preset with the avatar its admin chose, or the one its name picks', async () => {
@@ -347,6 +407,23 @@ test('marks a hosted model taken offline, and a preset on it, as not ready with 
   expect(row('Opus').querySelector('button:disabled')).not.toBeNull();
   expect(row('Live').textContent).not.toContain('taken offline');
   expect(row('Live').querySelector('button:disabled')).toBeNull();
+});
+
+test('a team model always starts a session on it, even the one the open session runs on', async () => {
+  const session = { id: 's', model: { provider: 'teamwork', model: 'live', team: true }, preset: null, started: true };
+  const model = { id: 'live', teamId: 'a', teamName: 'a', name: 'Live', version: 1, upstream: 'p/live', contextWindowMissing: false, modelOffline: false };
+  vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', session, models: [model] });
+  vi.mocked(host.uiWorkspace.connectWorkspace).mockResolvedValue('blank');
+  await mount(); await click('Show every team’s resources');
+  const tab = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(b => b.textContent?.startsWith('Models'))!;
+  await act(async () => tab.click());
+  expect(document.body.textContent).not.toContain('In use');
+  await click('Start a session');
+  // Team a's default folder is a DSH workspace: its blank session gets the model before it is shown.
+  expect(host.uiWorkspace.connectWorkspace).toHaveBeenCalledWith('ws-work');
+  expect(api.use).toHaveBeenCalledWith('blank', 'live');
+  expect(host.uiWorkspace.openSession).toHaveBeenCalledWith('blank');
+  expect(vi.mocked(api.use).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(host.uiWorkspace.openSession).mock.invocationCallOrder[0]);
 });
 
 test('a request waits for the device before it can be confirmed, and says so', async () => {

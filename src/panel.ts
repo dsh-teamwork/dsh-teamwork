@@ -139,6 +139,23 @@ export interface PanelSummary {
   pendingReviews: number;
 }
 
+/**
+ * The member's own last 30 days in one team, for its settings page: what they called and spent (the team's
+ * `summary` and `usage/stats`, both in the caller's own scope), which models and meters it went to, their budget, and
+ * the limits near their end.
+ */
+export interface PanelTeamUsage {
+  since: string;
+  calls: number;
+  /** Points spent, as a decimal string; calls without a price yet are counted in `unpriced` instead. */
+  points: string;
+  unpriced: number;
+  /** Most points first; a meter's `labels` name it in each language its edition registered. */
+  sources: Array<{ kind: 'model' | 'meter'; name: string; labels: Record<string, string>; calls: number; points: string }>;
+  budget: PanelQuota;
+  nearLimit: Array<{ scope: 'team' | 'member' | 'provider'; period: 'day' | 'month'; threshold: number }>;
+}
+
 export interface PanelProfile {
   id: string;
   email: string | null;
@@ -150,6 +167,7 @@ export interface PanelProfile {
 /** What the host half implements for the routes. Each throws an `Error` whose message is shown to the member. */
 export interface PanelOps {
   summary(teamId: string): Promise<PanelSummary>;
+  teamUsage(teamId: string): Promise<PanelTeamUsage>;
   profile(): Promise<PanelProfile>;
   updateProfile(input: { name: string | null; locale: Locale }): Promise<PanelProfile>;
   state(sessionId: string | undefined): Promise<PanelState>;
@@ -234,6 +252,7 @@ export function panelRoutes(ops: PanelOps, voice: RouteVoice): FetchRoute[] {
     post('state', (body) => ops.state(session(body))),
     post('profile', () => ops.profile()),
     post('summary', (body) => ops.summary(text(body.teamId, 'field.team'))),
+    post('team-usage', (body) => ops.teamUsage(text(body.teamId, 'field.team'))),
     post('update-profile', (body) => {
       if (body.name !== null && (typeof body.name !== 'string' || body.name.length > 80)) throw new Error(say('profile.nameTooLong'));
       if (body.locale !== 'en' && body.locale !== 'zh-CN') throw new Error(say('profile.badLocale'));
