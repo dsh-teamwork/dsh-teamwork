@@ -985,7 +985,7 @@ function Phones({ state, run }: { state: PanelState; run: Run }) {
         <div className="twui-stack" style={{ gap: 12, opacity: connected ? 1 : 0.55 }}>
           {paired.map((phone) => (
             <Item key={phone.id} icon={deviceIcon(phone)} title={phone.deviceName}
-              subtitle={deviceLine(t, phone, phone.lastUsedAt ? t('phones.lastUsed', { time: shortTime(t, phone.lastUsedAt) }) : t('phones.pairedAt', { time: shortTime(t, phone.createdAt) }))}
+              description={deviceLine(t, phone, phone.lastUsedAt ? t('phones.lastUsed', { time: shortTime(t, phone.lastUsedAt) }) : t('phones.pairedAt', { time: shortTime(t, phone.createdAt) }))}
               tags={phone.verified ? undefined : <Badge tone="warning" dot>{t('phones.repair')}</Badge>}
               actions={connected && <>
                 {!phone.verified && <Button size="sm" disabled={!!busy || pairing} onClick={() => void pair()}>{t('phones.repairAction')}</Button>}
