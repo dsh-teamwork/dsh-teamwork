@@ -23,7 +23,7 @@ let workspaces = { items: [{ workspaceId: 'ws-work', path: '/home/ada/work', tit
 const listeners = new Set<() => void>();
 const addWorkspace = (workspace: { workspaceId: string; path: string; title: string }) => { workspaces = { items: [...workspaces.items, workspace] }; listeners.forEach(listener => listener()); };
 const host: Host = {
-  sessions: { list: { getSnapshot: () => ({ byId: {} }), subscribe: () => () => {} } }, layout: { selectPanel: vi.fn() }, uiWorkspace: { startSession: vi.fn() },
+  sessions: { list: { getSnapshot: () => ({ byId: {} }), subscribe: () => () => {} } }, uiWorkspace: { startSession: vi.fn(), connectWorkspace: vi.fn(), openSession: vi.fn() },
   // DSH's list is a class instance whose methods use `this`, so the panel must not call them detached.
   workspaces: { list: new class { listeners = listeners; getSnapshot() { return workspaces; } subscribe(listener: () => void) { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; } }() },
 };
@@ -287,10 +287,38 @@ test('leads with the team assistant, starts a session with it, and names teams o
   await click('Ask the assistant');
   // Team a's default folder is a DSH workspace, so the session opens there.
   expect(host.uiWorkspace.startSession).toHaveBeenCalledWith('ws-work', { agentPreset: 'team:a:assistant-a' });
+  // An example question opens the same session with the question in its input, unsent.
+  await click('What did I spend this month?');
+  expect(host.uiWorkspace.startSession).toHaveBeenLastCalledWith('ws-work', { agentPreset: 'team:a:assistant-a', prompt: 'What did I spend this month?', whenDraftExists: 'replace' });
   await act(async () => document.querySelector<HTMLButtonElement>('.twui-select-trigger')!.click());
   await act(async () => document.querySelector('[role="option"][data-index="1"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
   expect(document.querySelector('.twui-resource-list .twui-item-subtitle')).toBeNull();
   expect(document.querySelector('.twui-featured .twui-item-subtitle')).toBeNull();
+});
+
+test('still offers a new session with the assistant while the open session already uses it', async () => {
+  const assistant = { ...state.presets[0], id: 'assistant-a', name: 'Alpha assistant', assistant: true };
+  const session = { id: 's1', model: null, preset: { id: 'assistant-a', name: 'Alpha assistant', version: 1 }, started: false };
+  vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', session, presets: [assistant, ...state.presets] });
+  await mount(); await click('Show every team’s resources');
+  const featured = document.querySelector('.twui-featured')!;
+  expect(featured.textContent).not.toContain('In use'); expect(featured.textContent).not.toContain('Use here');
+  await click('Ask the assistant');
+  expect(host.uiWorkspace.startSession).toHaveBeenLastCalledWith('ws-work', { agentPreset: 'team:a:assistant-a' });
+});
+
+test('a preset always starts a session, even the one a started open session uses, and never switches the open one', async () => {
+  const session = { id: 's1', model: null, preset: { id: 'preset-a', name: 'Preset a', version: 1 }, started: true };
+  vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', session });
+  await mount(); await click('Show every team’s resources');
+  const rows = document.querySelector('.twui-resource-list')!;
+  expect(rows.textContent).not.toContain('In use'); expect(rows.textContent).not.toContain('blank session');
+  expect(rows.textContent).not.toContain('has started');
+  const starts = [...rows.querySelectorAll<HTMLButtonElement>('button')].filter(b => b.textContent === 'Start a session');
+  expect(starts.map(b => b.disabled)).toEqual([false, false]);
+  await act(async () => starts[0].click());
+  expect(host.uiWorkspace.startSession).toHaveBeenLastCalledWith('ws-work', { agentPreset: 'team:a:preset-a' });
+  expect(api.use).not.toHaveBeenCalled();
 });
 
 test('draws each preset with the avatar its admin chose, or the one its name picks', async () => {
@@ -347,6 +375,23 @@ test('marks a hosted model taken offline, and a preset on it, as not ready with 
   expect(row('Opus').querySelector('button:disabled')).not.toBeNull();
   expect(row('Live').textContent).not.toContain('taken offline');
   expect(row('Live').querySelector('button:disabled')).toBeNull();
+});
+
+test('a team model always starts a session on it, even the one the open session runs on', async () => {
+  const session = { id: 's', model: { provider: 'teamwork', model: 'live', team: true }, preset: null, started: true };
+  const model = { id: 'live', teamId: 'a', teamName: 'a', name: 'Live', version: 1, upstream: 'p/live', contextWindowMissing: false, modelOffline: false };
+  vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', session, models: [model] });
+  vi.mocked(host.uiWorkspace.connectWorkspace).mockResolvedValue('blank');
+  await mount(); await click('Show every team’s resources');
+  const tab = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(b => b.textContent?.startsWith('Models'))!;
+  await act(async () => tab.click());
+  expect(document.body.textContent).not.toContain('In use');
+  await click('Start a session');
+  // Team a's default folder is a DSH workspace: its blank session gets the model before it is shown.
+  expect(host.uiWorkspace.connectWorkspace).toHaveBeenCalledWith('ws-work');
+  expect(api.use).toHaveBeenCalledWith('blank', 'live');
+  expect(host.uiWorkspace.openSession).toHaveBeenCalledWith('blank');
+  expect(vi.mocked(api.use).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(host.uiWorkspace.openSession).mock.invocationCallOrder[0]);
 });
 
 test('a request waits for the device before it can be confirmed, and says so', async () => {

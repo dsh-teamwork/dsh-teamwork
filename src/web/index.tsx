@@ -16,7 +16,7 @@ interface Slots {
   register(owner: Record<string, unknown>, render: (props: any) => unknown): unknown;
 }
 
-export const inject = ['slots', 'sessions', 'layout', 'uiWorkspace', 'workspaces'];
+export const inject = ['slots', 'sessions', 'uiWorkspace', 'workspaces'];
 
 export function apply(ctx: Host & { slots: Slots; effect(callback: () => (() => void)): void }) {
   const trackSession = currentSessionTracker(ctx.sessions.list);
@@ -25,7 +25,6 @@ export function apply(ctx: Host & { slots: Slots; effect(callback: () => (() => 
   const host: Host = {
     currentSession: trackSession,
     get sessions() { return ctx.sessions; },
-    get layout() { return ctx.layout; },
     get uiWorkspace() { return ctx.uiWorkspace; },
     get workspaces() { return ctx.workspaces; },
   };
