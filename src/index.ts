@@ -850,6 +850,8 @@ export async function apply(ctx: Context, config: Config) {
     }));
   });
   try { await restore(); } catch { ctx.logger.warn('The team cache could not be restored; sign in and sync again.'); }
+  // A sign-in kept from the last run syncs now rather than at the first interval; offline, the cache stands meanwhile.
+  if (!config.tokenFile && client.authenticated() && config.autoSync !== false) void configSync.sync().catch(() => { /* status retains the failure */ });
   try { await shared?.restore(); if (shared?.enabled) void archive.recover(); } catch (error) { ctx.logger.warn('Shared mode could not resume: %s', (error as Error).message); }
   // The same routes for `dsh-teamwork` on this machine, once restored state answers them (src/control-socket.ts).
   const closeSocket = await serveControlSocket(controlSocketPath(config.cachePath), routes, message => ctx.logger.warn('%s', message));

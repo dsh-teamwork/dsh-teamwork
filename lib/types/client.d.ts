@@ -236,6 +236,15 @@ export declare class TeamworkClient {
      * this signs out and drops the cached configuration, as `logout` does.
      */
     setEndpoint(endpoint: string): Promise<void>;
+    /**
+     * Where the sign-in is kept across restarts (platform ADR 0060): the token and the server it belongs to, beside the
+     * cache and readable by this user alone. The server can revoke it, and it lapses after 30 days unused.
+     */
+    get tokenPath(): string;
+    private saveToken;
+    private forgetToken;
+    /** Best effort: a token the server is not told about still lapses after 30 days unused. */
+    private revoke;
     /** The sign-in page's address; with `redirectUri`, the page sends the code there instead of showing it. */
     beginLogin(redirectUri?: string): string;
     /** Takes the code alone or the whole `/teamwork authorize <code>` line the sign-in page shows, so the panel accepts what was copied. */
@@ -362,6 +371,7 @@ export declare class TeamworkClient {
         }[];
     }>;
     private syncOnce;
+    /** The cached configuration, and the sign-in kept for this server, as the last run left them. */
     restore(): Promise<{
         teams: {
             teamId: string;
@@ -524,7 +534,7 @@ export declare class TeamworkClient {
     useToken(token: string | undefined): Promise<void>;
     clear(): Promise<void>;
     logout(): Promise<void>;
-    /** Forgets the token locally; the platform cannot revoke it, but a removed member is refused on every request. */
+    /** Forgets the token here and revokes it at the server that issued it, so a copy of it opens nothing either. */
     private logoutOnce;
 }
 /**
