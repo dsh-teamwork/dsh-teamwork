@@ -29,8 +29,6 @@ declare const en: {
     'auth.signedOut': string;
     'auth.hostManaged': string;
     'auth.shared': string;
-    'shared.off': string;
-    'shared.notListed': string;
     'auth.changed': string;
     'summary.team': string;
     'summary.unavailable': string;

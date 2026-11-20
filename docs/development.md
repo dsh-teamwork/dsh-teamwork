@@ -154,6 +154,14 @@ its desktop's browser this way, Playwright's MCP server over CDP.
 
 ## Shared mode
 
+**Team DSH is offline on the server, so nothing reaches shared mode.** The panel,
+`/teamwork` and `dsh-teamwork` offer no `share` action, and the panel routes for
+it are gone. At start, a DSH that still has `<cache>.shared.json` deletes it
+(`forgetSharedKey`), clears its roster and PINs, and is a personal DSH again; its
+audit archive is kept. The modules below and their tests stay, unwired, for when
+Team DSH returns: the platform's `server/e2e` shared-mode test drives them
+directly. What follows describes them as they would run.
+
 `src/shared-mode.ts` makes a DSH its team's shared DSH (the server's
 `docs/tech/shared-dsh.md`, part of the community edition). `/teamwork share enable <key>` trades a team
 host key for a one-hour host token (platform ADR 0047): the server's nonce is

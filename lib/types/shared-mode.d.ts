@@ -1,5 +1,11 @@
 import type { Identity } from './secure-channel.js';
 export declare const sharedKeyPath: (cachePath: string) => string;
+/**
+ * Team DSH is offline on the server (platform docs/tech/shared-dsh.md), so a DSH left in shared mode is not resumed:
+ * its saved team host key is deleted, untouched otherwise (its audit archive holds members' sealed sessions). True
+ * when there was one to delete.
+ */
+export declare function forgetSharedKey(path: string): Promise<boolean>;
 /** What the server's refusal means for the key: `invalid` (unknown, rotated or deleted) and `elsewhere` stop renewal. */
 export declare class SharedKeyError extends Error {
     readonly code: 'format' | 'invalid' | 'elsewhere' | 'unavailable';

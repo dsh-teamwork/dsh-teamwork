@@ -1,11 +1,12 @@
 import { createPublicKey, verify } from 'node:crypto';
-import { mkdtemp, readFile, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { deviceIdentity, base64 } from '../src/secure-channel.js';
-import { SharedMode, SharedKeyError, sharedKeyPath, signedExchange } from '../src/shared-mode.js';
+import { forgetSharedKey, SharedMode, SharedKeyError, sharedKeyPath, signedExchange } from '../src/shared-mode.js';
+import { auditArchivePath } from '../src/audit-archive.js';
 
 const server = 'https://teamwork.test';
 const hostId = 'a1b2c3';
@@ -84,4 +85,16 @@ describe('shared mode', () => {
     expect(mode.status()).toEqual({ enabled: false });
     expect(existsSync(path)).toBe(false);
   });
+});
+
+// Team DSH is offline: a DSH left in shared mode loses its key at start and nothing else, its members' archive least of all.
+it('forgets a saved team host key, and only it', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'tw-forget-'));
+  const cache = join(dir, 'cache.json');
+  await writeFile(sharedKeyPath(cache), JSON.stringify({ key: 'dshh_saved' }));
+  await writeFile(auditArchivePath(cache), 'sealed sessions');
+  expect(await forgetSharedKey(sharedKeyPath(cache))).toBe(true);
+  expect(existsSync(sharedKeyPath(cache))).toBe(false);
+  expect(await readFile(auditArchivePath(cache), 'utf8')).toBe('sealed sessions');
+  expect(await forgetSharedKey(sharedKeyPath(cache))).toBe(false);
 });
