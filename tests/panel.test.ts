@@ -20,7 +20,7 @@ const ops: PanelOps = {
 let locale: 'en' | 'zh-CN' = 'en';
 const routes = new Map(panelRoutes(ops, { say, speak: answer => speaking(locale, answer) }).map((r) => [r.path, r]));
 const post = (name: string, body?: unknown) =>
-  routes.get(`${ROUTE_PREFIX}/${name}`)!.fetch(new Request(`http://dsh.local${ROUTE_PREFIX}/${name}`, { method: 'POST', body: typeof body === 'string' ? body : JSON.stringify(body ?? {}) }));
+  routes.get(`${ROUTE_PREFIX}/${name}`)!.fetch(new Request(`http://dsh.local${ROUTE_PREFIX}/${name}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: typeof body === 'string' ? body : JSON.stringify(body ?? {}) }));
 
 describe('panel routes', () => {
   it('proxies only editable profile fields and rejects invalid updates', async () => {
@@ -30,6 +30,18 @@ describe('panel routes', () => {
     expect((await post('update-profile', { name: 'x'.repeat(81), locale: 'en' })).status).toBe(400);
     expect((await post('update-profile', { name: null, locale: 'invalid' })).status).toBe(400);
     expect(calls).toHaveLength(1);
+  });
+  it('checks browser origin and JSON on every panel POST', async () => {
+    for (const route of routes.values()) {
+      for (const headers of [
+        { 'content-type': 'text/plain' },
+        { 'content-type': 'application/json', origin: 'http://localhost:2000' },
+        { 'content-type': 'application/json', 'sec-fetch-site': 'same-site' },
+      ] as HeadersInit[]) {
+        const response = await route.fetch(new Request('http://localhost:3000' + route.path, { method: 'POST', headers, body: '{}' }));
+        expect(response.status).toBe(403);
+      }
+    }
   });
   it('registers POST-only routes under /api/teamwork', () => {
     expect([...routes.keys()].sort()).toEqual(['authorize', 'decide-phone', 'install', 'login', 'logout', 'owner-pin', 'pair-phone', 'profile', 'revoke-phone', 'server', 'share-audit-key', 'share-disable', 'share-enable', 'share-invite', 'share-unlock', 'state', 'summary', 'sync', 'update-profile', 'use', 'workspace'].map((n) => `${ROUTE_PREFIX}/${n}`));

@@ -208,7 +208,7 @@ Run these in DSH's command input, not your shell. IDs come from `/teamwork list`
 | `/teamwork retry` | Preview recovery; `retry confirm` sends a recovery instruction, not tool replay. |
 | `/teamwork logout` | Drop the in-memory token, team cache and team registrations. |
 
-Personal desktops default to PIN protection off. In the device pairing panel on the computer, set a four-digit PIN to enable it, change it, or turn it off. Upgrades keep an existing PIN.
+Personal desktops default to PIN protection off. In the device pairing panel on the computer, set a four-digit PIN to enable it, change it, or turn it off. The PIN and any lockout belong to this host and persist when the signed-in account changes. The new owner can change or disable the PIN locally in the pairing panel.
 
 Continue and retry do not jump ahead of queued input. A confirmation expires
 when its session, model, configuration or login binding changes. Logout leaves

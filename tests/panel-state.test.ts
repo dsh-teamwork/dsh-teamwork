@@ -3,6 +3,8 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
+import { Bridge } from '../src/bridge.js';
+import { PhoneSecurity } from '../src/phone-security.js';
 import { apply } from '../src/index.js';
 import type { FetchRoute, PanelState } from '../src/panel.js';
 
@@ -44,7 +46,7 @@ test('a panel request reads one inventory for every preset and sees changes on t
   try {
     await apply(ctx, { apiEndpoint: 'http://localhost:3800', cachePath, autoSync: false });
     const read = async (): Promise<PanelState> => {
-      const response = await routes.get('/api/teamwork/state')!.fetch(new Request('http://localhost/api/teamwork/state', { method: 'POST', body: '{}' }));
+      const response = await routes.get('/api/teamwork/state')!.fetch(new Request('http://localhost/api/teamwork/state', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }));
       expect(response.status).toBe(200);
       return response.json();
     };
@@ -59,7 +61,7 @@ test('a panel request reads one inventory for every preset and sees changes on t
     // With no DSH workspace, it starts in the folder DSH was started in.
     const started = realpathSync(process.cwd());
     expect(first.teams.map(t => t.workspace)).toEqual([started]);
-    const setWorkspace = (body: unknown) => routes.get('/api/teamwork/workspace')!.fetch(new Request('http://localhost/api/teamwork/workspace', { method: 'POST', body: JSON.stringify(body) }));
+    const setWorkspace = (body: unknown) => routes.get('/api/teamwork/workspace')!.fetch(new Request('http://localhost/api/teamwork/workspace', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }));
     expect((await setWorkspace({ teamId: 'team', path: '/not/a/workspace' })).status).toBe(400);
     expect((await setWorkspace({ teamId: 'other', path: started })).status).toBe(400);
     expect((await setWorkspace({ teamId: 'team', path: started })).status).toBe(200);
@@ -71,6 +73,23 @@ test('a panel request reads one inventory for every preset and sees changes on t
     expect((await read()).presets.every(p => p.plugins[0].state === 'disabled')).toBe(true);
     expect(manager.listBundles).toHaveBeenCalledTimes(2);
     expect(manager.listPlugins).toHaveBeenCalledTimes(2);
+    const closeChannels = vi.spyOn(PhoneSecurity.prototype, 'reset');
+    const dropStreams = vi.spyOn(Bridge.prototype, 'dropAll');
+    try {
+      for (const pin of ['1234', '2345', null]) {
+        const response = await routes.get('/api/teamwork/owner-pin')!.fetch(new Request('http://localhost/api/teamwork/owner-pin', {
+          method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pin }),
+        }));
+        expect(response.status).toBe(200);
+        expect(closeChannels).toHaveBeenCalled();
+        expect(dropStreams).toHaveBeenCalled();
+        closeChannels.mockClear();
+        dropStreams.mockClear();
+      }
+    } finally {
+      closeChannels.mockRestore();
+      dropStreams.mockRestore();
+    }
     await services.dshTeamwork.logout();
     expect((await read()).plugins).toEqual([]);
     expect(manager.listBundles).toHaveBeenCalledTimes(2);
@@ -108,7 +127,7 @@ test('a team model without its context window is shown as not ready and stops a 
   };
   try {
     await apply(ctx, { apiEndpoint: 'http://localhost:3800', cachePath, autoSync: false });
-    const response = await routes.get('/api/teamwork/state')!.fetch(new Request('http://localhost/api/teamwork/state', { method: 'POST', body: '{}' }));
+    const response = await routes.get('/api/teamwork/state')!.fetch(new Request('http://localhost/api/teamwork/state', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }));
     const state: PanelState = await response.json();
     expect(state.models.find(m => m.id === 'sized')?.contextWindowMissing).toBe(false);
     expect(state.models.find(m => m.id === 'unsized')?.contextWindowMissing).toBe(true);

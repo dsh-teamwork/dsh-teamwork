@@ -831,6 +831,7 @@ function Phones({ state, run }: { state: PanelState; run: Run }) {
   const t = useT();
   const [offer, setOffer] = useState<PanelPairingOffer>();
   const [pin, setPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
   const [revoking, setRevoking] = useState<PanelPhone>();
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<unknown>();
@@ -857,11 +858,13 @@ function Phones({ state, run }: { state: PanelState; run: Run }) {
   const pinSettings = state.ownerPinEnabled !== undefined && <Card>
         <label>{t('phones.pin')} <input type="password" inputMode="numeric" maxLength={4} autoComplete="new-password" value={pin}
           onChange={event => setPin(event.target.value.replace(/[^0-9]/g, ''))} /></label>
-        <Button disabled={!!busy || pin.length !== 4} onClick={() => void perform('pin', async () => {
-          await api.setOwnerPin(pin); setPin('');
+        <label>{t('phones.pinConfirm')} <input type="password" inputMode="numeric" maxLength={4} autoComplete="new-password" value={confirmPin}
+          onChange={event => setConfirmPin(event.target.value.replace(/[^0-9]/g, ''))} /></label>
+        <Button disabled={!!busy || pin.length !== 4 || pin !== confirmPin} onClick={() => void perform('pin', async () => {
+          await api.setOwnerPin(pin); setPin(''); setConfirmPin('');
         })}>{t(state.ownerPinEnabled ? 'phones.pinChange' : 'phones.pinEnable')}</Button>
         {state.ownerPinEnabled && <Button disabled={!!busy} onClick={() => void perform('pin', async () => {
-          await api.setOwnerPin(null); setPin('');
+          await api.setOwnerPin(null); setPin(''); setConfirmPin('');
         })}>{t('phones.pinDisable')}</Button>}
       </Card>;
   if (state.relay !== 'connected') {

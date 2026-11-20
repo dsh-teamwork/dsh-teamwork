@@ -59,7 +59,7 @@ describe('a channel behind the PIN', () => {
       send: packet => queueMicrotask(() => phone.receive(packet)), forward: frame => forwarded.push(frame),
       confirm: async () => {}, changed: () => {}, error: error => { throw error; },
     });
-    phone = new SecureChannel({
+    const connect = () => new SecureChannel({
       importAesKey, pairingId: 'pair', channelId: newChannelId(n => randomBytes(n)), identity,
       initiator: true, random: n => randomBytes(n), send: packet => queueMicrotask(() => void host.handle(packet)),
       ready: () => {}, closed: () => {}, message: (value: any) => {
@@ -67,6 +67,7 @@ describe('a channel behind the PIN', () => {
         messages.push(value.t);
       },
     });
+    phone = connect();
     phone.start();
     await until(() => messages.includes('unlocked'));
     phone.send({ t: 'setPin', pin: '1234' });
@@ -74,6 +75,20 @@ describe('a channel behind the PIN', () => {
     expect(await pins.ownerEnabled()).toBe(false);
     phone.send({ t: 'call', pairingId: 'pair', id: '1', method: 'session/list', body: {} });
     await until(() => forwarded.length === 1);
+    for (const [newPIN, expected] of [['4321', 'pinRequired'], [null, 'unlocked']] as const) {
+      phone.close();
+      if (newPIN) await pins.set('owner', newPIN);
+      else await pins.clear('owner');
+      host.reset();
+      messages.length = 0;
+      phone = connect();
+      phone.start();
+      await until(() => messages.includes(expected));
+      if (newPIN) {
+        phone.send({ t: 'unlock', pin: newPIN });
+        await until(() => messages.includes('unlocked'));
+      }
+    }
     phone.close();
   });
   it('carries nothing until the member sets or gives their PIN, and locks again when idle', async () => {

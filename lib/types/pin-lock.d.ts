@@ -34,7 +34,7 @@ export declare class PinStore {
     replace(member: string, pin: string, old: string, requirePolicyEntry: boolean): Promise<PinCheck>;
     /** Clears a member's PIN and lock: their next connection sets a new one. */
     clear(member: string): Promise<void>;
-    /** Shared mode ended, or this DSH changed hands: every PIN goes. */
+    /** Clear PIN records when switching shared hosting modes. */
     reset(): Promise<void>;
 }
 //# sourceMappingURL=pin-lock.d.ts.map

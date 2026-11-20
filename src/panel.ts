@@ -230,8 +230,13 @@ export function panelRoutes(ops: PanelOps, voice: RouteVoice): FetchRoute[] {
     methods: ['POST'],
     requestBody: 'buffered',
     fetch: (request) => voice.speak(async () => {
-      if (name === 'owner-pin' && (request.headers.get('content-type')?.split(';')[0] !== 'application/json'
-        || request.headers.get('sec-fetch-site') === 'cross-site')) return json({ error: say('request.invalid') }, 403);
+      const origin = request.headers.get('origin');
+      const site = request.headers.get('sec-fetch-site');
+      if (request.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'application/json'
+        || (site && site !== 'same-origin')
+        || (origin && site !== 'same-origin' && origin !== new URL(request.url).origin)) {
+        return json({ error: say('request.invalid') }, 403);
+      }
       let body: Record<string, unknown> = {};
       try {
         const raw = await request.text();
