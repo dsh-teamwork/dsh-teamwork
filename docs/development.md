@@ -184,7 +184,7 @@ restart. Once a channel is authorized, `PhoneSecurity` tells the phone
 every call (`teamwork/locked`) and stream until unlocked, and again after
 fifteen minutes with nothing sent. Five wrong PINs lock the member on every
 device until `/teamwork share unlock <email>` or `/teamwork pin reset` clears
-it. Signing out, entering or leaving shared mode clears every PIN.
+it. The personal desktop retains its local PIN policy when the account signs out. Entering or leaving shared mode clears every PIN.
 
 `src/audit-archive.ts` is a shared DSH's audit archive (the server's ADR 0045):
 every frame between a member's device and this DSH, both ways, becomes a record

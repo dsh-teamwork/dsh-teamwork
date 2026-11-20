@@ -509,7 +509,7 @@ export async function apply(ctx: Context, config: Config) {
     return { url: client.beginLogin(callback?.uri), automatic: callback !== undefined };
   };
   const restore = async () => { await client.restore(); await overlay.apply(client.current()); relay.refresh(); };
-  const logout = async () => { hostManaged(); pendingInstalls.clear(); stopCallback(); try { await client.logout(); await pins.reset(); } finally { setLocale(null); await overlay.apply(); relay.refresh(); } };
+  const logout = async () => { hostManaged(); pendingInstalls.clear(); stopCallback(); try { await client.logout(); } finally { setLocale(null); await overlay.apply(); relay.refresh(); } };
   ctx.provide('dshTeamwork', {
     beginLogin, completeLogin: authorize,
     sync: () => configSync.sync(),
