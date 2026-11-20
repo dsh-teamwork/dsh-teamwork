@@ -385,6 +385,7 @@ export async function apply(ctx: Context, config: Config) {
     error: error => ctx.logger.warn('phone security: %s', error.message),
     joining: (pairingId) => shared?.enabled ? joining.get(pairingId) : undefined,
     pins,
+    pinRequired: async () => shared?.enabled || await pins.ownerEnabled(),
     pinMember: async (pairingId) => shared?.enabled ? roster.memberOf(pairingId) : 'owner',
     admit: async (input) => {
       // No member joins before the admin's audit key is set: nothing they do would be archived.
@@ -621,6 +622,7 @@ export async function apply(ctx: Context, config: Config) {
         defaultServer: serverAddress(config.apiEndpoint),
         sync: { auto: status.autoSync, running: status.syncing, lastSuccess: status.lastSuccess, lastError: status.lastError },
         relay: relay.status,
+        ownerPinEnabled: shared?.enabled || config.tokenFile ? undefined : await pins.ownerEnabled(),
         phones: await Promise.all(phones.map(async phone => ({ ...phone, ...await security.details(phone.id) }))),
         shared: await sharedView(),
         session: agent ? {
@@ -655,6 +657,14 @@ export async function apply(ctx: Context, config: Config) {
         await client.setEndpoint(next);
         await serverChoice.write(next === serverAddress(config.apiEndpoint) ? undefined : next);
       } finally { setLocale(null); await overlay.apply(client.current()); relay.refresh(); }
+    },
+    async setOwnerPin(pin) {
+      if (shared?.enabled || config.tokenFile) throw new Error('Personal desktop DSH only.');
+      if (pin === null) await pins.clear('owner');
+      else await pins.set('owner', pin);
+      security.reset();
+      bridge.dropAll();
+      relay.refresh();
     },
     async pairPhone() {
       const offer = offerSchema.parse(await relay.request({ t: 'offer' }).catch(phoneError));
@@ -778,7 +788,11 @@ export async function apply(ctx: Context, config: Config) {
           }
           if (action === 'pin' && requestedId === 'reset') {
             if (shared?.enabled) throw new Error('On a Team DSH, clear a member\'s PIN with /teamwork share unlock <email>.');
-            await pins.clear('owner');
+            if (!await pins.ownerEnabled()) return { kind: 'success', text: 'Personal desktop PIN is off.' };
+            await pins.resetOwnerPin();
+            security.reset();
+            bridge.dropAll();
+            relay.refresh();
             return { kind: 'success', text: 'Your phone PIN and its lock are cleared; set a new PIN on your phone\'s next connection.' };
           }
           if (action === 'logout') { await logout(); return { kind: 'success', text: 'Signed out, and the team configuration removed.' }; }

@@ -32,7 +32,7 @@ describe('panel routes', () => {
     expect(calls).toHaveLength(1);
   });
   it('registers POST-only routes under /api/teamwork', () => {
-    expect([...routes.keys()].sort()).toEqual(['authorize', 'decide-phone', 'install', 'login', 'logout', 'pair-phone', 'profile', 'revoke-phone', 'server', 'share-audit-key', 'share-disable', 'share-enable', 'share-invite', 'share-unlock', 'state', 'summary', 'sync', 'update-profile', 'use', 'workspace'].map((n) => `${ROUTE_PREFIX}/${n}`));
+    expect([...routes.keys()].sort()).toEqual(['authorize', 'decide-phone', 'install', 'login', 'logout', 'owner-pin', 'pair-phone', 'profile', 'revoke-phone', 'server', 'share-audit-key', 'share-disable', 'share-enable', 'share-invite', 'share-unlock', 'state', 'summary', 'sync', 'update-profile', 'use', 'workspace'].map((n) => `${ROUTE_PREFIX}/${n}`));
     for (const route of routes.values()) expect(route.methods).toEqual(['POST']);
   });
 

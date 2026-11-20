@@ -830,6 +830,7 @@ const shortTime = (t: Translate, iso: string) => new Date(iso).toLocaleString(t.
 function Phones({ state, run }: { state: PanelState; run: Run }) {
   const t = useT();
   const [offer, setOffer] = useState<PanelPairingOffer>();
+  const [pin, setPin] = useState('');
   const [revoking, setRevoking] = useState<PanelPhone>();
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<unknown>();
@@ -853,13 +854,24 @@ function Phones({ state, run }: { state: PanelState; run: Run }) {
   };
   const pair = () => perform('pair', async () => { setOffer(await api.pairPhone()); setExpired(false); });
 
+  const pinSettings = state.ownerPinEnabled !== undefined && <Card>
+        <label>{t('phones.pin')} <input type="password" inputMode="numeric" maxLength={4} autoComplete="new-password" value={pin}
+          onChange={event => setPin(event.target.value.replace(/[^0-9]/g, ''))} /></label>
+        <Button disabled={!!busy || pin.length !== 4} onClick={() => void perform('pin', async () => {
+          await api.setOwnerPin(pin); setPin('');
+        })}>{t(state.ownerPinEnabled ? 'phones.pinChange' : 'phones.pinEnable')}</Button>
+        {state.ownerPinEnabled && <Button disabled={!!busy} onClick={() => void perform('pin', async () => {
+          await api.setOwnerPin(null); setPin('');
+        })}>{t('phones.pinDisable')}</Button>}
+      </Card>;
   if (state.relay !== 'connected') {
     const [title, body] = relayText[state.relay];
-    return <Card><EmptyState icon="smartphone" title={t(title)}>{t(body)}</EmptyState></Card>;
+    return <>{pinSettings}{error !== undefined && <Banner tone="warning" title={t('phones.failed')}>{describe(t,error)}</Banner>}<Card><EmptyState icon="smartphone" title={t(title)}>{t(body)}</EmptyState></Card></>;
   }
   return (
     <>
       {error !== undefined && <Banner tone="warning" title={t('phones.failed')}>{describe(t, error)}</Banner>}
+      {pinSettings}
       {expired && <Banner tone="warning" title={t('phones.expiredTitle')} action={<Button busy={busy === 'pair'} disabled={!!busy} onClick={() => void pair()}>{t('phones.newCode')}</Button>}>{t('phones.expiredBody')}</Banner>}
       <Card>
         {offer

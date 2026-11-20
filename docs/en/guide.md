@@ -208,6 +208,8 @@ Run these in DSH's command input, not your shell. IDs come from `/teamwork list`
 | `/teamwork retry` | Preview recovery; `retry confirm` sends a recovery instruction, not tool replay. |
 | `/teamwork logout` | Drop the in-memory token, team cache and team registrations. |
 
+Personal desktops default to PIN protection off. In the device pairing panel on the computer, set a four-digit PIN to enable it, change it, or turn it off. Upgrades keep an existing PIN.
+
 Continue and retry do not jump ahead of queued input. A confirmation expires
 when its session, model, configuration or login binding changes. Logout leaves
 explicitly installed plugins in place. Removed members are refused by the

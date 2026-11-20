@@ -56,6 +56,7 @@ export declare class PhoneSecurity {
          * personal computer). Without them no channel is locked.
          */
         pins?: PinStore;
+        pinRequired?(): Promise<boolean>;
         pinMember?(pairingId: string): Promise<string | undefined>;
         now?(): number;
     });
@@ -95,6 +96,7 @@ export declare class PhoneSecurity {
     private askPin;
     /** `unlock` with the PIN, or `setPin`: the first PIN, or a new one with the old. */
     private pinMessage;
+    private relockOtherChannels;
     /** What a locked channel answers its member's work with: the call fails, the stream ends, and nothing reaches DSH. */
     private refuseLocked;
     reset(): void;

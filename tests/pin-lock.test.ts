@@ -14,6 +14,19 @@ const until = async (predicate: () => boolean) => {
 };
 
 describe('the PIN store', () => {
+  it('defaults off and preserves the owner policy across restarts and resets', async () => {
+    const path = join(await mkdtemp(join(tmpdir(), 'owner-pins-')), 'pins.json');
+    const pins = new PinStore(path);
+    expect(await pins.ownerEnabled()).toBe(false);
+    await pins.set('owner', '0012');
+    const restarted = new PinStore(path);
+    expect(await restarted.ownerEnabled()).toBe(true);
+    await restarted.resetOwnerPin();
+    expect(await restarted.has('owner')).toBe(false);
+    expect(await new PinStore(path).ownerEnabled()).toBe(true);
+    await restarted.clear('owner');
+    expect(await new PinStore(path).ownerEnabled()).toBe(false);
+  });
   it('locks a member after five wrong PINs, refusing even the right one, across restarts until cleared', async () => {
     const path = join(await mkdtemp(join(tmpdir(), 'pins-')), 'pins.json');
     const pins = new PinStore(path);
@@ -33,6 +46,36 @@ describe('the PIN store', () => {
 });
 
 describe('a channel behind the PIN', () => {
+  it('lets a trusted desktop device work with PIN off and ignores remote PIN setup', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'pin-disabled-'));
+    const keys = new PhoneKeys(join(dir, 'keys.json'));
+    const pins = new PinStore(join(dir, 'pins.json'));
+    const identity = await deviceIdentity(base64(randomBytes(32)));
+    await keys.trust('scope', 'pair', identity.publicKey, 'phone');
+    const messages: string[] = [], forwarded: unknown[] = [];
+    let phone: SecureChannel;
+    const host = new PhoneSecurity({
+      keys, pins, scope: async () => 'scope', pinRequired: () => pins.ownerEnabled(), pinMember: async () => 'owner',
+      send: packet => queueMicrotask(() => phone.receive(packet)), forward: frame => forwarded.push(frame),
+      confirm: async () => {}, changed: () => {}, error: error => { throw error; },
+    });
+    phone = new SecureChannel({
+      importAesKey, pairingId: 'pair', channelId: newChannelId(n => randomBytes(n)), identity,
+      initiator: true, random: n => randomBytes(n), send: packet => queueMicrotask(() => void host.handle(packet)),
+      ready: () => {}, closed: () => {}, message: (value: any) => {
+        if (value.t === 'secureReady') phone.verified();
+        messages.push(value.t);
+      },
+    });
+    phone.start();
+    await until(() => messages.includes('unlocked'));
+    phone.send({ t: 'setPin', pin: '1234' });
+    await until(() => messages.filter(type => type === 'unlocked').length === 2);
+    expect(await pins.ownerEnabled()).toBe(false);
+    phone.send({ t: 'call', pairingId: 'pair', id: '1', method: 'session/list', body: {} });
+    await until(() => forwarded.length === 1);
+    phone.close();
+  });
   it('carries nothing until the member sets or gives their PIN, and locks again when idle', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'pin-channel-'));
     const keys = new PhoneKeys(join(dir, 'keys.json'));

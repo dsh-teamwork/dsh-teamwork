@@ -176,8 +176,7 @@ Whatever the bridge sends back fits one 1 MiB message of the encrypted channel
 records and says `hasMore`, and a stream frame that still cannot fit ends its
 stream with `too_large` rather than closing the channel.
 
-`src/pin-lock.ts` is the PIN lock, on a shared DSH and on a personal computer
-alike (`<cache>.pins.json`, mode 0600): one four-digit PIN per member (`owner`
+`src/pin-lock.ts` stores the per-member PIN lock (`<cache>.pins.json`, mode 0600): one optional four-digit PIN on a personal desktop, enabled from the local device panel. A saved owner entry preserves the policy across upgrades. The file stores one four-digit PIN per protected member (`owner`
 on a personal computer), kept as scrypt, and a failure count that survives a
 restart. Once a channel is authorized, `PhoneSecurity` tells the phone
 `pinRequired` (with `set` when the member has none yet), answers `unlock` and

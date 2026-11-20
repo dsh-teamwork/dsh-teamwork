@@ -119,6 +119,7 @@ export interface PanelState {
   relay: RelayStatus;
   /** Phones paired with this computer; empty while the relay is not connected. */
   phones: PanelPhone[];
+  ownerPinEnabled?: boolean;
   shared: PanelShared | null;
   /** The session the member has open, when the host has it loaded. */
   session: {
@@ -179,6 +180,7 @@ export interface PanelOps {
   /** Installs a pinned plugin at exactly the version the member confirmed. */
   install(id: string, version: string): Promise<string>;
   /** A fresh pairing code from the relay; earlier unused codes stop working. */
+  setOwnerPin(pin: string | null): Promise<void>;
   pairPhone(): Promise<PanelPairingOffer>;
   /** Confirms or refuses a phone that redeemed a code. */
   decidePhone(id: string, accept: boolean): Promise<void>;
@@ -228,6 +230,8 @@ export function panelRoutes(ops: PanelOps, voice: RouteVoice): FetchRoute[] {
     methods: ['POST'],
     requestBody: 'buffered',
     fetch: (request) => voice.speak(async () => {
+      if (name === 'owner-pin' && (request.headers.get('content-type')?.split(';')[0] !== 'application/json'
+        || request.headers.get('sec-fetch-site') === 'cross-site')) return json({ error: say('request.invalid') }, 403);
       let body: Record<string, unknown> = {};
       try {
         const raw = await request.text();
@@ -264,6 +268,10 @@ export function panelRoutes(ops: PanelOps, voice: RouteVoice): FetchRoute[] {
     post('server', (body) => ops.setServer(body.server === null ? null : text(body.server, 'field.server'))),
     post('use', async (body) => ({ message: await ops.use(text(body.sessionId, 'field.session'), text(body.id, 'field.config')) })),
     post('install', async (body) => ({ message: await ops.install(text(body.id, 'field.plugin'), text(body.version, 'field.version')) })),
+    post('owner-pin', body => {
+      if (body.pin !== null && typeof body.pin !== 'string') throw new Error(say('request.invalid'));
+      return ops.setOwnerPin(body.pin);
+    }),
     post('pair-phone', () => ops.pairPhone()),
     post('decide-phone', (body) => ops.decidePhone(text(body.id, 'field.device'), body.accept === true)),
     post('revoke-phone', (body) => ops.revokePhone(text(body.id, 'field.device'))),
