@@ -1,4 +1,4 @@
-import { ROUTE_PREFIX, type PanelPairingOffer, type PanelState, type PanelProfile, type PanelSummary } from '../panel.js';
+import { ROUTE_PREFIX, type PanelPairingOffer, type PanelState, type PanelProfile, type PanelSummary, type PanelTeamUsage } from '../panel.js';
 import type { Locale } from '../locale.js';
 
 /** A request that never reached the host's answer; the panel words it in its own language. */
@@ -33,6 +33,7 @@ async function call<T>(route: string, payload: Record<string, unknown> = {}): Pr
 
 export const api = {
   summary: (teamId: string) => call<PanelSummary>('summary', { teamId }),
+  teamUsage: (teamId: string) => call<PanelTeamUsage>('team-usage', { teamId }),
   profile: () => call<PanelProfile>('profile'),
   updateProfile: (input: { name: string | null; locale: Locale }) => call<PanelProfile>('update-profile', input),
   state: (sessionId: string | undefined) => call<PanelState>('state', { sessionId }),

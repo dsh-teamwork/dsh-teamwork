@@ -8,7 +8,7 @@ import { presetAvatar } from '../../src/web/avatars.js';
 import type { PanelState } from '../../src/panel.js';
 import type { Host, RenderFactorySlot } from '../../src/web/host.js';
 
-vi.mock('../../src/web/api.js', async (original) => ({ HostUnreachable: (await original<typeof import('../../src/web/api.js')>()).HostUnreachable, api: { summary: vi.fn().mockRejectedValue(new Error("Unavailable")), state: vi.fn(), profile: vi.fn(), updateProfile: vi.fn(), sync: vi.fn(), use: vi.fn(), login: vi.fn(), authorize: vi.fn(), pairPhone: vi.fn(), decidePhone: vi.fn(), revokePhone: vi.fn(), setWorkspace: vi.fn() } }));
+vi.mock('../../src/web/api.js', async (original) => ({ HostUnreachable: (await original<typeof import('../../src/web/api.js')>()).HostUnreachable, api: { summary: vi.fn().mockRejectedValue(new Error("Unavailable")), state: vi.fn(), profile: vi.fn(), updateProfile: vi.fn(), sync: vi.fn(), use: vi.fn(), login: vi.fn(), authorize: vi.fn(), pairPhone: vi.fn(), decidePhone: vi.fn(), revokePhone: vi.fn(), setWorkspace: vi.fn(), teamUsage: vi.fn() } }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const profile = { id: 'user', name: 'Ada', email: 'ada@example.com', image: null, locale: 'zh-CN' as const };
 const state: PanelState = {
@@ -34,7 +34,7 @@ const renderFactorySlot: RenderFactorySlot = (_name, props) => props.open ? <div
 </div> : null;
 let root: ReturnType<typeof createRoot>;
 let scenario = 0;
-beforeEach(() => { vi.resetAllMocks(); profile.id = `user-${++scenario}`; vi.mocked(api.state).mockResolvedValue(state); vi.mocked(api.profile).mockResolvedValue(profile); });
+beforeEach(() => { vi.resetAllMocks(); profile.id = `user-${++scenario}`; vi.mocked(api.state).mockResolvedValue(state); vi.mocked(api.profile).mockResolvedValue(profile); vi.mocked(api.teamUsage).mockRejectedValue(new Error('Unavailable')); });
 afterEach(() => { act(() => root?.unmount()); document.body.innerHTML = ''; localStorage.clear(); vi.clearAllMocks(); vi.useRealTimers(); });
 async function mount() {
   const container = document.createElement('div'); document.body.append(container); root = createRoot(container);
@@ -138,11 +138,17 @@ test('switches teams and survives a removed membership without changing the phon
   expect(api.use).not.toHaveBeenCalled(); expect(api.decidePhone).not.toHaveBeenCalled();
 });
 
-test('sets a team’s default workspace from DSH’s own workspace menu, including a folder added there', async () => {
+const settingsOf = async (team: string) => {
+  await click('我的团队');
+  const row = [...document.querySelectorAll('.twui-item')].find(r => r.querySelector('.twui-item-title')?.firstChild?.textContent === team)!;
+  await act(async () => [...row.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent === '设置')!.click());
+};
+
+test('sets a team’s default workspace from DSH’s own workspace menu on its settings page, including a folder added there', async () => {
   vi.mocked(api.setWorkspace).mockResolvedValue(undefined);
-  await mount(); await click('我的团队');
-  // A workspace shows by its title; where DSH started, which is not one, by its folder name.
-  expect([...document.querySelectorAll('button')].map(b => b.textContent).filter(text => text === 'Work' || text === 'ada')).toEqual(['Work', 'ada']);
+  await mount(); await settingsOf('Beta');
+  // Where DSH started, which is not a workspace, shows by its folder name.
+  expect([...document.querySelectorAll('button')].some(b => b.textContent === 'ada')).toBe(true);
   await click('ada'); await click('Pick Work');
   expect(api.setWorkspace).toHaveBeenCalledWith('b', '/home/ada/work');
   expect(document.body.textContent).toContain('已保存Beta的默认工作区');
@@ -151,6 +157,32 @@ test('sets a team’s default workspace from DSH’s own workspace menu, includi
   expect(api.setWorkspace).toHaveBeenCalledTimes(1);
   await act(async () => addWorkspace({ workspaceId: 'ws-new', path: '/home/ada/new', title: 'New' }));
   expect(api.setWorkspace).toHaveBeenLastCalledWith('b', '/home/ada/new');
+});
+
+test('a team’s settings show the member’s own usage by model and their budget, and lead to its resources', async () => {
+  vi.mocked(api.teamUsage).mockResolvedValue({
+    since: '2026-10-21T00:00:00Z', calls: 12, points: '3.5', unpriced: 1,
+    sources: [
+      { kind: 'model', name: 'Claude Opus', labels: {}, calls: 10, points: '3' },
+      { kind: 'meter', name: 'cloud.computer', labels: { 'zh-CN': '云电脑' }, calls: 2, points: '0.5' },
+    ],
+    budget: { remaining: '96.5', state: 'known', resetAt: '2026-12-01T00:00:00Z', tokenLimited: false, exhausted: false },
+    nearLimit: [{ scope: 'member', period: 'month', threshold: 80 }],
+  });
+  await mount(); await settingsOf('Alpha');
+  expect(api.teamUsage).toHaveBeenCalledWith('a');
+  const text = document.body.textContent!;
+  for (const shown of ['Alpha', '默认工作区', '3.5', '12', '有 1 次调用还没有定价', 'Claude Opus', '3 积分 · 10 次', '云电脑', '预算剩余 96.5 积分', '你的本月预算已用 80%']) expect(text).toContain(shown);
+  // A meter shows by its name in the panel's language, never by its key.
+  expect(text).not.toContain('cloud.computer');
+  await click('浏览资源');
+  expect(document.querySelector('.twui-select-primary')!.textContent).toContain('Alpha');
+});
+
+test('a team’s settings say so when its usage cannot be read', async () => {
+  await mount(); await settingsOf('Beta');
+  expect(document.body.textContent).toContain('暂时读取不到');
+  expect(document.body.textContent).toContain('默认工作区');
 });
 
 test('locks pairing generation and lets the member hide a still-valid code', async () => {
