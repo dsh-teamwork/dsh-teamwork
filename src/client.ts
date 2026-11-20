@@ -304,21 +304,25 @@ export class TeamworkClient {
     const team = `teams/${encodeURIComponent(teamId)}`;
     const [own, me] = await Promise.all([
       read(`${team}/summary`, z.object({
-        since: z.string(), calls: z.number().int().nonnegative(), points: pointsSchema, unpriced: z.number().int().nonnegative(),
-        budget: budgetSchema,
+        since: z.string(), budget: budgetSchema,
         nearLimit: z.array(z.object({ scope: z.enum(['team', 'member', 'provider']), period: z.enum(['day', 'month']), threshold: z.number().int() })),
       })),
       read('profile', z.object({ id: z.string().min(1) })),
     ]);
-    // An admin's stats are the whole team's unless they name a member: these are the caller's own.
-    const { sources } = await read(`${team}/usage/stats?${new URLSearchParams({ userId: me.id })}`, z.object({
+    // An admin's stats are the whole team's unless they name a member: these are the caller's own. Days are this
+    // computer's calendar days, as the web console counts them in the browser's.
+    const count = z.number().int().nonnegative();
+    const query = new URLSearchParams({ userId: me.id, since: own.since, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' });
+    const { totals, days, sources } = await read(`${team}/usage/stats?${query}`, z.object({
+      totals: z.object({ calls: count, points: pointsSchema, unpriced: count, input: count, cacheRead: count, output: count, reasoning: count }),
+      days: z.array(z.object({ day: z.string(), calls: count, points: pointsSchema })),
       sources: z.array(z.object({
         kind: z.enum(['model', 'meter']), name: z.string(), labels: z.record(z.string(), z.string()).nullable().default({}).transform(labels => labels ?? {}),
-        calls: z.number().int().nonnegative(), points: pointsSchema,
+        calls: count, points: pointsSchema,
       })),
     }));
     if (epoch !== this.epoch || endpoint !== this.endpoint || this.token !== token) throw new Error(say('auth.changed'));
-    return { ...own, nearLimit: own.nearLimit.map(({ scope, period, threshold }) => ({ scope, period, threshold })), sources };
+    return { since: own.since, totals, days, sources, budget: own.budget, nearLimit: own.nearLimit.map(({ scope, period, threshold }) => ({ scope, period, threshold })) };
   }
   profile(): Promise<PanelProfile> {
     if (!this.token) return Promise.reject(new Error(say('auth.signedOut')));

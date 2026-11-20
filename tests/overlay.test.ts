@@ -161,7 +161,7 @@ test('a team’s usage for its settings page reads the member’s own summary an
   const dir = await mkdtemp(join(tmpdir(), 'teamwork-usage-'));
   const budget = { remaining: '96.5', state: 'known', resetAt: '2026-12-01T00:00:00Z', tokenLimited: false, exhausted: false };
   const summary = { since: '2026-10-21T00:00:00Z', calls: 12, points: '3.5', unpriced: 1, unresolved: 0, overruns: 0, failedNotices: 0, nearLimit: [{ scope: 'member', subjectId: 'u-other', period: 'month', threshold: 80 }], unpricedModels: [], budget, pendingReviews: 0 };
-  const stats = { since: '2026-10-21T00:00:00Z', until: '2026-11-20T00:00:00Z', timezone: 'UTC', totals: {}, days: [], sources: [{ kind: 'model', key: 'm1', name: 'Claude Opus', labels: {}, calls: 12, points: '3.5', input: 1, output: 1 }, { kind: 'meter', key: 'cloud.computer', name: 'cloud.computer', labels: null, calls: 1, points: '0', input: 0, output: 0 }] };
+  const stats = { since: '2026-10-21T00:00:00Z', until: '2026-11-20T00:00:00Z', timezone: 'UTC', totals: { calls: 13, points: '3.5', unpriced: 1, input: 2400, cacheRead: 800, cacheWrite: 0, output: 600, reasoning: 200 }, days: [{ day: '2026-11-19', calls: 0, points: '0' }, { day: '2026-11-20', calls: 13, points: '3.5' }], sources: [{ kind: 'model', key: 'm1', name: 'Claude Opus', labels: {}, calls: 12, points: '3.5', input: 1, output: 1 }, { kind: 'meter', key: 'cloud.computer', name: 'cloud.computer', labels: null, calls: 1, points: '0', input: 0, output: 0 }] };
   let summaryStatus = 200;
   let hold: Promise<void> | undefined;
   const asked: string[] = [];
@@ -179,11 +179,17 @@ test('a team’s usage for its settings page reads the member’s own summary an
     client.beginLogin(); await client.completeLogin('code'); await client.sync();
     await expect(client.teamUsage('other')).rejects.toThrow();
     const usage = await client.teamUsage('team1');
-    expect(usage).toEqual({ since: summary.since, calls: 12, points: '3.5', unpriced: 1, budget, nearLimit: [{ scope: 'member', period: 'month', threshold: 80 }],
+    expect(usage).toEqual({ since: summary.since, budget, nearLimit: [{ scope: 'member', period: 'month', threshold: 80 }],
+      totals: { calls: 13, points: '3.5', unpriced: 1, input: 2400, cacheRead: 800, output: 600, reasoning: 200 }, days: stats.days,
       sources: [{ kind: 'model', name: 'Claude Opus', labels: {}, calls: 12, points: '3.5' }, { kind: 'meter', name: 'cloud.computer', labels: {}, calls: 1, points: '0' }] });
     // Both reads are the caller's own: the summary's default scope, and the stats named for the caller, since an
-    // admin's stats are otherwise the whole team's.
-    expect(asked.filter(u => u.includes('/api/teams/team1/'))).toEqual(['https://example.com/api/teams/team1/summary', 'https://example.com/api/teams/team1/usage/stats?userId=me']);
+    // admin's stats are otherwise the whole team's. The stats cover the summary's period, in this computer's days.
+    const reads = asked.filter(u => u.includes('/api/teams/team1/'));
+    expect(reads[0]).toBe('https://example.com/api/teams/team1/summary');
+    const statsRead = new URL(reads[1]!);
+    expect(statsRead.pathname).toBe('/api/teams/team1/usage/stats');
+    expect(Object.fromEntries(statsRead.searchParams)).toEqual({ userId: 'me', since: summary.since, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone });
+    expect(reads).toHaveLength(2);
     // A failure says which read and how, for the panel to show.
     summaryStatus = 403;
     await expect(client.teamUsage('team1')).rejects.toThrow('(teams/team1/summary: HTTP 403)');

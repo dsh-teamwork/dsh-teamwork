@@ -159,12 +159,14 @@ test('sets a team’s default workspace from DSH’s own workspace menu on its s
   expect(api.setWorkspace).toHaveBeenLastCalledWith('b', '/home/ada/new');
 });
 
-test('a team’s settings show the member’s own usage by model and their budget, and lead to its resources', async () => {
+test('a team’s settings show the member’s own usage as the console does, in whole points, and their budget, and lead to its resources', async () => {
   vi.mocked(api.teamUsage).mockResolvedValue({
-    since: '2026-10-21T00:00:00Z', calls: 12, points: '3.5', unpriced: 1,
+    since: '2026-10-21T00:00:00Z',
+    totals: { calls: 12, points: '1234.916349266', unpriced: 1, input: 24000, cacheRead: 8000, output: 6000, reasoning: 2000 },
+    days: [{ day: '2026-11-19', calls: 2, points: '0.4' }, { day: '2026-11-20', calls: 10, points: '1234.516349266' }],
     sources: [
-      { kind: 'model', name: 'Claude Opus', labels: {}, calls: 10, points: '3' },
-      { kind: 'meter', name: 'cloud.computer', labels: { 'zh-CN': '云电脑' }, calls: 2, points: '0.5' },
+      { kind: 'model', name: 'Claude Opus', labels: {}, calls: 10, points: '1234.5' },
+      { kind: 'meter', name: 'cloud.computer', labels: { 'zh-CN': '云电脑' }, calls: 2, points: '0.4' },
     ],
     budget: { remaining: '96.5', state: 'known', resetAt: '2026-12-01T00:00:00Z', tokenLimited: false, exhausted: false },
     nearLimit: [{ scope: 'member', period: 'month', threshold: 80 }],
@@ -172,7 +174,9 @@ test('a team’s settings show the member’s own usage by model and their budge
   await mount(); await settingsOf('Alpha');
   expect(api.teamUsage).toHaveBeenCalledWith('a');
   const text = document.body.textContent!;
-  for (const shown of ['Alpha', '默认工作区', '3.5', '12', '有 1 次调用还没有定价', 'Claude Opus', '3 积分 · 10 次', '云电脑', '预算剩余 96.5 积分', '你的本月预算已用 80%']) expect(text).toContain(shown);
+  for (const shown of ['Alpha', '默认工作区', '1,235', '1 次尚无积分', '24,000', '其中缓存命中 8,000', '6,000', '其中推理 2,000', '每日积分', '单日最高 1,235 积分', 'Claude Opus', '1,235 积分 · 10 次', '云电脑', '0 积分 · 2 次', '预算剩余 97 积分', '你的本月预算已用 80%']) expect(text).toContain(shown);
+  // Amounts are whole points everywhere on the page.
+  expect(text).not.toMatch(/\d\.\d+ ?积分|1234\.9|96\.5/);
   // A meter shows by its name in the panel's language, never by its key.
   expect(text).not.toContain('cloud.computer');
   await click('浏览资源');
