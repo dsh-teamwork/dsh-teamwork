@@ -18,15 +18,20 @@ export interface Host {
   currentSession?(): string | undefined;
   /** `ctx.sessions` (`@deepseek-ai/dsh-api-session-controller`). */
   sessions: { list: Observable<{ byId: Record<string, SessionSummary> }> };
-  /** `ctx.layout` (`@deepseek-ai/dsh-client-ui-layout`). */
-  layout: { selectPanel(id: string | null): void };
   /** `ctx.uiWorkspace` (`@deepseek-ai/dsh-client-ui-workspace`). */
-  uiWorkspace: { startSession(workspaceId?: string, options?: { agentPreset?: string }): void };
+  uiWorkspace: {
+    /** `prompt` fills the new session's input without sending it; `whenDraftExists` decides what happens to text already there. */
+    startSession(workspaceId?: string, options?: { agentPreset?: string; prompt?: string; whenDraftExists?: 'replace' | 'append' | 'keep' }): void;
+    /** Reuses the workspace's first unsent blank session, or creates one, without opening it. */
+    connectWorkspace(workspaceId: string): Promise<string>;
+    /** Shows a session in the conversation view and closes any panel over it. */
+    openSession(sessionId: string): void;
+  };
   /** `ctx.workspaces` (`@deepseek-ai/dsh-api-workspace-controller`): DSH's own workspaces, by id and folder. */
   workspaces: { list: Observable<{ items: readonly Workspace[] }> };
 }
 
-export interface Workspace { workspaceId: string; path: string; title: string }
+export interface Workspace { workspaceId: string; path: string; title: string; sessionIds?: readonly string[] }
 
 /**
  * Renders another plugin's Component Factory, as DSH hands it to a slot's occupant. The panel uses
