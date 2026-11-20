@@ -127,6 +127,7 @@ export interface PanelState {
     relay: RelayStatus;
     /** Phones paired with this computer; empty while the relay is not connected. */
     phones: PanelPhone[];
+    ownerPinEnabled?: boolean;
     shared: PanelShared | null;
     /** The session the member has open, when the host has it loaded. */
     session: {
@@ -205,6 +206,7 @@ export interface PanelOps {
     /** Installs a pinned plugin at exactly the version the member confirmed. */
     install(id: string, version: string): Promise<string>;
     /** A fresh pairing code from the relay; earlier unused codes stop working. */
+    setOwnerPin(pin: string | null): Promise<void>;
     pairPhone(): Promise<PanelPairingOffer>;
     /** Confirms or refuses a phone that redeemed a code. */
     decidePhone(id: string, accept: boolean): Promise<void>;

@@ -105,6 +105,8 @@ dsh-teamwork share members        # 另有 status、unlock <email>、disable
 | `/teamwork retry` | 预览恢复；`retry confirm` 发送恢复指令，不重放工具调用。 |
 | `/teamwork logout` | 丢弃内存令牌、团队缓存与注册。 |
 
+个人桌面 DSH 默认关闭设备连接 PIN。可在本机的设备配对面板中设置四位 PIN、修改或关闭保护。PIN 和锁定状态保存在主机上，切换账号后继续生效。新机主可在本机配对面板修改或关闭 PIN。
+
 继续和重试不会插队；会话、模型、配置或登录身份变化会使确认失效。退出不卸载明确安装过的插件；被移除成员的下一次服务端请求将被拒绝。
 
 ## 配置

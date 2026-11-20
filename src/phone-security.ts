@@ -137,6 +137,7 @@ export class PhoneSecurity {
        * personal computer). Without them no channel is locked.
        */
       pins?: PinStore;
+      pinRequired?(): Promise<boolean>;
       pinMember?(pairingId: string): Promise<string | undefined>;
       now?(): number;
     },
@@ -275,7 +276,7 @@ export class PhoneSecurity {
           )
             throw new Error('invalid_secure_message');
           if (!(await this.open(frame.pairingId, link))) return this.refuseLocked(link, inner.data);
-          this.options.forward(inner.data);
+          if (this.links.get(frame.pairingId) === link) this.options.forward(inner.data);
         },
         closed: (error) => {
           if (this.links.get(frame.pairingId) === link) {
@@ -357,7 +358,7 @@ export class PhoneSecurity {
 
   /** Whether a channel may carry the member's work now: unlocked, and not idle past the limit. */
   private async open(pairingId: string, link: Link) {
-    if (!this.options.pins) return true;
+    if (!this.options.pins || (this.options.pinRequired && !await this.options.pinRequired())) return true;
     if (link.unlocked && this.now() - (link.lastActive ?? 0) <= IDLE_MS) { link.lastActive = this.now(); return true; }
     if (link.unlocked) { link.unlocked = false; await this.askPin(pairingId, link); }
     return false;
@@ -368,6 +369,10 @@ export class PhoneSecurity {
     const { pins } = this.options;
     if (!pins) return;
     try {
+      if (this.options.pinRequired && !await this.options.pinRequired()) {
+        link.channel.send({ t: 'unlocked' });
+        return;
+      }
       const member = await this.options.pinMember?.(pairingId);
       if (!member) return;
       link.channel.send(await pins.locked(member) ? { t: 'pinLocked' } : { t: 'pinRequired', set: !(await pins.has(member)) });
@@ -378,22 +383,33 @@ export class PhoneSecurity {
   private async pinMessage(pairingId: string, link: Link, body: Record<string, unknown>) {
     const pins = this.options.pins, member = await this.options.pinMember?.(pairingId);
     if (!pins || !member) return;
+    if (this.options.pinRequired && !await this.options.pinRequired()) return link.channel.send({ t: 'unlocked' });
     const pin = typeof body.pin === 'string' ? body.pin : '';
     if (body.t === 'setPin' && !PIN.test(pin)) return link.channel.send({ t: 'pinInvalid' });
-    if (body.t === 'setPin' && !(await pins.has(member))) {
-      await pins.set(member, pin);
-    } else {
-      const result = await pins.check(member, body.t === 'setPin' ? (typeof body.old === 'string' ? body.old : '') : pin);
-      if (!result.ok) {
-        link.unlocked = false;
-        if (result.reason === 'unset') return link.channel.send({ t: 'pinRequired', set: true });
-        return link.channel.send(result.reason === 'wrong' ? { t: 'pinWrong', left: result.left } : { t: 'pinLocked' });
-      }
-      if (body.t === 'setPin') await pins.set(member, pin);
+    const result = body.t === 'setPin'
+      ? await pins.replace(member, pin, typeof body.old === 'string' ? body.old : '', !!this.options.pinRequired && member === 'owner')
+      : await pins.check(member, pin);
+    if (this.links.get(pairingId) !== link) return;
+    if (!result.ok) {
+      if (link.unlocked) this.options.forward({ t: 'detach', pairingId });
+      link.unlocked = false;
+      if (member === 'owner' && result.reason === 'locked') this.relockOtherChannels(pairingId);
+      if (result.reason === 'unset') return this.askPin(pairingId, link);
+      return link.channel.send(result.reason === 'wrong' ? { t: 'pinWrong', left: result.left } : { t: 'pinLocked' });
     }
+    if (body.t === 'setPin' && member === 'owner') this.relockOtherChannels(pairingId);
     link.unlocked = true;
     link.lastActive = this.now();
     link.channel.send({ t: 'unlocked' });
+  }
+
+  private relockOtherChannels(current: string) {
+    for (const [id, link] of this.links) {
+      if (id === current || !link.authorized) continue;
+      link.unlocked = false;
+      this.options.forward({ t: 'detach', pairingId: id });
+      void this.askPin(id, link);
+    }
   }
 
   /** What a locked channel answers its member's work with: the call fails, the stream ends, and nothing reaches DSH. */

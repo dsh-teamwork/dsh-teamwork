@@ -29,6 +29,25 @@ export const pinsPath = (cachePath: string) => cachePath.replace(/(\.json)?$/, '
 
 export type PinCheck = { ok: true } | { ok: false; reason: 'unset' | 'locked' } | { ok: false; reason: 'wrong'; left: number };
 
+async function pinEntry(pin: string): Promise<Entry> {
+  if (!PIN.test(pin)) throw new Error('A PIN is four digits.');
+  const salt = randomBytes(16);
+  const hash = await scrypt(pin, salt, 32, PARAMS);
+  return { hash: hash.toString('base64'), salt: salt.toString('base64'), N: PARAMS.N, failures: 0 };
+}
+
+async function verify(entry: Entry | undefined, pin: string): Promise<PinCheck> {
+  if (!entry?.hash || !entry.salt) return { ok: false, reason: 'unset' };
+  if (entry.failures >= MAX_FAILURES) return { ok: false, reason: 'locked' };
+  if (PIN.test(pin)) {
+    const expected = Buffer.from(entry.hash, 'base64');
+    const actual = await scrypt(pin, Buffer.from(entry.salt, 'base64'), expected.length, { ...PARAMS, N: entry.N ?? PARAMS.N });
+    if (timingSafeEqual(expected, actual)) { entry.failures = 0; return { ok: true }; }
+  }
+  entry.failures++;
+  return entry.failures >= MAX_FAILURES ? { ok: false, reason: 'locked' } : { ok: false, reason: 'wrong', left: MAX_FAILURES - entry.failures };
+}
+
 export class PinStore {
   private state?: Promise<Record<string, Entry>>;
   private writes: Promise<unknown> = Promise.resolve();
@@ -44,16 +63,24 @@ export class PinStore {
   /** One change at a time, saved before its result is known, so no guess goes uncounted. */
   private change<T>(apply: (state: Record<string, Entry>) => Promise<T> | T): Promise<T> {
     const task = this.writes.catch(() => {}).then(async () => {
-      const state = await this.load();
+      const state = structuredClone(await this.load());
       const result = await apply(state);
       await mkdir(dirname(this.path), { recursive: true, mode: 0o700 });
       const temporary = `${this.path}.${randomBytes(8).toString('hex')}.tmp`;
       try { await writeFile(temporary, JSON.stringify(state), { mode: 0o600 }); await rename(temporary, this.path); }
       finally { await rm(temporary, { force: true }); }
+      this.state = Promise.resolve(state);
       return result;
     });
     this.writes = task;
     return task;
+  }
+
+  // Existing owner entries (including a locked owner) keep protection after an upgrade.
+  async ownerEnabled() { return Object.hasOwn(await this.load(), 'owner'); }
+
+  resetOwnerPin() {
+    return this.change(state => { if (state.owner) state.owner = { failures: 0 }; });
   }
 
   /** Whether a member has set a PIN; one who has not is asked to set one. */
@@ -62,30 +89,38 @@ export class PinStore {
 
   /** Checks a PIN, counting a wrong one before answering; a locked member is refused even the right one. */
   check(member: string, pin: string): Promise<PinCheck> {
-    return this.change(async (state) => {
-      const entry = state[member];
-      if (!entry?.hash || !entry.salt) return { ok: false as const, reason: 'unset' as const };
-      if (entry.failures >= MAX_FAILURES) return { ok: false as const, reason: 'locked' as const };
-      const want = Buffer.from(entry.hash, 'base64');
-      const got = PIN.test(pin) ? await scrypt(pin, Buffer.from(entry.salt, 'base64'), want.length, { ...PARAMS, N: entry.N ?? PARAMS.N }) : Buffer.alloc(want.length);
-      if (PIN.test(pin) && timingSafeEqual(want, got)) { entry.failures = 0; return { ok: true as const }; }
-      entry.failures += 1;
-      return entry.failures >= MAX_FAILURES ? { ok: false as const, reason: 'locked' as const } : { ok: false as const, reason: 'wrong' as const, left: MAX_FAILURES - entry.failures };
-    });
+    return this.change(state => verify(state[member], pin));
   }
 
-  /** Sets a member's PIN. Only for one with none yet, or after `check` passed with the old one. */
+  /** A local setting change is authorized by the host. */
   set(member: string, pin: string) {
-    if (!PIN.test(pin)) return Promise.reject(new Error('A PIN is four digits.'));
-    return this.change(async (state) => {
-      const salt = randomBytes(16);
-      state[member] = { hash: (await scrypt(pin, salt, 32, PARAMS)).toString('base64'), salt: salt.toString('base64'), N: PARAMS.N, failures: 0 };
+    return this.change(async state => { state[member] = await pinEntry(pin); });
+  }
+
+  /** A device can change an existing PIN only with its old PIN, in the same serialized write. */
+  replace(member: string, pin: string, old: string, requirePolicyEntry: boolean): Promise<PinCheck> {
+    return this.change(async state => {
+      const entry = state[member];
+      if (!entry && requirePolicyEntry) return { ok: false, reason: 'unset' };
+      if (entry?.hash) {
+        const result = await verify(entry, old);
+        if (!result.ok) return result;
+      }
+      state[member] = await pinEntry(pin);
+      return { ok: true };
     });
   }
 
   /** Clears a member's PIN and lock: their next connection sets a new one. */
   clear(member: string) { return this.change((state) => { delete state[member]; }); }
 
-  /** Shared mode ended, or this DSH changed hands: every PIN goes. */
-  async reset() { this.state = Promise.resolve({}); await rm(this.path, { force: true }); }
+  /** Clear PIN records when switching shared hosting modes. */
+  reset() {
+    const task = this.writes.catch(() => {}).then(async () => {
+      await rm(this.path, { force: true });
+      this.state = Promise.resolve({});
+    });
+    this.writes = task;
+    return task;
+  }
 }
