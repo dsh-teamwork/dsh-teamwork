@@ -122,6 +122,7 @@ const en = {
   'model.use': 'Use in this session',
   'model.openSession': 'Open or start a session in DSH first, then choose a model.',
   'model.noContextWindow': 'The team model “{name}” has no context window (contextWindow) configured, so it cannot be used yet. Ask a team admin to set it in the console, then sync again.',
+  'model.offline': 'The team model “{name}” has been taken offline by the service that hosts it, so it cannot be used. Choose another model.',
 
   // Plugins
   'plugin.ready': 'Enabled',
@@ -379,6 +380,7 @@ const zhCN: Record<PanelMessage, string> = {
   'model.use': '用于当前会话',
   'model.openSession': '先在 DSH 新建或打开一个会话，再选择模型。',
   'model.noContextWindow': '团队模型「{name}」没有配置上下文窗口（contextWindow），暂时不能使用。请团队管理员在控制台补充后重新同步。',
+  'model.offline': '团队模型「{name}」已被托管方下线，暂时不能使用。请改用其他模型。',
 
   'plugin.ready': '已启用',
   'plugin.missing': '未安装',

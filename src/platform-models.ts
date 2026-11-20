@@ -21,10 +21,11 @@ export function platformAdapter(client: TeamworkClient) {
       const baseUrl = `${client.endpoint.replace(/\/$/, '')}/api/llm`;
       profiles = new Map((snapshot?.teams ?? []).map(team => {
         const provider = teamProvider(team.teamId);
-        // A model without its contextWindow is not offered at all (see modelLimitProblem); the plugin says why.
+        // A model without its contextWindow, or one taken offline, is not offered at all (see modelLimitProblem); the
+        // plugin says why.
         const models: Model<'openai-completions'>[] = team.configs.flatMap(c => {
           const data = c.kind === 'plugin' ? undefined : modelData(snapshot!, c);
-          if (data?.contextWindow === undefined) return [];
+          if (data?.contextWindow === undefined || ('offline' in data && data.offline)) return [];
           return [{
             id: c.id, name: c.name, provider, api: 'openai-completions' as const, baseUrl,
             reasoning: false, input: 'vision' in data && data.vision ? ['text' as const, 'image' as const] : ['text' as const], contextWindow: data.contextWindow, maxTokens: data.maxTokens ?? Math.min(4096, data.contextWindow),

@@ -38,10 +38,12 @@ export interface PanelPreset {
     model: string | null;
     /** The assistant every team is given (`builtin: team-assistant`), shown first. */
     assistant: boolean;
-    /** False when the model it references is gone from the team, or cannot run here (`contextWindowMissing`). */
+    /** False when the model it references is gone from the team, or cannot run here (`contextWindowMissing`, `modelOffline`). */
     modelAvailable: boolean;
     /** The model it calls has no context window configured, so it is not offered (`unsizedModel`, `src/client.ts`). */
     contextWindowMissing: boolean;
+    /** The hosted model it calls is taken out of service, so it is not offered (`offlineModel`, `src/client.ts`). */
+    modelOffline: boolean;
     /** Checked against the current session; `unknown` without one. */
     tools: Array<{
         name: string;
@@ -128,7 +130,7 @@ export interface PanelState {
         started: boolean;
     } | null;
     presets: PanelPreset[];
-    /** `contextWindowMissing`: the model has no context window configured, so it cannot be selected. */
+    /** `contextWindowMissing`: the model has no context window configured; `modelOffline`: its service took it out of service. Either way it cannot be selected. */
     models: Array<{
         id: string;
         teamId: string;
@@ -137,6 +139,7 @@ export interface PanelState {
         version: number;
         upstream: string;
         contextWindowMissing: boolean;
+        modelOffline: boolean;
     }>;
     plugins: PanelPlugin[];
 }

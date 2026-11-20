@@ -12,7 +12,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session';
 import type { Agent } from '@deepseek-ai/dsh-agent';
 import type { PresetContext } from './preset-context.js';
 import { PresetStamps, presetStampPath, sameRevision, toolReport, assertBlank } from './preset-session.js';
-import { modelData, modelLimitProblem, unsizedModel, inheritsModel, pinnedPlugin, type TeamConfig } from './client.js';
+import { modelData, modelLimitProblem, offlineModel, unsizedModel, inheritsModel, pinnedPlugin, type TeamConfig } from './client.js';
 import { taskProjection, stepProjection, TaskActions, recoveryHint, retryInstruction, outcomeText } from './task-session.js';
 import { pluginState, stateText, type PluginState } from './plugin-status.js';
 import { panelRoutes, type FetchRoute, type PanelOps, type PanelPreset } from './panel.js';
@@ -567,8 +567,9 @@ export async function apply(ctx: Context, config: Config) {
           id: item.id, teamId: team.teamId, teamName: team.teamName, name: item.name, version: item.version, ...(item.data.avatar ? { avatar: item.data.avatar } : {}), description: item.data.description ?? '',
           model: item.data.inheritModel ? null : item.data.modelConfigId ? linked?.name ?? item.data.modelConfigId : `${item.data.provider}/${item.data.model}`,
           assistant: item.builtin === 'team-assistant',
-          modelAvailable: inheritsModel(item) || !!modelData(snapshot!, item) && !unsizedModel(snapshot!, item),
+          modelAvailable: inheritsModel(item) || !!modelData(snapshot!, item) && !unsizedModel(snapshot!, item) && !offlineModel(snapshot!, item),
           contextWindowMissing: !!unsizedModel(snapshot!, item),
+          modelOffline: !!offlineModel(snapshot!, item),
           tools: agent ? requirements(agent, candidate) : toolReport(candidate, () => 'unknown'),
           plugins: item.data.pluginDependencies?.length ? await plugins({teamId:team.teamId,pluginDependencies:item.data.pluginDependencies} as PresetContext, readInventory) : [],
         });
@@ -594,7 +595,7 @@ export async function apply(ctx: Context, config: Config) {
         } : null,
         presets: presets.sort((a,b) => Number(b.assistant) - Number(a.assistant)),
         models: (snapshot?.teams ?? []).flatMap(team => team.configs.flatMap(c => c.kind === 'model'
-          ? [{ id: c.id, teamId: team.teamId, teamName: team.teamName, name: c.name, version: c.version, upstream: `${c.data.provider}/${c.data.model}`, contextWindowMissing: !!unsizedModel(snapshot!, c) }] : [])),
+          ? [{ id: c.id, teamId: team.teamId, teamName: team.teamName, name: c.name, version: c.version, upstream: `${c.data.provider}/${c.data.model}`, contextWindowMissing: !!unsizedModel(snapshot!, c), modelOffline: !!offlineModel(snapshot!, c) }] : [])),
         plugins: (await plugins(undefined, readInventory)).map(plugin => {
           const team = teamOf(snapshot, plugin.id);
           return { ...plugin, teamId: team?.teamId, teamName: team?.teamName };

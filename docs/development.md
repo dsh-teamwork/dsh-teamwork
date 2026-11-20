@@ -88,6 +88,11 @@ does not offer it; selection, readiness, `agent/request` and sync report
 `contextWindowMissing` itself. (A guessed 32K window left DSH's compaction,
 which reserves 64K headroom by default, no budget: `MODEL_SWITCH_COMPACTION_FAILED`.)
 A missing output limit uses 4096, bounded by the context window.
+A hosted model its service took out of service carries `offline: true` in its
+`data` and stays in the team: the adapter does not offer it, or a preset on it,
+`modelLimitProblem` says `model.offline` first, and the panel words
+`modelOffline`. It is offered again as soon as a sync brings it back without
+the mark.
 Multimodal input and other provider protocols are not implemented by this adapter.
 
 Presets use native `agentPresets` registration, mounting, selection and revisions.
