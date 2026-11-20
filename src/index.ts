@@ -45,6 +45,22 @@ interface WorkspaceRegistry {
   readonly pinnedSessionIds: readonly string[];
   readonly archivedSessionIds: readonly string[];
 }
+/** What the plugin reads of DSH's loader: the profile's entries, to find the default preset's composition. */
+interface LoaderEntries { entries(): Iterable<{ options: { name: string; config?: { id?: unknown; plugins?: unknown } } }> }
+/**
+ * The plugin rows of the profile's declared default preset (DSH's `standard`). A team preset composes them before
+ * its own context, so a team session has the tools (read, write, bash, web and the rest), persona, compaction and
+ * planning a host session has; a template's required tools are DSH's own. Empty, with a warning, when the profile
+ * declares its default some other way: the team preset then carries its context alone.
+ */
+function hostComposition(ctx: Context): unknown[] {
+  const id = ctx.agentPresets.config.default;
+  for (const { options } of (ctx.get('loader') as LoaderEntries | undefined)?.entries() ?? []) {
+    if (options.name === '@deepseek-ai/dsh-agent-preset' && options.config?.id === id && Array.isArray(options.config.plugins)) return [...options.config.plugins];
+  }
+  ctx.logger.warn('The default agent preset %s is not a profile row; team presets compose no host tools', id);
+  return [];
+}
 export interface Config { apiEndpoint: string; cachePath: string; autoSync?: boolean; syncIntervalMs?: number; tokenFile?: string; mcpServers?: Record<string, { command: string; args: string[] }>; }
 /** The hosted service. A member can pick another server in the panel; the profile's `apiEndpoint` sets the default. */
 export const DEFAULT_SERVER = 'https://www.dshteamwork.com';
@@ -67,7 +83,7 @@ export async function apply(ctx: Context, config: Config) {
   await stamps.load();
   const overlay = new TeamOverlay(async (id, item, team) => ctx.agentPresets.register({
     id, name: `[${team.teamName}] ${item.name}`, description: item.data.description ?? '',
-    plugins: [{ name: 'cordis:group', group: true, isolate: {teamworkPreset:true}, config: [{ name: new URL('./preset-context.js', import.meta.url).href, config: {
+    plugins: [...hostComposition(ctx) as never[], { name: 'cordis:group', group: true, isolate: {teamworkPreset:true}, config: [{ name: new URL('./preset-context.js', import.meta.url).href, config: {
       inheritModel: item.data.inheritModel, builtin: item.builtin, description: item.data.description ?? '', instructions: item.data.instructions ?? '', outputDescription: item.data.outputDescription ?? '',
       pluginDependencies: item.data.pluginDependencies ?? [],
       requiredTools: item.data.requiredTools ?? [], optionalTools: item.data.optionalTools ?? [], systemPrompt: item.data.systemPrompt,

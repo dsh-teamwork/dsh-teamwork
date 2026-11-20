@@ -16,7 +16,8 @@ export function apply(ctx) {
       const execute = text=>ctx.commands.execute(agent,text,[],new AbortController().signal);
       let info=await execute('/teamwork info'); assert.equal(info.result.kind,'success');assert.match(info.result.text,/Team code review/);assert.match(info.result.text,/Optional tool missing-optional-fixture: missing/);
       assert.equal(ctx.agentPresets.serviceFor(agent,'teamworkPreset').version,1);
-      preset.version=2; preset.name='Review v2'; preset.data.systemPrompt='new prompt'; await save();
+      // v2 asks for the host's own tools, as a console template does: a team preset composes them like the host's default preset.
+      preset.version=2; preset.name='Review v2'; preset.data.systemPrompt='new prompt'; preset.data.requiredTools=['read','write','edit','bash','glob','web_fetch']; await save();
       assert.equal(ctx.agentPresets.serviceFor(agent,'teamworkPreset').version,1,'Existing native generation must stay pinned');
       info=await execute('/teamwork info');assert.match(info.result.text,/Version v2 is available/);
       assert.equal((await execute('/teamwork use review')).result.kind,'success');
@@ -27,6 +28,8 @@ export function apply(ctx) {
       const newId=created.result.text.match(/Created session ([a-z0-9-]+)/)[1];
       const fresh=ctx.agents.get(newId);assert.equal(ctx.agentPresets.serviceFor(fresh,'teamworkPreset').version,2);
       assert.deepEqual(fresh.model.current(),{provider:'teamwork-platform-host-smoke',model:'review'});
+      const hostTools=(await ctx.commands.execute(fresh,'/teamwork tools',[],new AbortController().signal)).result.text;
+      for(const tool of ['read','write','edit','bash','glob','web_fetch'])assert.match(hostTools,new RegExp(`^${tool} · `,'m'),`Team preset session lacks the host tool ${tool}`);
       preset.version=3; preset.data.requiredTools=['missing-required-fixture']; await save();
       const missing=await ctx.commands.execute(fresh,'/teamwork use review',[],new AbortController().signal);
       assert.equal(missing.result.kind,'error');assert.match(missing.result.text,/Required tools are missing/);
@@ -43,7 +46,7 @@ export function apply(ctx) {
       assert.match((await execute('/teamwork retry')).result.text,/retry confirm/);
       assert.equal((await execute('/teamwork retry confirm')).result.kind,'error');
       const cancelled=await execute('/teamwork cancel');assert.equal(cancelled.result.kind,'success');assert.match(cancelled.result.text,/nothing is rolled back/);
-      await reportResult({passed:true,checks:['native scoped preset details','optional tool warning','existing generation preserved','update availability shown','blank session updates','started session locked','new session uses latest preset','required tool blocks selection without mutation','session tool inventory','missing plugin installation guidance','required plugin blocks selection','stale dependency version rejected','session overview and login readiness','unauthenticated continuation blocked','durable cancellation outcome and explicit retry','native cancellation command']});
+      await reportResult({passed:true,checks:['native scoped preset details','optional tool warning','existing generation preserved','update availability shown','blank session updates','started session locked','new session uses latest preset','team preset composes the host default tools','required tool blocks selection without mutation','session tool inventory','missing plugin installation guidance','required plugin blocks selection','stale dependency version rejected','session overview and login readiness','unauthenticated continuation blocked','durable cancellation outcome and explicit retry','native cancellation command']});
     } catch(error) {await reportResult({passed:false,error:String(error),stack:error.stack});}
   },3000);
   ctx.effect(()=>()=>clearTimeout(timer));
