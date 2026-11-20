@@ -325,11 +325,14 @@ function TeamSettings({ team, locale, dsh, renderFactorySlot, run, browse }: {
 }) {
   const t = useT();
   const [usage, setUsage] = useState<PanelTeamUsage | null>();
+  /** Why the usage could not be read, as the plugin or the server put it. */
+  const [failure, setFailure] = useState<string>();
   useEffect(() => {
     let alive = true;
-    api.teamUsage(team.id).then(next => { if (alive) setUsage(next); }, () => { if (alive) setUsage(null); });
+    api.teamUsage(team.id).then(next => { if (alive) setUsage(next); }, error => { if (alive) { setUsage(null); setFailure(describe(t, error)); } });
     return () => { alive = false; };
   }, [team.id]);
+  const unavailable = <div className="twui-stack" style={{ gap: 4 }}><p className="twui-muted">{t('team.usageUnavailable')}</p>{failure && <p className="twui-subtle">{failure}</p>}</div>;
   const section = (title: string) => <h3 style={{ fontSize: 15, fontWeight: 600 }}>{title}</h3>;
   return (
     <>
@@ -349,7 +352,7 @@ function TeamSettings({ team, locale, dsh, renderFactorySlot, run, browse }: {
       {section(t('team.usageTitle'))}
       <Card>
         {usage === undefined ? <p className="twui-muted">{t('team.usageLoading')}</p>
-          : usage === null ? <p className="twui-muted">{t('team.usageUnavailable')}</p>
+          : usage === null ? unavailable
           : <div className="twui-stack" style={{ gap: 14 }}>
               <div className="twui-row" style={{ gap: 32, flexWrap: 'wrap' }}>
                 <div className="twui-stack" style={{ gap: 2 }}><span className="twui-subtle">{t('team.points')}</span><span style={{ fontSize: 22, fontWeight: 650 }}>{usage.points}</span></div>
@@ -373,7 +376,7 @@ function TeamSettings({ team, locale, dsh, renderFactorySlot, run, browse }: {
       {section(t('team.budgetTitle'))}
       <Card>
         {usage === undefined ? <p className="twui-muted">{t('team.usageLoading')}</p>
-          : usage === null ? <p className="twui-muted">{t('team.usageUnavailable')}</p>
+          : usage === null ? unavailable
           : <div className="twui-stack" style={{ gap: 8 }}>
               <span style={{ fontWeight: 600 }}>{budgetLabel(t, usage.budget)}</span>
               {usage.budget.resetAt && <span className="twui-subtle">{t('team.budgetReset', { time: shortTime(t, usage.budget.resetAt) })}</span>}
