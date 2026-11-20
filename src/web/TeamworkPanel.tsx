@@ -827,11 +827,63 @@ const deviceIcon = (device: PanelPhone) => (device.deviceKind === 'web' ? 'monit
 const withKind = (t: Translate, device: PanelPhone, rest: string) => (device.deviceKind ? `${t(`devices.kind.${device.deviceKind}`)} · ${rest}` : rest);
 const shortTime = (t: Translate, iso: string) => new Date(iso).toLocaleString(t.locale, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
+/**
+ * The personal desktop's own PIN for its paired devices (`src/pin-lock.ts`): off by default, set here with the
+ * computer's own authority, so changing or turning it off asks for no old PIN; it closes every open device channel.
+ */
+function OwnerPin({ enabled, busy, perform }: {
+  enabled: boolean;
+  busy?: string;
+  perform(key: string, action: () => Promise<unknown>, done?: string): Promise<unknown>;
+}) {
+  const t = useT();
+  const [editing, setEditing] = useState(false);
+  const [turningOff, setTurningOff] = useState(false);
+  const [pin, setPin] = useState('');
+  const [again, setAgain] = useState('');
+  const digits = (value: string) => value.replace(/[^0-9]/g, '').slice(0, 4);
+  const mismatch = again.length === 4 && pin !== again;
+  const close = () => { setEditing(false); setPin(''); setAgain(''); };
+  const save = () => void perform('pin', async () => { await api.setOwnerPin(pin); close(); }, t(enabled ? 'phones.pinChanged' : 'phones.pinTurnedOn'));
+  const off = () => void perform('pin', async () => { await api.setOwnerPin(null); setTurningOff(false); }, t('phones.pinTurnedOff'));
+  return (
+    <Item
+      icon="key"
+      title={t('phones.pinTitle')}
+      tags={<Badge tone={enabled ? 'success' : 'neutral'} dot>{t(enabled ? 'phones.pinOn' : 'phones.pinOff')}</Badge>}
+      description={t('phones.pinHint')}
+      actions={!editing && !turningOff && <>
+        <Button size="sm" variant={enabled ? 'secondary' : 'primary'} disabled={!!busy} onClick={() => setEditing(true)}>
+          {t(enabled ? 'phones.pinChange' : 'phones.pinEnable')}
+        </Button>
+        {enabled && <Button size="sm" variant="ghost" disabled={!!busy} onClick={() => setTurningOff(true)}>{t('phones.pinDisable')}</Button>}
+      </>}
+      >
+      {editing && <ItemBody>
+        <form className="twui-row" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }} onSubmit={event => { event.preventDefault(); if (pin.length === 4 && pin === again) save(); }}>
+          <Field label={t('phones.pin')} htmlFor="teamwork-owner-pin">
+            <Input id="teamwork-owner-pin" className="twui-mono" type="password" inputMode="numeric" maxLength={4} autoComplete="new-password" autoFocus
+              value={pin} disabled={!!busy} onChange={event => setPin(digits(event.target.value))} />
+          </Field>
+          <Field label={t('phones.pinConfirm')} htmlFor="teamwork-owner-pin-again" error={mismatch ? t('phones.pinMismatch') : undefined}>
+            <Input id="teamwork-owner-pin-again" className="twui-mono" type="password" inputMode="numeric" maxLength={4} autoComplete="new-password"
+              value={again} disabled={!!busy} onChange={event => setAgain(digits(event.target.value))} />
+          </Field>
+          <Button type="submit" variant="primary" busy={busy === 'pin'} disabled={!!busy || pin.length !== 4 || pin !== again}>{t('phones.pinSave')}</Button>
+          <Button variant="ghost" disabled={!!busy} onClick={close}>{t('phones.pinCancel')}</Button>
+        </form>
+      </ItemBody>}
+      {turningOff && <ItemBody>
+        <Confirm title={t('phones.pinDisableTitle')} description={t('phones.pinDisableBody')} confirmLabel={t('phones.pinDisable')} cancelLabel={t('phones.pinCancel')}
+          busy={busy === 'pin'} onConfirm={off} onCancel={() => setTurningOff(false)} />
+      </ItemBody>}
+    </Item>
+  );
+}
+
 function Phones({ state, run }: { state: PanelState; run: Run }) {
   const t = useT();
   const [offer, setOffer] = useState<PanelPairingOffer>();
-  const [pin, setPin] = useState('');
-  const [confirmPin, setConfirmPin] = useState('');
   const [revoking, setRevoking] = useState<PanelPhone>();
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<unknown>();
@@ -855,18 +907,8 @@ function Phones({ state, run }: { state: PanelState; run: Run }) {
   };
   const pair = () => perform('pair', async () => { setOffer(await api.pairPhone()); setExpired(false); });
 
-  const pinSettings = state.ownerPinEnabled !== undefined && <Card>
-        <label>{t('phones.pin')} <input type="password" inputMode="numeric" maxLength={4} autoComplete="new-password" value={pin}
-          onChange={event => setPin(event.target.value.replace(/[^0-9]/g, ''))} /></label>
-        <label>{t('phones.pinConfirm')} <input type="password" inputMode="numeric" maxLength={4} autoComplete="new-password" value={confirmPin}
-          onChange={event => setConfirmPin(event.target.value.replace(/[^0-9]/g, ''))} /></label>
-        <Button disabled={!!busy || pin.length !== 4 || pin !== confirmPin} onClick={() => void perform('pin', async () => {
-          await api.setOwnerPin(pin); setPin(''); setConfirmPin('');
-        })}>{t(state.ownerPinEnabled ? 'phones.pinChange' : 'phones.pinEnable')}</Button>
-        {state.ownerPinEnabled && <Button disabled={!!busy} onClick={() => void perform('pin', async () => {
-          await api.setOwnerPin(null); setPin(''); setConfirmPin('');
-        })}>{t('phones.pinDisable')}</Button>}
-      </Card>;
+  const pinSettings = state.ownerPinEnabled !== undefined
+    && <OwnerPin enabled={state.ownerPinEnabled} busy={busy} perform={perform} />;
   if (state.relay !== 'connected') {
     const [title, body] = relayText[state.relay];
     return <>{pinSettings}{error !== undefined && <Banner tone="warning" title={t('phones.failed')}>{describe(t,error)}</Banner>}<Card><EmptyState icon="smartphone" title={t(title)}>{t(body)}</EmptyState></Card></>;
