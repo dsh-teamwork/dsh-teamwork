@@ -107,8 +107,10 @@ and the distinction between submitted, published, synced and installed.
   Teamwork sign-in screen to use a [self-hosted community server](https://github.com/dsh-teamwork/dsh-teamwork-platform).
 - Team-model requests go through your chosen server. Provider keys stay on
   that server; prompts and model context pass through its model gateway.
-- Plugin sign-in tokens stay in host memory. Restarting DSH requires signing
-  in again. Configuration caches do not authenticate a session.
+- The sign-in is kept beside the cache (`<cache>.token.json`, readable only by
+  you), so restarting DSH keeps you signed in. It lapses after 30 days unused,
+  and `/teamwork logout` revokes it on the server too. Configuration caches do
+  not authenticate a session.
 - The device relay requires an online web/desktop host, and on a phone the
   matching App. Pairing grants
   access to the owner's permitted DSH sessions across teams.

@@ -206,7 +206,7 @@ Run these in DSH's command input, not your shell. IDs come from `/teamwork list`
 | `/teamwork continue <instruction>` | Send follow-up input after readiness checks. |
 | `/teamwork cancel` | Request native cancellation; keep the inbox and existing file changes. |
 | `/teamwork retry` | Preview recovery; `retry confirm` sends a recovery instruction, not tool replay. |
-| `/teamwork logout` | Drop the in-memory token, team cache and team registrations. |
+| `/teamwork logout` | Revoke the sign-in on the server, and drop the kept token, team cache and team registrations. |
 
 Personal desktops default to PIN protection off. In the device pairing panel on the computer, set a four-digit PIN to enable it, change it, or turn it off. The PIN and any lockout belong to this host and persist when the signed-in account changes. The new owner can change or disable the PIN locally in the pairing panel.
 
@@ -249,7 +249,8 @@ Do not duplicate the package's `insert` entry in a profile.
 
 ## Data and device access
 
-Tokens stay in host memory; restart requires sign-in. Team configuration is
+The sign-in is kept beside the cache, readable only by you, so a restart keeps
+you signed in; it lapses after 30 days unused. Team configuration is
 cached with private file permissions. A stale cache is not authorization.
 Network failures preserve it; 401/403 clear team registrations and suspend sync
 until sign-in. Provider keys remain on the service; team-model prompts and

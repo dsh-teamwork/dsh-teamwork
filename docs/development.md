@@ -63,7 +63,12 @@ State polls wait for the previous request, failures preserve the displayed data,
 and dependency inventory is shared only within one state request.
 
 The server selection persists beside the cache as `<cache>.server.json`.
-Changing it clears old identity/resources. Tokens are memory-only. Configuration
+Changing it revokes the old token at its server and clears old identity/resources.
+The token persists as `<cache>.token.json` (`{ server, token }`, mode 0600,
+replaced atomically) and is restored only for the same server; it names a
+revocable grant that lapses after 30 days unused (platform ADR 0060). Logout
+and a 401/403 from `configs` delete it; logout also sends
+`DELETE /api/auth/plugin/token`. A `tokenFile` host never writes it. Configuration
 caches use private file permissions and atomic replacement. Periodic/manual sync
 requests coalesce; unload stops timers and waits before releasing registrations.
 401/403 clear team resources and suspend automatic sync. Network/schema failures

@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { TeamOverlay, TeamworkClient, type Snapshot } from '../src/client.js';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 const team1 = { teamId: 'team1', teamName: 'Team one', role: 'member' as const, configs: [{ id: 'p1', name: 'Same name', kind: 'preset' as const, version: 1, data: { provider: 'deepseek', model: 'chat', systemPrompt: 'Review' } }] };
@@ -73,8 +73,9 @@ test('late login completion cannot reauthenticate after logout', async () => {
   let complete!: (response: Response) => void, started!: () => void;
   const fetching = new Promise<void>(resolve => { started = resolve; });
   const calls: string[] = [];
-  const request: typeof fetch = async input => {
-    calls.push(new URL(String(input)).pathname);
+  const request: typeof fetch = async (input, init) => {
+    calls.push(`${init?.method ?? 'GET'} ${new URL(String(input)).pathname} ${new Headers(init?.headers).get('Authorization') ?? ''}`.trim());
+    if (init?.method === 'DELETE') return new Response(null, { status: 204 });
     if (String(input).endsWith('/auth/plugin/token')) { started(); return new Promise(resolve => { complete = resolve; }); }
     return Response.json(snapshot);
   };
@@ -83,8 +84,45 @@ test('late login completion cannot reauthenticate after logout', async () => {
     client.beginLogin(); const login = client.completeLogin('code'); const rejected = expect(login).rejects.toThrow('Login cancelled');
     await fetching; const logout = client.logout(); complete(Response.json({ token: 'late-token' }));
     await rejected; await logout; await expect(client.sync()).rejects.toThrow('Sign in first');
-    // The late token is dropped, never used: no request carried it.
-    expect(calls).toEqual(['/api/auth/plugin/token']);
+    // The late token is revoked, never used or kept.
+    expect(calls).toEqual(['POST /api/auth/plugin/token', 'DELETE /api/auth/plugin/token Bearer late-token']);
+    await expect(readFile(client.tokenPath)).rejects.toThrow();
+  } finally { await rm(dir, { recursive: true }); }
+});
+
+test('a sign-in outlives a restart for its own server only, and signing out revokes it', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'teamwork-kept-')), path = join(dir, 'cache.json');
+  const calls: string[] = []; let configs = 200;
+  const request: typeof fetch = async (input, init) => {
+    calls.push(`${init?.method ?? 'GET'} ${new URL(String(input)).host}${new URL(String(input)).pathname} ${new Headers(init?.headers).get('Authorization') ?? ''}`.trim());
+    if (init?.method === 'DELETE') return new Response(null, { status: 204 });
+    if (String(input).endsWith('/auth/plugin/token')) return Response.json({ token: 'kept-token' });
+    return configs === 200 ? Response.json(snapshot) : new Response('', { status: configs });
+  };
+  try {
+    const first = new TeamworkClient('http://localhost:3800', path, request);
+    first.beginLogin(); await first.completeLogin('code');
+    if (process.platform !== 'win32') expect((await stat(first.tokenPath)).mode & 0o777).toBe(0o600);
+
+    const restarted = new TeamworkClient('http://localhost:3800', path, request); await restarted.restore();
+    expect(restarted.authenticated()).toBe(true);
+    await restarted.sync(); expect(calls.at(-1)).toBe('GET localhost:3800/api/configs Bearer kept-token');
+    const elsewhere = new TeamworkClient('http://127.0.0.1:3800', path, request); await elsewhere.restore();
+    expect(elsewhere.authenticated()).toBe(false);
+
+    await restarted.logout();
+    expect(calls.at(-1)).toBe('DELETE localhost:3800/api/auth/plugin/token Bearer kept-token');
+    await expect(readFile(restarted.tokenPath)).rejects.toThrow();
+    const afterLogout = new TeamworkClient('http://localhost:3800', path, request); await afterLogout.restore();
+    expect(afterLogout.authenticated()).toBe(false);
+
+    // A token the server no longer accepts is forgotten here too.
+    first.beginLogin(); await first.completeLogin('code'); configs = 401;
+    await expect(first.sync()).rejects.toThrow(); await expect(readFile(first.tokenPath)).rejects.toThrow();
+
+    // Changing servers revokes the token at the server that issued it.
+    configs = 200; first.beginLogin(); await first.completeLogin('code'); await first.setEndpoint('http://127.0.0.1:3800');
+    expect(calls.at(-1)).toBe('DELETE localhost:3800/api/auth/plugin/token Bearer kept-token');
   } finally { await rm(dir, { recursive: true }); }
 });
 
