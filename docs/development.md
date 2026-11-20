@@ -131,6 +131,16 @@ approval pipeline gates mutations, even in permissive sessions. Review reads
 frozen server contents and checks revisions. Provider secrets and initial account
 passwords use the console's forms. Server membership/role checks remain authoritative.
 
+The tools' parameter schemas spell out a preset's fields (`PresetData`) and each
+read's filters under the server's own names (`since`/`until` for usage), and a
+filter a route would ignore is refused; a refused change returns the server's
+error code and its field issues, so the model can correct itself. The built-in
+assistant (`builtin: team-assistant`) also gets `ASSISTANT_GUIDE`
+(`src/preset-context.ts`), a system prompt section ahead of the team's own
+prompt: it is proactive, acts within the member's role, drafts a complete preset
+before proposing or changing one, and uses only the Teamwork tools. It ships
+with the plugin, so teams created before it get it too.
+
 Local packages are prepared without lifecycle scripts and inspected before upload.
 After review, private downloads authenticate to the service, verify SHA-256 and
 persist a private content-addressed archive before installing disabled and checking
