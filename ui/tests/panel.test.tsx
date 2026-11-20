@@ -8,12 +8,12 @@ import { presetAvatar } from '../../src/web/avatars.js';
 import type { PanelState } from '../../src/panel.js';
 import type { Host, RenderFactorySlot } from '../../src/web/host.js';
 
-vi.mock('../../src/web/api.js', async (original) => ({ HostUnreachable: (await original<typeof import('../../src/web/api.js')>()).HostUnreachable, api: { summary: vi.fn().mockRejectedValue(new Error("Unavailable")), state: vi.fn(), profile: vi.fn(), updateProfile: vi.fn(), sync: vi.fn(), use: vi.fn(), login: vi.fn(), authorize: vi.fn(), pairPhone: vi.fn(), decidePhone: vi.fn(), revokePhone: vi.fn(), shareEnable: vi.fn(), shareDisable: vi.fn(), shareAuditKey: vi.fn(), shareInvite: vi.fn(), shareUnlock: vi.fn(), setWorkspace: vi.fn() } }));
+vi.mock('../../src/web/api.js', async (original) => ({ HostUnreachable: (await original<typeof import('../../src/web/api.js')>()).HostUnreachable, api: { summary: vi.fn().mockRejectedValue(new Error("Unavailable")), state: vi.fn(), profile: vi.fn(), updateProfile: vi.fn(), sync: vi.fn(), use: vi.fn(), login: vi.fn(), authorize: vi.fn(), pairPhone: vi.fn(), decidePhone: vi.fn(), revokePhone: vi.fn(), setWorkspace: vi.fn() } }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const profile = { id: 'user', name: 'Ada', email: 'ada@example.com', image: null, locale: 'zh-CN' as const };
 const state: PanelState = {
   locale: 'zh-CN', authRevision: 0, authenticated: true, server: 'https://example.com', defaultServer: 'https://example.com',
-  sync: { auto: true, running: false }, relay: 'connected', phones: [], session: null, shared: null,
+  sync: { auto: true, running: false }, relay: 'connected', phones: [], session: null,
   teams: [{ id: 'a', name: 'Alpha', role: 'admin', consoleUrl: 'https://example.com/teams/a', workspace: '/home/ada/work' }, { id: 'b', name: 'Beta', role: 'member', consoleUrl: 'https://example.com/teams/b', workspace: '/home/ada' }],
   presets: ['a', 'b'].map(id => ({ id: `preset-${id}`, teamId: id, teamName: id, name: `Preset ${id}`, version: 1, description: 'Review', model: 'Model', assistant: false, modelAvailable: true, contextWindowMissing: false, tools: [], plugins: [] })),
   models: [], plugins: [],
@@ -328,27 +328,18 @@ test('marks a team model without its context window, and a preset on it, as not 
   expect(row('Sized').querySelector('button:disabled')).toBeNull();
 });
 
-test('a Team DSH shows its members and holds invites until the audit key is set, with no person signed in', async () => {
-  const shared = { name: 'Build box', teamName: 'Alpha', error: null, auditKey: null as string | null, members: [{ userId: 'u-bob', email: 'bob@example.com', devices: [], locked: true }] };
-  vi.mocked(api.state).mockImplementation(async () => ({ ...state, teams: [state.teams[0]!], shared }));
-  vi.mocked(api.shareInvite).mockResolvedValue({ link: 'dshteamwork://join?host=h&invite=i', expiresAt: '2026-11-19T00:00:00Z' });
-  vi.mocked(api.shareAuditKey).mockImplementation(async () => { shared.auditKey = 'f'.repeat(64); return { fingerprint: shared.auditKey }; });
+// Team DSH is offline on the server: the panel offers no way into it, signed out or in.
+test('the sign-in screen offers no Team DSH', async () => {
+  vi.mocked(api.state).mockResolvedValue({ ...state, authenticated: false, teams: [], presets: [] });
   await mount();
-  expect(api.profile).not.toHaveBeenCalled();
-  const labels = [...document.querySelectorAll('button')].map(b => b.textContent?.trim());
-  expect(labels).not.toContain('设备连接');
-  await click('团队 DSH');
-  expect(document.body.textContent).toContain('成员还不能加入');
-  expect(document.body.textContent).toContain('bob@example.com');
-  const inviteButton = () => [...document.querySelectorAll('button')].find(b => b.textContent?.trim() === '邀请')!;
-  expect(inviteButton().disabled).toBe(true);
-  await input('input[aria-label="审计公钥"]', 'AAAA');
-  await click('设置密钥');
-  expect(api.shareAuditKey).toHaveBeenCalledWith('AAAA');
-  expect(inviteButton().disabled).toBe(false);
-  await click('邀请');
-  expect(api.shareInvite).toHaveBeenCalledWith('bob@example.com');
-  expect(document.body.textContent).toContain('dshteamwork://join?host=h&invite=i');
-  await click('解锁');
-  expect(api.shareUnlock).toHaveBeenCalledWith('bob@example.com');
+  expect(document.body.textContent).toContain('在浏览器中登录');
+  expect(document.body.textContent).not.toContain('团队 DSH');
+});
+
+test('the account page offers no Team DSH', async () => {
+  vi.mocked(api.state).mockResolvedValue(state);
+  await mount();
+  await click('我的账号');
+  expect(document.body.textContent).toContain('退出此 DSH 的 Teamwork');
+  expect(document.body.textContent).not.toContain('团队 DSH');
 });

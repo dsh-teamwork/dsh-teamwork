@@ -20,6 +20,16 @@ const RETRY_MS = 60 * 1000;
 
 export const sharedKeyPath = (cachePath: string) => cachePath.replace(/(\.json)?$/, '.shared.json');
 
+/**
+ * Team DSH is offline on the server (platform docs/tech/shared-dsh.md), so a DSH left in shared mode is not resumed:
+ * its saved team host key is deleted, untouched otherwise (its audit archive holds members' sealed sessions). True
+ * when there was one to delete.
+ */
+export async function forgetSharedKey(path: string) {
+  try { await rm(path); return true; }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false; throw error; }
+}
+
 /** What the server's refusal means for the key: `invalid` (unknown, rotated or deleted) and `elsewhere` stop renewal. */
 export class SharedKeyError extends Error {
   constructor(readonly code: 'format' | 'invalid' | 'elsewhere' | 'unavailable', message: string) { super(message); }

@@ -3,7 +3,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import { controlSocketPath, serveControlSocket } from '../src/control-socket.js';
-import type { FetchRoute, PanelPhone, PanelShared } from '../src/panel.js';
+import type { FetchRoute, PanelPhone } from '../src/panel.js';
 import { dshHome, run, socketIn } from '../src/teamwork-cli.js';
 
 const route = (name: string, handle: (body: Record<string, unknown>) => unknown): FetchRoute => ({
@@ -15,18 +15,17 @@ const route = (name: string, handle: (body: Record<string, unknown>) => unknown)
 });
 
 /**
- * A stand-in for the panel: shared mode with one member, an invite, and the plugin's own refusal of a bad key; a
- * sign-in by pasted code; and a phone that pairs, first before its handshake, then with a safety code.
+ * A stand-in for the panel: a sign-in by pasted code, with the plugin's own refusal of a wrong one; and a phone that
+ * pairs, first before its handshake, then with a safety code.
  */
 function panel() {
   const calls: Array<[string, Record<string, unknown>]> = [];
-  let shared: PanelShared | null = null;
   const record = (name: string, handle: (body: Record<string, unknown>) => unknown) => route(name, (body) => { calls.push([name, body]); return handle(body); });
   let server = 'https://www.dshteamwork.com';
   let authenticated = false;
   const phones: PanelPhone[] = [];
   const routes = [
-    record('state', () => ({ shared, server, authenticated, teams: authenticated ? [{ id: 't', name: 'Team', role: 'member', consoleUrl: '' }] : [], sync: { auto: true, running: false }, relay: 'connected', phones })),
+    record('state', () => ({ server, authenticated, teams: authenticated ? [{ id: 't', name: 'Team', role: 'member', consoleUrl: '' }] : [], sync: { auto: true, running: false }, relay: 'connected', phones })),
     record('login', () => ({ url: 'https://teamwork.example.com/plugin?challenge=c', automatic: true })),
     record('authorize', (body) => { if (body.code !== 'ABCD-1234') throw new Error('That code is not valid.'); authenticated = true; }),
     record('sync', () => undefined),
@@ -36,11 +35,6 @@ function panel() {
     }),
     record('decide-phone', (body) => { if (body.accept) Object.assign(phones[0]!, { status: 'confirmed', verified: true }); }),
     record('server', (body) => { server = String(body.server); }),
-    record('share-enable', (body) => {
-      if (body.key !== 'dshh_good') throw new Error('That is not a team host key. Copy it again from the team console.');
-      shared = { name: 'vm3', teamName: 'Team', error: null, auditKey: null, members: [{ userId: 'u1', email: 'bob@example.test', devices: ['Phone'], locked: true }] };
-    }),
-    record('share-invite', () => ({ link: 'dshteamwork://join?x', expiresAt: '2026-11-19T00:00:00Z' })),
   ];
   return { routes, calls, phones };
 }
@@ -66,19 +60,14 @@ test.skipIf(process.platform === 'win32')('the command drives the panel routes t
     expect((await stat(socket)).mode & 0o777).toBe(0o600);
     expect((await stat(join(home, 'dsh-teamwork'))).mode & 0o777).toBe(0o700);
 
-    expect(await cli('share', 'status')).toMatchObject({ code: 0, out: expect.stringContaining('This DSH is not a Team DSH') });
     expect(await cli('server', 'https://teamwork.example.com')).toMatchObject({ code: 0, out: 'Teamwork server: https://teamwork.example.com' });
     // The plugin's own refusal reaches the command line unchanged.
-    expect(await cli('share', 'enable', 'dshh_bad')).toMatchObject({ code: 1, err: 'That is not a team host key. Copy it again from the team console.' });
-    const enabled = await cli('share', 'enable', 'dshh_good');
-    expect(enabled.code).toBe(0);
-    expect(enabled.out).toContain('Team DSH: vm3');
-    expect(enabled.out).toContain('Audit key: not set');
-    expect(await cli('share', 'members')).toMatchObject({ out: 'bob@example.test (locked): Phone' });
-    const invite = await cli('share', 'invite', 'bob@example.test');
-    expect(invite.out).toContain('dshteamwork://join?x');
-    expect(calls).toContainEqual(['share-invite', { email: 'bob@example.test' }]);
-    expect(await cli('share', 'invite')).toMatchObject({ code: 2 });
+    expect(await cli('authorize', 'WRONG')).toMatchObject({ code: 1, err: 'That code is not valid.' });
+    // Team DSH is offline: the command offers no way into shared mode, and asks the DSH nothing for one.
+    const before = calls.length;
+    expect(await cli('share', 'enable', 'dshh_good')).toMatchObject({ code: 2, err: expect.stringContaining('usage: dsh-teamwork') });
+    expect((await cli('share', 'enable', 'dshh_good')).err).not.toContain('share');
+    expect(calls.length).toBe(before);
   } finally { await close(); }
 });
 
@@ -87,9 +76,9 @@ test.skipIf(process.platform === 'win32')('without a running DSH the command say
   const second = await serveControlSocket(socket, routes, (m) => logs.push(m));
   expect(logs.join('\n')).toContain('Another DSH using this home already serves');
   await second();
-  expect(await cli('share', 'status')).toMatchObject({ code: 0 });
+  expect(await cli('status')).toMatchObject({ code: 0 });
   await close();
-  const gone = await cli('share', 'status');
+  const gone = await cli('status');
   expect(gone.code).toBe(1);
   expect(gone.err).toContain(`No running DSH with the Teamwork plugin at ${socket}`);
 });
