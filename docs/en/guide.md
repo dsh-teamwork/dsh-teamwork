@@ -57,10 +57,12 @@ where **Add workspace…** offers any folder. A session started in a workspace i
 listed under it in DSH's sidebar; one started in a folder that is not a
 workspace is listed under Ungrouped.
 
-The same **Settings** page shows your own last 30 days in that team: the points
-and calls you spent, which models (and metered services, such as a cloud
-computer) they went to, and your budget with when it resets and any limit near
-its end. The web console's **My usage** has the details.
+The same **Settings** page shows your own last 30 days in that team, laid out
+as the web console's **My usage**: calls, points, input tokens (with cache hits)
+and output tokens (with reasoning), each day's points, which models (and metered
+services, such as a cloud computer) they went to, and your budget with when it
+resets and any limit near its end. Points are shown as whole numbers. The web
+console's **My usage** has each call.
 
 Create or join teams in the web console. New teams receive a built-in assistant;
 existing teams are unchanged. Team renaming does not automatically rename the

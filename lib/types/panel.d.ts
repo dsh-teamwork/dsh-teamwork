@@ -158,16 +158,29 @@ export interface PanelSummary {
     pendingReviews: number;
 }
 /**
- * The member's own last 30 days in one team, for its settings page: what they called and spent (the team's
- * `summary` and `usage/stats`, both in the caller's own scope), which models and meters it went to, their budget, and
- * the limits near their end.
+ * The member's own last 30 days in one team, for its settings page, laid out as the web console's My usage: what
+ * they called, spent and sent (the team's `summary` and `usage/stats`, both in the caller's own scope), each day's
+ * points, which models and meters it went to, their budget, and the limits near their end.
  */
 export interface PanelTeamUsage {
     since: string;
-    calls: number;
-    /** Points spent, as a decimal string; calls without a price yet are counted in `unpriced` instead. */
-    points: string;
-    unpriced: number;
+    /** Points are decimal strings; calls without a price yet are counted in `unpriced` instead. Input includes cache
+     * reads, and output includes reasoning. */
+    totals: {
+        calls: number;
+        points: string;
+        unpriced: number;
+        input: number;
+        cacheRead: number;
+        output: number;
+        reasoning: number;
+    };
+    /** Every calendar day of the period on this computer, oldest first, spent on or not. */
+    days: Array<{
+        day: string;
+        calls: number;
+        points: string;
+    }>;
     /** Most points first; a meter's `labels` name it in each language its edition registered. */
     sources: Array<{
         kind: 'model' | 'meter';

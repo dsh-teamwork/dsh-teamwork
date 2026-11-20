@@ -350,28 +350,28 @@ function TeamSettings({ team, locale, dsh, renderFactorySlot, run, browse }: {
       {team.workspace && <>{section(t('team.workspaceTitle'))}<Card><TeamWorkspace team={team} dsh={dsh} renderFactorySlot={renderFactorySlot} run={run} /></Card></>}
 
       {section(t('team.usageTitle'))}
-      <Card>
-        {usage === undefined ? <p className="twui-muted">{t('team.usageLoading')}</p>
-          : usage === null ? unavailable
-          : <div className="twui-stack" style={{ gap: 14 }}>
-              <div className="twui-row" style={{ gap: 32, flexWrap: 'wrap' }}>
-                <div className="twui-stack" style={{ gap: 2 }}><span className="twui-subtle">{t('team.points')}</span><span style={{ fontSize: 22, fontWeight: 650 }}>{usage.points}</span></div>
-                <div className="twui-stack" style={{ gap: 2 }}><span className="twui-subtle">{t('team.calls')}</span><span style={{ fontSize: 22, fontWeight: 650 }}>{usage.calls}</span></div>
+      {usage === undefined ? <Card><p className="twui-muted">{t('team.usageLoading')}</p></Card>
+        : usage === null ? <Card>{unavailable}</Card>
+        : <>
+            <UsageTotals usage={usage} />
+            <UsageDaily usage={usage} />
+            <Card>
+              <div className="twui-stack" style={{ gap: 12 }}>
+                <h4 style={{ fontSize: 14, fontWeight: 600 }}>{t('team.byModel')}</h4>
+                {usage.sources.length === 0
+                  ? <span className="twui-muted">{t('team.noUsage')}</span>
+                  : <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 6 }} aria-label={t('team.byModel')}>
+                      {usage.sources.slice(0, 8).map(source => (
+                        <li key={`${source.kind}:${source.name}`} className="twui-row" style={{ justifyContent: 'space-between', gap: 12 }}>
+                          <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{source.labels[locale] ?? source.name}</span>
+                          <span className="twui-subtle" style={{ whiteSpace: 'nowrap' }}>{t('team.pointsCount', { points: formatPoints(source.points, t.locale) })} · {t('team.callsCount', { count: source.calls })}</span>
+                        </li>
+                      ))}
+                    </ul>}
+                <div><Button size="sm" variant="ghost" trailingIcon="external" onClick={() => open(`${team.consoleUrl}/my-usage`)}>{t('team.usageDetail')}</Button></div>
               </div>
-              {usage.unpriced > 0 && <span className="twui-muted">{t('team.unpriced', { count: usage.unpriced })}</span>}
-              {usage.sources.length === 0
-                ? <span className="twui-muted">{t('team.noUsage')}</span>
-                : <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 6 }} aria-label={t('team.byModel')}>
-                    {usage.sources.slice(0, 8).map(source => (
-                      <li key={`${source.kind}:${source.name}`} className="twui-row" style={{ justifyContent: 'space-between', gap: 12 }}>
-                        <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{source.labels[locale] ?? source.name}</span>
-                        <span className="twui-subtle" style={{ whiteSpace: 'nowrap' }}>{t('team.pointsCount', { points: source.points })} · {t('team.callsCount', { count: source.calls })}</span>
-                      </li>
-                    ))}
-                  </ul>}
-              <div><Button size="sm" variant="ghost" trailingIcon="external" onClick={() => open(`${team.consoleUrl}/my-usage`)}>{t('team.usageDetail')}</Button></div>
-            </div>}
-      </Card>
+            </Card>
+          </>}
 
       {section(t('team.budgetTitle'))}
       <Card>
@@ -388,6 +388,97 @@ function TeamSettings({ team, locale, dsh, renderFactorySlot, run, browse }: {
             </div>}
       </Card>
     </>
+  );
+}
+
+/**
+ * A point amount as a whole number, rounded half up and grouped for the reader, as the web console shows it
+ * (`formatPoints` in the platform's `@dsh-teamwork/shared`). The server's points are decimal strings with up to nine
+ * places; anything else is shown as it came.
+ */
+function formatPoints(value: string | number, locale: string): string {
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(String(value).trim());
+  if (!match) return String(value);
+  const [, sign, whole, fraction = ''] = match;
+  const rounded = Number(whole) + (fraction !== '' && fraction[0]! >= '5' ? 1 : 0);
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(sign && rounded !== 0 ? -rounded : rounded);
+}
+
+/** The period's four figures, as the web console's My usage tiles them: calls, points, input and output tokens. */
+function UsageTotals({ usage }: { usage: PanelTeamUsage }) {
+  const t = useT();
+  const number = new Intl.NumberFormat(t.locale);
+  const { totals } = usage;
+  const cells = [
+    { label: t('team.calls'), value: number.format(totals.calls), note: totals.unpriced > 0 ? t('team.unpriced', { count: totals.unpriced }) : t('team.callsNote') },
+    { label: t('team.points'), value: formatPoints(totals.points, t.locale), note: t('team.pointsNote') },
+    { label: t('team.input'), value: number.format(totals.input), note: t('team.inputNote', { cached: number.format(totals.cacheRead) }) },
+    { label: t('team.output'), value: number.format(totals.output), note: t('team.outputNote', { reasoning: number.format(totals.reasoning) }) },
+  ];
+  // A one-pixel gap over the border colour draws the dividers however the tiles wrap.
+  return (
+    <dl className="twui-card" style={{ margin: 0, overflow: 'hidden', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 1, background: 'var(--twui-border)' }}>
+      {cells.map(cell => (
+        <div key={cell.label} className="twui-stack" style={{ gap: 2, padding: 16, background: 'var(--twui-surface)' }}>
+          <dt className="twui-muted">{cell.label}</dt>
+          <dd style={{ margin: 0, fontSize: 22, fontWeight: 650, fontVariantNumeric: 'tabular-nums' }}>{cell.value}</dd>
+          <dd className="twui-subtle" style={{ margin: 0 }}>{cell.note}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/**
+ * Each day's points as columns from one baseline, as the web console draws them. Hovering or focusing a day reads it
+ * out above the plot; with none, the readout is the busiest day.
+ */
+function UsageDaily({ usage }: { usage: PanelTeamUsage }) {
+  const t = useT();
+  const [active, setActive] = useState<number | null>(null);
+  const { days } = usage;
+  const values = days.map(day => Number(day.points));
+  const max = Math.max(0, ...values);
+  const date = new Intl.DateTimeFormat(t.locale, { month: 'short', day: 'numeric' });
+  const label = (day: string) => date.format(new Date(`${day}T00:00:00`));
+  const shown = active === null ? undefined : days[active];
+  const ticks = days.length === 0 ? [] : [0, Math.floor((days.length - 1) / 2), days.length - 1];
+  return (
+    <Card>
+      <div className="twui-stack" style={{ gap: 12 }}>
+        <div className="twui-row" style={{ justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+          <h4 style={{ fontSize: 14, fontWeight: 600 }}>{t('team.daily')}</h4>
+          <p aria-live="polite" style={{ margin: 0, fontVariantNumeric: 'tabular-nums' }}>
+            {shown
+              ? <><span style={{ fontWeight: 600 }}>{t('team.pointsCount', { points: formatPoints(shown.points, t.locale) })}</span> <span className="twui-muted">{t('team.dayDetail', { day: label(shown.day), count: shown.calls })}</span></>
+              : <span className="twui-muted">{t('team.peak', { points: formatPoints(max, t.locale) })}</span>}
+          </p>
+        </div>
+        {max === 0 ? <p className="twui-muted" style={{ padding: '32px 0', textAlign: 'center' }}>{t('team.noUsage')}</p> : <div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 140, borderBottom: '1px solid var(--twui-border)' }} onPointerLeave={() => setActive(null)}>
+            {days.map((day, i) => (
+              <button
+                key={day.day}
+                type="button"
+                aria-label={`${label(day.day)}: ${t('team.pointsCount', { points: formatPoints(day.points, t.locale) })}, ${t('team.callsCount', { count: day.calls })}`}
+                onPointerEnter={() => setActive(i)}
+                onFocus={() => setActive(i)}
+                onBlur={() => setActive(null)}
+                style={{ flex: '1 1 0', minWidth: 0, height: '100%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: 0, border: 0, background: 'none', cursor: 'default' }}
+              >
+                {/* At most 24px wide, rounded at its tip and square on the baseline; the hit area is the whole column. */}
+                <span style={{ width: '100%', maxWidth: 24, height: `${(values[i]! / max) * 100}%`, borderRadius: '4px 4px 0 0', background: 'var(--twui-accent)', opacity: active === i ? 1 : 0.75 }} />
+              </button>
+            ))}
+          </div>
+          <div className="twui-subtle" style={{ position: 'relative', height: 16, marginTop: 6 }}>
+            {ticks.map((i, n) => (
+              <span key={n} style={{ position: 'absolute', ...(n === 0 ? { left: 0 } : n === 1 ? { left: '50%', transform: 'translateX(-50%)' } : { right: 0 }) }}>{label(days[i]!.day)}</span>
+            ))}
+          </div>
+        </div>}
+      </div>
+    </Card>
   );
 }
 
@@ -664,7 +755,7 @@ function Header({ state, page, team, reviews, reviewUrl, selectTeam, navigate }:
 /** A member's budget in one team, in a few words: used up, being reconciled, what is left, or no limit. */
 const budgetLabel = (t: Translate, budget: PanelSummary['budget']) => budget.exhausted ? t('budget.exhausted')
   : budget.state === 'unconfirmed' ? t('budget.unconfirmed')
-  : budget.state === 'known' && budget.remaining !== null ? t('budget.remaining', { points: budget.remaining })
+  : budget.state === 'known' && budget.remaining !== null ? t('budget.remaining', { points: formatPoints(budget.remaining, t.locale) })
   : budget.tokenLimited ? t('budget.tokenLimited') : t('budget.unlimited');
 
 /** The browsed team's budget for this member; changing the browsed team never changes a running conversation. */
