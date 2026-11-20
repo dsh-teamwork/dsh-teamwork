@@ -215,7 +215,7 @@ export class TeamworkClient {
     };
     const route=routes[action];if(!route)throw new Error('Unsupported operation');
     const response=await this.request(`${this.endpoint}/api/teams/${encodeURIComponent(teamId)}/${route.path}`,{method:route.method,headers:{Authorization:`Bearer ${this.token}`,Origin:new URL(this.endpoint).origin,'Content-Type':'application/json'},body:JSON.stringify(route.body),signal,redirect:'error'});
-    if(!response.ok)throw new Error(`Teamwork operation failed (${response.status}): ${String((await response.json().catch(()=>({}))).error ?? '')}`);
+    if(!response.ok)throw new Error(`Teamwork operation failed (${response.status}): ${failure(await response.json().catch(()=>({})))}`);
     const result=response.status===204?null:await response.json();if(epoch!==this.epoch)throw new Error('Account changed during operation');return result;
   }
   async reviewPreview(teamId:string,id:string,signal:AbortSignal) {
@@ -240,7 +240,7 @@ export class TeamworkClient {
     const response = await this.request(`${this.endpoint}/api/teams/${encodeURIComponent(teamId)}${path}?${new URLSearchParams(filters)}`, {
       headers: {Authorization:`Bearer ${this.token}`}, signal,redirect:'error',
     });
-    if (!response.ok) throw new Error(`Teamwork request failed (${response.status})`);
+    if (!response.ok) throw new Error(`Teamwork request failed (${response.status}): ${failure(await response.json().catch(() => ({})))}`);
     const data = await response.json();
     if (epoch !== this.epoch) throw new Error('Session changed during operation');
     return data;
@@ -423,6 +423,16 @@ export function modelLimitProblem(snapshot: Snapshot, config: TeamConfig): strin
   if (offline !== undefined) return say('model.offline', { name: offline });
   const name = unsizedModel(snapshot, config);
   return name === undefined ? undefined : say('model.noContextWindow', { name });
+}
+
+/**
+ * A refusal as the model can act on it: the server's error code and, for a request it could not accept, which field
+ * and why (`issues`, never a value the caller did not send).
+ */
+function failure(body: { error?: unknown; issues?: unknown }) {
+  const issues = Array.isArray(body.issues) ? body.issues.slice(0, 5).map((i: { path?: unknown; message?: unknown }) =>
+    `${Array.isArray(i.path) ? i.path.join('.') : ''}: ${String(i.message ?? '')}`) : [];
+  return [String(body.error ?? ''), ...issues].join('; ');
 }
 
 /**

@@ -97,7 +97,12 @@ the mark.
 Multimodal input and other provider protocols are not implemented by this adapter.
 
 Presets use native `agentPresets` registration, mounting, selection and revisions.
-A preset has one of inherited selection, same-team model reference, or legacy
+A team preset composes the plugin rows of the profile's declared default preset
+(DSH's `standard`: its tools, persona, compaction and planning, read from the
+loader as the preset registers) and then its own team context, so a template's
+required tools such as `read`, `bash` or `web_search` are DSH's own. A profile
+whose default is not a `dsh-agent-preset` row gives team presets no host rows,
+and the plugin logs a warning. A preset has one of inherited selection, same-team model reference, or legacy
 explicit provider/model. Human-readable instructions/output notes are not system
 instructions; behavior belongs in `systemPrompt`. Team prompts are additive.
 Required tools and pinned plugin dependencies are checked when selecting and
@@ -126,6 +131,16 @@ Tools bind to the active preset's team and current account epoch. DSH's actual
 approval pipeline gates mutations, even in permissive sessions. Review reads
 frozen server contents and checks revisions. Provider secrets and initial account
 passwords use the console's forms. Server membership/role checks remain authoritative.
+
+The tools' parameter schemas spell out a preset's fields (`PresetData`) and each
+read's filters under the server's own names (`since`/`until` for usage), and a
+filter a route would ignore is refused; a refused change returns the server's
+error code and its field issues, so the model can correct itself. The built-in
+assistant (`builtin: team-assistant`) also gets `ASSISTANT_GUIDE`
+(`src/preset-context.ts`), a system prompt section ahead of the team's own
+prompt: it is proactive, acts within the member's role, drafts a complete preset
+before proposing or changing one, and uses only the Teamwork tools. It ships
+with the plugin, so teams created before it get it too.
 
 Local packages are prepared without lifecycle scripts and inspected before upload.
 After review, private downloads authenticate to the service, verify SHA-256 and
