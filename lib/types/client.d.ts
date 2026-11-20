@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { PanelProfile, PanelSummary } from './panel.js';
+import type { PanelProfile, PanelSummary, PanelTeamUsage } from './panel.js';
 import type { Locale } from './locale.js';
 /** `GET /api/configs`: every team the member is in, each with its configuration (platform ADR 0013). */
 export declare const snapshotSchema: z.ZodObject<{
@@ -454,6 +454,8 @@ export declare class TeamworkClient {
     authenticated(): boolean;
     /** Independent of configuration sync: only the member's own budget and a count of reviews leave the host. */
     summary(teamId: string): Promise<PanelSummary>;
+    /** The member's own last 30 days in one team, for its settings page; dropped if the account changed meanwhile. */
+    teamUsage(teamId: string): Promise<PanelTeamUsage>;
     profile(): Promise<PanelProfile>;
     updateProfile(input: {
         name: string | null;

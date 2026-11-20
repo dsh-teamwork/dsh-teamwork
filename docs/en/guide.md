@@ -51,10 +51,16 @@ session started for that team opens in, from one of its presets in the panel,
 the phone app or the web console, unless the member picks another folder there.
 Until you choose one it is DSH's default workspace, or else DSH's first
 workspace; only with no workspace at all is it the folder DSH was started in.
-Change it under
-**My teams** from DSH's own workspace menu, where **Add workspace…** offers any
-folder. A session started in a workspace is listed under it in DSH's sidebar;
-one started in a folder that is not a workspace is listed under Ungrouped.
+Change it on the team's
+**Settings** page (**My teams** → **Settings**) from DSH's own workspace menu,
+where **Add workspace…** offers any folder. A session started in a workspace is
+listed under it in DSH's sidebar; one started in a folder that is not a
+workspace is listed under Ungrouped.
+
+The same **Settings** page shows your own last 30 days in that team: the points
+and calls you spent, which models (and metered services, such as a cloud
+computer) they went to, and your budget with when it resets and any limit near
+its end. The web console's **My usage** has the details.
 
 Create or join teams in the web console. New teams receive a built-in assistant;
 existing teams are unchanged. Team renaming does not automatically rename the
