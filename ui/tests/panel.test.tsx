@@ -179,9 +179,11 @@ test('a team’s settings show the member’s own usage by model and their budge
   expect(document.querySelector('.twui-select-primary')!.textContent).toContain('Alpha');
 });
 
-test('a team’s settings say so when its usage cannot be read', async () => {
+test('a team’s settings say so when its usage cannot be read, and why', async () => {
+  vi.mocked(api.teamUsage).mockRejectedValue(new Error('团队摘要暂不可用。 (teams/b/usage/stats: HTTP 403)'));
   await mount(); await settingsOf('Beta');
   expect(document.body.textContent).toContain('暂时读取不到');
+  expect(document.body.textContent).toContain('teams/b/usage/stats: HTTP 403');
   expect(document.body.textContent).toContain('默认工作区');
 });
 

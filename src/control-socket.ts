@@ -43,7 +43,10 @@ export async function serveControlSocket(path: string, routes: FetchRoute[], log
       const route = routes.find((r) => r.path === request.url && r.methods.includes(request.method as 'POST'));
       if (!route) { response.writeHead(404).end(); return; }
       try {
-        const answer = await route.fetch(new Request(`http://teamwork${request.url}`, { method: request.method, body: await body(request) }));
+        // The panel's routes admit only a JSON request, so the command's content type travels with its body.
+        const answer = await route.fetch(new Request(`http://teamwork${request.url}`, {
+          method: request.method, body: await body(request), headers: { 'content-type': request.headers['content-type'] ?? '' },
+        }));
         response.writeHead(answer.status, { 'content-type': answer.headers.get('content-type') ?? 'application/json' }).end(Buffer.from(await answer.arrayBuffer()));
       } catch (error) {
         response.writeHead(500, { 'content-type': 'application/json' }).end(JSON.stringify({ error: (error as Error).message }));

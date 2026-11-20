@@ -290,25 +290,33 @@ export class TeamworkClient {
   async teamUsage(teamId: string): Promise<PanelTeamUsage> {
     if (!this.token || !this.snapshot?.teams.some(team => team.teamId === teamId)) throw new Error(say('summary.team'));
     const epoch = this.epoch, endpoint = this.endpoint, token = this.token;
-    const read = async (path: string) => {
-      const response = await this.request(`${endpoint}/api/teams/${encodeURIComponent(teamId)}/${path}`, {
-        headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000),
-      });
-      if (!response.ok) throw new Error(say('summary.unavailable'));
-      return response.json();
+    /** One read, its failure named by the route and what went wrong, so the panel can say why it has nothing. */
+    const read = async <T>(path: string, schema: z.ZodType<T>): Promise<T> => {
+      const response = await this.request(`${endpoint}/api/${path}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(8000) });
+      if (!response.ok) throw new Error(`${say('summary.unavailable')} (${path}: HTTP ${response.status})`);
+      const parsed = schema.safeParse(await response.json());
+      if (!parsed.success) {
+        const issue = parsed.error.issues[0];
+        throw new Error(`${say('summary.unavailable')} (${path}: ${issue?.path.join('.') || 'answer'} ${issue?.message ?? ''})`.trim());
+      }
+      return parsed.data;
     };
-    const [summary, stats] = await Promise.all([read('summary'), read('usage/stats')]);
-    const own = z.object({
-      since: z.string(), calls: z.number().int().nonnegative(), points: pointsSchema, unpriced: z.number().int().nonnegative(),
-      budget: budgetSchema,
-      nearLimit: z.array(z.object({ scope: z.enum(['team', 'member', 'provider']), period: z.enum(['day', 'month']), threshold: z.number().int() })),
-    }).parse(summary);
-    const { sources } = z.object({
+    const team = `teams/${encodeURIComponent(teamId)}`;
+    const [own, me] = await Promise.all([
+      read(`${team}/summary`, z.object({
+        since: z.string(), calls: z.number().int().nonnegative(), points: pointsSchema, unpriced: z.number().int().nonnegative(),
+        budget: budgetSchema,
+        nearLimit: z.array(z.object({ scope: z.enum(['team', 'member', 'provider']), period: z.enum(['day', 'month']), threshold: z.number().int() })),
+      })),
+      read('profile', z.object({ id: z.string().min(1) })),
+    ]);
+    // An admin's stats are the whole team's unless they name a member: these are the caller's own.
+    const { sources } = await read(`${team}/usage/stats?${new URLSearchParams({ userId: me.id })}`, z.object({
       sources: z.array(z.object({
-        kind: z.enum(['model', 'meter']), name: z.string(), labels: z.record(z.string(), z.string()).default({}),
+        kind: z.enum(['model', 'meter']), name: z.string(), labels: z.record(z.string(), z.string()).nullable().default({}).transform(labels => labels ?? {}),
         calls: z.number().int().nonnegative(), points: pointsSchema,
       })),
-    }).parse(stats);
+    }));
     if (epoch !== this.epoch || endpoint !== this.endpoint || this.token !== token) throw new Error(say('auth.changed'));
     return { ...own, nearLimit: own.nearLimit.map(({ scope, period, threshold }) => ({ scope, period, threshold })), sources };
   }

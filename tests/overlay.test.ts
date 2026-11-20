@@ -157,11 +157,12 @@ test('summary reads keep only the own budget and review count, fail closed and d
   } finally { await rm(dir, { recursive: true }); }
 });
 
-test('a team’s usage for its settings page reads the member’s own summary and stats, keeps no other member’s id, and drops an old account’s answer', async () => {
+test('a team’s usage for its settings page reads the member’s own summary and stats, names a failure, keeps no other member’s id, and drops an old account’s answer', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'teamwork-usage-'));
   const budget = { remaining: '96.5', state: 'known', resetAt: '2026-12-01T00:00:00Z', tokenLimited: false, exhausted: false };
   const summary = { since: '2026-10-21T00:00:00Z', calls: 12, points: '3.5', unpriced: 1, unresolved: 0, overruns: 0, failedNotices: 0, nearLimit: [{ scope: 'member', subjectId: 'u-other', period: 'month', threshold: 80 }], unpricedModels: [], budget, pendingReviews: 0 };
-  const stats = { since: '2026-10-21T00:00:00Z', until: '2026-11-20T00:00:00Z', timezone: 'UTC', totals: {}, days: [], sources: [{ kind: 'model', key: 'm1', name: 'Claude Opus', labels: {}, calls: 12, points: '3.5', input: 1, output: 1 }] };
+  const stats = { since: '2026-10-21T00:00:00Z', until: '2026-11-20T00:00:00Z', timezone: 'UTC', totals: {}, days: [], sources: [{ kind: 'model', key: 'm1', name: 'Claude Opus', labels: {}, calls: 12, points: '3.5', input: 1, output: 1 }, { kind: 'meter', key: 'cloud.computer', name: 'cloud.computer', labels: null, calls: 1, points: '0', input: 0, output: 0 }] };
+  let summaryStatus = 200;
   let hold: Promise<void> | undefined;
   const asked: string[] = [];
   const request: typeof fetch = async (input) => {
@@ -169,7 +170,9 @@ test('a team’s usage for its settings page reads the member’s own summary an
     if (url.endsWith('/auth/plugin/token')) return Response.json({ token: 'secret' });
     if (url.endsWith('/configs')) return Response.json(snapshot);
     if (hold) await hold;
-    return Response.json(url.endsWith('/usage/stats') ? stats : summary);
+    if (url.endsWith('/api/profile')) return Response.json({ id: 'me', email: null, name: null, image: null, locale: null });
+    if (url.includes('/usage/stats')) return Response.json(stats);
+    return summaryStatus === 200 ? Response.json(summary) : new Response('', { status: summaryStatus });
   };
   const client = new TeamworkClient('https://example.com', join(dir, 'cache.json'), request);
   try {
@@ -177,9 +180,14 @@ test('a team’s usage for its settings page reads the member’s own summary an
     await expect(client.teamUsage('other')).rejects.toThrow();
     const usage = await client.teamUsage('team1');
     expect(usage).toEqual({ since: summary.since, calls: 12, points: '3.5', unpriced: 1, budget, nearLimit: [{ scope: 'member', period: 'month', threshold: 80 }],
-      sources: [{ kind: 'model', name: 'Claude Opus', labels: {}, calls: 12, points: '3.5' }] });
-    // Both reads are the caller's own scope: no userId and no team scope is asked for.
-    expect(asked.filter(u => u.includes('/api/teams/team1/'))).toEqual(['https://example.com/api/teams/team1/summary', 'https://example.com/api/teams/team1/usage/stats']);
+      sources: [{ kind: 'model', name: 'Claude Opus', labels: {}, calls: 12, points: '3.5' }, { kind: 'meter', name: 'cloud.computer', labels: {}, calls: 1, points: '0' }] });
+    // Both reads are the caller's own: the summary's default scope, and the stats named for the caller, since an
+    // admin's stats are otherwise the whole team's.
+    expect(asked.filter(u => u.includes('/api/teams/team1/'))).toEqual(['https://example.com/api/teams/team1/summary', 'https://example.com/api/teams/team1/usage/stats?userId=me']);
+    // A failure says which read and how, for the panel to show.
+    summaryStatus = 403;
+    await expect(client.teamUsage('team1')).rejects.toThrow('(teams/team1/summary: HTTP 403)');
+    summaryStatus = 200;
     expect(JSON.stringify(usage)).not.toContain('u-other');
     let release!: () => void; hold = new Promise(resolve => { release = resolve; });
     const pending = client.teamUsage('team1');
