@@ -172,10 +172,9 @@ test('retries rejecting a request, then confirms a new request and revokes the r
   });
   vi.mocked(api.revokePhone).mockImplementation(async () => { current = { ...current, phones: [] }; });
   await mount(); await click('设备连接 · 1');
-  // The request is step two, its safety code on its own line, and what pairing grants is one fold away.
+  // The request is step two, its safety code on its own line.
   expect(document.body.textContent).toContain('Test phone 请求配对');
   expect(document.body.textContent).toContain('1234 5678');
-  expect(document.body.textContent).toContain('目前不能只授权某一个团队');
   await click('拒绝'); expect(document.body.textContent).toContain('等待你确认');
   await click('拒绝'); expect(document.body.textContent).not.toContain('等待你确认');
   current = { ...current, phones: [pending] };

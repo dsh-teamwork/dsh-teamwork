@@ -961,7 +961,6 @@ function Phones({ state, run }: { state: PanelState; run: Run }) {
               <Button variant="ghost" busy={busy === `reject:${phone.id}`} disabled={!!busy} onClick={() => void perform(`reject:${phone.id}`, () => api.decidePhone(phone.id, false), t('phones.rejected'))}>{t('phones.reject')}</Button>
               <Button variant="primary" busy={busy === `accept:${phone.id}`} disabled={!!busy || !ready || !connected} onClick={() => void accept(phone)}>{t('phones.accept')}</Button>
             </div>
-            <Scope />
           </div></Card>
         );
       })}
@@ -977,7 +976,6 @@ function Phones({ state, run }: { state: PanelState; run: Run }) {
             <li>{t('phones.how3')}</li>
           </ol>
           <div>{pairButton}</div>
-          <Scope />
         </div></Card>
       )}
 
@@ -995,7 +993,6 @@ function Phones({ state, run }: { state: PanelState; run: Run }) {
               </>} />
           ))}
         </div>
-        {pending.length === 0 && <Scope />}
       </>}
       {revoking && (
         <Confirm title={t('phones.unpairTitle', { device: revoking.deviceName })} description={t('phones.unpairBody')}
@@ -1021,21 +1018,6 @@ function PairSteps({ at }: { at: 1 | 2 | 3 }) {
     <ol aria-label={t('phones.stepsLabel')} style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexWrap: 'wrap', gap: '8px 16px' }}>
       {labels.map((label, i) => <Step key={label} n={i + 1} state={i + 1 < at || at === 3 ? 'done' : i + 1 === at ? 'active' : 'todo'}>{label}</Step>)}
     </ol>
-  );
-}
-
-/** What a paired device may do, said once on the page and folded away. */
-function Scope() {
-  const t = useT();
-  return (
-    <details>
-      <summary className="twui-link" style={{ fontSize: 13 }}>{t('phones.scopeTitle')}</summary>
-      <ul className="twui-muted" style={{ margin: '8px 0 0', paddingLeft: 18, display: 'grid', gap: 4, fontSize: 13 }}>
-        <li>{t('phones.scope1')}</li>
-        <li>{t('phones.scope2')}</li>
-        <li>{t('phones.scope3')}</li>
-      </ul>
-    </details>
   );
 }
 
