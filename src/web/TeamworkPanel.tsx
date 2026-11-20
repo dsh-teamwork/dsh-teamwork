@@ -257,7 +257,6 @@ export function TeamworkPanel({ host: dsh, renderFactorySlot }: { host: Host; re
             {t('sync.failedBody')}
           </Banner>
         )}
-        {page !== 'resources' && !choosing && <div><Button variant="ghost" size="sm" onClick={() => navigate('resources')}>{t('common.back')}</Button></div>}
         {choosing ? <TeamChooser state={state} select={selectTeam} /> : (page === 'resources' || page === 'choose') && <>
           {!state.teams.length ? <EmptyState icon="layers" title={t('noTeam.title')} action={<div className="twui-row"><Button trailingIcon="external" onClick={() => open(`${state.server}/teams`)}>{t('noTeam.open')}</Button><Button icon="refresh" onClick={() => run(() => api.sync(), t('noTeam.refreshed'))}>{t('noTeam.refresh')}</Button></div>}>{t('noTeam.body')}</EmptyState> : <>
             <div className="twui-resource-toolbar"><Tabs<Tab> label={t('tabs.label')} items={tabs} value={tab} onChange={setTab} /><Input aria-label={t('search.label')} placeholder={t('search.placeholder')} value={query} onChange={e => setQuery(e.target.value)} /></div>
@@ -270,7 +269,7 @@ export function TeamworkPanel({ host: dsh, renderFactorySlot }: { host: Host; re
             </div>
           </>}
         </>}
-        {page === 'devices' && <><PageTitle title={t('phones.title')}>{t('phones.body')}</PageTitle><Phones state={state} run={run} /></>}
+        {page === 'devices' && <Phones state={state} run={run} />}
         {page === 'teams' && <><PageTitle title={t('teams.title')}>{t('teams.body')}</PageTitle>{state.teams.map(x => <Item key={x.id} icon="layers" title={x.name} tags={<Badge tone={x.role === 'admin' ? 'brand' : 'neutral'}>{role(t, x.role)}</Badge>} actions={<><Button onClick={() => selectTeam(x.id)}>{t('teams.browse')}</Button><Button variant="ghost" trailingIcon="external" onClick={() => open(x.consoleUrl)}>{t(x.role === 'admin' ? 'teams.manage' : 'teams.view')}</Button></>}><TeamWorkspace team={x} dsh={dsh} renderFactorySlot={renderFactorySlot} run={run} /></Item>)}<div><Button trailingIcon="external" onClick={() => open(`${state.server}/teams`)}>{t('teams.joinOrCreate')}</Button></div></>}
         {page === 'profile' && <Account state={state} profile={profile} error={profileError} retry={() => setProfileAttempt(n => n + 1)} updated={next => { if (identity.current === `teamwork:team:${state.server}:${next.id}`) { setProfile(next); void refresh(); } }} run={run} />}
         {toastNode}
@@ -806,7 +805,11 @@ const relayText: Record<Exclude<PanelState['relay'], 'connected'>, [PanelMessage
 
 /** A paired device's kind, as it said when it paired; one paired before devices said shows none. */
 const deviceIcon = (device: PanelPhone) => (device.deviceKind === 'web' ? 'monitor' : 'smartphone');
-const withKind = (t: Translate, device: PanelPhone, rest: string) => (device.deviceKind ? `${t(`devices.kind.${device.deviceKind}`)} · ${rest}` : rest);
+/** A device's kind, then the rest; a device named after its kind (the default name) says it once, in its title. */
+const deviceLine = (t: Translate, device: PanelPhone, rest: string) => {
+  const kind = device.deviceKind ? t(`devices.kind.${device.deviceKind}`) : undefined;
+  return kind && kind !== device.deviceName ? `${kind} · ${rest}` : rest;
+};
 const shortTime = (t: Translate, iso: string) => new Date(iso).toLocaleString(t.locale, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 /**
@@ -854,6 +857,7 @@ function OwnerPin({ enabled, busy, perform }: {
           <Button type="submit" variant="primary" busy={busy === 'pin'} disabled={!!busy || pin.length !== 4 || pin !== again}>{t('phones.pinSave')}</Button>
           <Button variant="ghost" disabled={!!busy} onClick={close}>{t('phones.pinCancel')}</Button>
         </form>
+        <p className="twui-subtle" style={{ marginTop: 8 }}>{t('phones.pinChangeNote')}</p>
       </ItemBody>}
       {turningOff && <ItemBody>
         <Confirm title={t('phones.pinDisableTitle')} description={t('phones.pinDisableBody')} confirmLabel={t('phones.pinDisable')} cancelLabel={t('phones.pinCancel')}
@@ -863,6 +867,11 @@ function OwnerPin({ enabled, busy, perform }: {
   );
 }
 
+/**
+ * The devices page, in the order a visitor needs it: a pairing in progress first (the code, then each request with its
+ * safety code, then a moment of "paired"), the paired devices next, and the device PIN last as a security setting.
+ * With no device yet, pairing is explained in three steps; with some, "Pair a device" sits in the header.
+ */
 function Phones({ state, run }: { state: PanelState; run: Run }) {
   const t = useT();
   const [offer, setOffer] = useState<PanelPairingOffer>();
@@ -870,16 +879,23 @@ function Phones({ state, run }: { state: PanelState; run: Run }) {
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<unknown>();
   const [expired, setExpired] = useState(false);
+  const [justPaired, setJustPaired] = useState<{ id: string; name: string }>();
   const locked = useRef(false);
+  const connected = state.relay === 'connected';
   const pending = state.phones.filter((p) => p.status === 'pending');
   const paired = state.phones.filter((p) => p.status === 'confirmed');
-  // A phone redeemed the code: the code is spent, so stop showing it.
+  // A phone redeemed the code: the code is spent, and its request takes the code's place as the next step.
   const seen = useRef(new Set(pending.map(p => p.id)));
   useEffect(() => {
     if (pending.some(p => !seen.current.has(p.id))) { setOffer(undefined); setExpired(false); }
     seen.current = new Set(pending.map(p => p.id));
   }, [state.phones]);
-  useEffect(() => { if (state.relay !== 'connected') { setOffer(undefined); setExpired(false); } }, [state.relay]);
+  useEffect(() => { if (!connected) { setOffer(undefined); setExpired(false); } }, [connected]);
+  useEffect(() => {
+    if (!justPaired) return;
+    const timer = setTimeout(() => setJustPaired(undefined), 3000);
+    return () => clearTimeout(timer);
+  }, [justPaired]);
   const perform = async (key: string, action: () => Promise<unknown>, done?: string) => {
     if (locked.current) return false;
     locked.current = true; setBusy(key); setError(undefined);
@@ -888,43 +904,96 @@ function Phones({ state, run }: { state: PanelState; run: Run }) {
     } finally { locked.current = false; setBusy(undefined); }
   };
   const pair = () => perform('pair', async () => { setOffer(await api.pairPhone()); setExpired(false); });
+  const accept = (phone: PanelPhone) => perform(`accept:${phone.id}`, async () => { await api.decidePhone(phone.id, true); setJustPaired({ id: phone.id, name: phone.deviceName }); }, t('phones.accepted', { device: phone.deviceName }));
 
-  const pinSettings = state.ownerPinEnabled !== undefined
-    && <OwnerPin enabled={state.ownerPinEnabled} busy={busy} perform={perform} />;
-  if (state.relay !== 'connected') {
-    const [title, body] = relayText[state.relay];
-    return <>{pinSettings}{error !== undefined && <Banner tone="warning" title={t('phones.failed')}>{describe(t,error)}</Banner>}<Card><EmptyState icon="smartphone" title={t(title)}>{t(body)}</EmptyState></Card></>;
-  }
+  // "Paired" shows for a moment, and only while that device still is.
+  const done = justPaired && paired.some((p) => p.id === justPaired.id) ? justPaired.name : undefined;
+  const pairing = !!offer || expired || pending.length > 0;
+  const pairButton = <Button variant="primary" icon="plus" busy={busy === 'pair'} disabled={!!busy || !connected} onClick={() => void pair()}>{t('phones.pair')}</Button>;
+  const relayBanner = state.relay !== 'connected' && <Banner tone={state.relay === 'connecting' ? 'neutral' : 'warning'} title={t(relayText[state.relay][0])}>{t(relayText[state.relay][1])}</Banner>;
+
   return (
     <>
+      <div className="twui-row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+        <div className="twui-stack" style={{ minWidth: 0, flex: '1 1 260px' }}>
+          <h2 className="twui-page-title">{t('phones.title')}</h2>
+          <p className="twui-muted">{t('phones.body')}</p>
+        </div>
+        {/* A code on screen is its own way forward; otherwise, with any device or request, a new code is one click. */}
+        {(paired.length > 0 || pending.length > 0) && !offer && !expired && pairButton}
+      </div>
+      {relayBanner}
       {error !== undefined && <Banner tone="warning" title={t('phones.failed')}>{describe(t, error)}</Banner>}
-      {pinSettings}
-      {expired && <Banner tone="warning" title={t('phones.expiredTitle')} action={<Button busy={busy === 'pair'} disabled={!!busy} onClick={() => void pair()}>{t('phones.newCode')}</Button>}>{t('phones.expiredBody')}</Banner>}
-      <Card>
-        {offer
-          ? <PairingCode offer={offer} onDone={() => setOffer(undefined)} onExpire={() => { setOffer(undefined); setExpired(true); }} />
-          : <EmptyState icon="smartphone" title={t('phones.emptyTitle')}
-              action={!expired && <Button icon="plus" busy={busy === 'pair'} disabled={!!busy} onClick={() => void pair()}>{t('phones.pair')}</Button>}>
-              {t('phones.emptyBody')}
-            </EmptyState>}
-      </Card>
-      {pending.map((phone) => (
-        <Item key={phone.id} icon={deviceIcon(phone)} title={phone.deviceName} subtitle={withKind(t, phone, t('phones.requested', { time: shortTime(t, phone.createdAt) }))}
-          tags={<Badge tone="warning" dot>{t('phones.waiting')}</Badge>}
-          description={`${phone.safetyCode ? t('phones.safetyCode', { code: phone.safetyCode }) : t('phones.handshake')} ${t('phones.grant')}`}
-          actions={<>
-            <Button size="sm" variant="ghost" busy={busy === `reject:${phone.id}`} disabled={!!busy} onClick={() => void perform(`reject:${phone.id}`, () => api.decidePhone(phone.id, false), t('phones.rejected'))}>{t('phones.reject')}</Button>
-            <Button size="sm" busy={busy === `accept:${phone.id}`} disabled={!!busy || !phone.safetyCode || !phone.phoneConfirmed} onClick={() => void perform(`accept:${phone.id}`, () => api.decidePhone(phone.id, true), t('phones.accepted', { device: phone.deviceName }))}>{t('phones.accept')}</Button>
-          </>} />
-      ))}
-      <h3 style={{ fontSize: 15, fontWeight: 500 }}>{t('phones.paired')}</h3>
-      {!paired.length && <p className="twui-muted">{t('phones.none')}</p>}
-      {paired.map((phone) => (
-        <Item key={phone.id} icon={deviceIcon(phone)} title={phone.deviceName}
-          subtitle={withKind(t, phone, phone.lastUsedAt ? t('phones.lastUsed', { time: shortTime(t, phone.lastUsedAt) }) : t('phones.pairedAt', { time: shortTime(t, phone.createdAt) }))}
-          tags={<Badge tone={phone.verified ? 'success' : 'warning'} dot>{phone.verified ? t('phones.verified') : t('phones.repair')}</Badge>}
-          actions={<Button size="sm" variant="ghost" disabled={!!busy} onClick={() => setRevoking(phone)}>{t('phones.unpair')}</Button>} />
-      ))}
+
+      {offer && <Card><div className="twui-stack" style={{ gap: 16 }}><PairSteps at={1} /><PairingCode offer={offer} onCancel={() => setOffer(undefined)} onExpire={() => { setOffer(undefined); setExpired(true); }} /></div></Card>}
+      {expired && !offer && (
+        <Card><div className="twui-stack" style={{ gap: 16 }}>
+          <PairSteps at={1} />
+          <div className="twui-row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+            <span>{t('phones.expiredTitle')}</span>
+            <div className="twui-row" style={{ gap: 8 }}>
+              <Button variant="ghost" disabled={!!busy} onClick={() => setExpired(false)}>{t('phones.hide')}</Button>
+              <Button variant="primary" busy={busy === 'pair'} disabled={!!busy || !connected} onClick={() => void pair()}>{t('phones.newCode')}</Button>
+            </div>
+          </div>
+        </div></Card>
+      )}
+      {pending.map((phone) => {
+        const ready = !!phone.safetyCode && !!phone.phoneConfirmed;
+        return (
+          <Card key={phone.id}><div className="twui-stack" style={{ gap: 14 }}>
+            <PairSteps at={2} />
+            <div className="twui-row" style={{ alignItems: 'center', flexWrap: 'wrap', gap: '4px 10px' }}>
+              <span className="twui-tile" aria-hidden="true"><Icon name={deviceIcon(phone)} size={18} /></span>
+              <strong style={{ fontWeight: 600 }}>{t('phones.requestTitle', { device: phone.deviceName })}</strong>
+              <span className="twui-subtle">{deviceLine(t, phone, t('phones.requested', { time: shortTime(t, phone.createdAt) }))}</span>
+              <Badge tone="warning" dot>{t('phones.waiting')}</Badge>
+            </div>
+            {phone.safetyCode
+              ? <div className="twui-stack" style={{ gap: 4 }}>
+                  <span className="twui-subtle">{t('phones.safetyLabel')}</span>
+                  <span className="twui-mono" style={{ fontSize: 26, fontWeight: 600, letterSpacing: '0.14em' }}>{phone.safetyCode}</span>
+                  <span className="twui-muted">{t('phones.confirmOrder')}</span>
+                </div>
+              : <span className="twui-muted">{t('phones.handshake')}</span>}
+            <div className="twui-row" style={{ justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+              {phone.safetyCode && !phone.phoneConfirmed && <span className="twui-subtle" style={{ flex: '1 1 auto' }}>{t('phones.waitDevice')}</span>}
+              <Button variant="ghost" busy={busy === `reject:${phone.id}`} disabled={!!busy} onClick={() => void perform(`reject:${phone.id}`, () => api.decidePhone(phone.id, false), t('phones.rejected'))}>{t('phones.reject')}</Button>
+              <Button variant="primary" busy={busy === `accept:${phone.id}`} disabled={!!busy || !ready || !connected} onClick={() => void accept(phone)}>{t('phones.accept')}</Button>
+            </div>
+          </div></Card>
+        );
+      })}
+      {done && <Card><div className="twui-stack" style={{ gap: 12 }}><PairSteps at={3} /><span>{t('phones.accepted', { device: done })}</span></div></Card>}
+
+      {paired.length === 0 && !pairing && connected && (
+        <Card><div className="twui-stack" style={{ gap: 16 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 600 }}>{t('phones.emptyTitle')}</h3>
+          {/* What to do, in order: read as instructions, not as steps not yet reached. */}
+          <ol style={{ margin: 0, paddingLeft: 20, display: 'grid', gap: 8 }}>
+            <li>{t('phones.how1')}</li>
+            <li>{t('phones.how2')}</li>
+            <li>{t('phones.how3')}</li>
+          </ol>
+          <div>{pairButton}</div>
+        </div></Card>
+      )}
+
+      {paired.length > 0 && <>
+        <h3 style={{ fontSize: 15, fontWeight: 600 }}>{t('phones.pairedCount', { count: paired.length })}</h3>
+        {/* While the relay reconnects, the devices it last listed stay, dimmed: their pairings are intact. */}
+        <div className="twui-stack" style={{ gap: 12, opacity: connected ? 1 : 0.55 }}>
+          {paired.map((phone) => (
+            <Item key={phone.id} icon={deviceIcon(phone)} title={phone.deviceName}
+              description={deviceLine(t, phone, phone.lastUsedAt ? t('phones.lastUsed', { time: shortTime(t, phone.lastUsedAt) }) : t('phones.pairedAt', { time: shortTime(t, phone.createdAt) }))}
+              tags={phone.verified ? undefined : <Badge tone="warning" dot>{t('phones.repair')}</Badge>}
+              actions={connected && <>
+                {!phone.verified && <Button size="sm" disabled={!!busy || pairing} onClick={() => void pair()}>{t('phones.repairAction')}</Button>}
+                <Button size="sm" variant="ghost" disabled={!!busy} onClick={() => setRevoking(phone)}>{t('phones.unpair')}</Button>
+              </>} />
+          ))}
+        </div>
+      </>}
       {revoking && (
         <Confirm title={t('phones.unpairTitle', { device: revoking.deviceName })} description={t('phones.unpairBody')}
           confirmLabel={t('phones.unpair')} cancelLabel={t('common.cancel')}
@@ -932,11 +1001,27 @@ function Phones({ state, run }: { state: PanelState; run: Run }) {
           onCancel={() => setRevoking(undefined)}
           onConfirm={async () => { if (await perform(`revoke:${revoking.id}`, () => api.revokePhone(revoking.id), t('phones.unpaired'))) setRevoking(undefined); }} />
       )}
+
+      {state.ownerPinEnabled !== undefined && <>
+        <h3 style={{ fontSize: 15, fontWeight: 600 }}>{t('phones.security')}</h3>
+        <OwnerPin enabled={state.ownerPinEnabled} busy={busy} perform={perform} />
+      </>}
     </>
   );
 }
 
-function PairingCode({ offer, onDone, onExpire }: { offer: PanelPairingOffer; onDone(): void; onExpire(): void }) {
+/** Where a pairing stands: the code, the safety code, done. */
+function PairSteps({ at }: { at: 1 | 2 | 3 }) {
+  const t = useT();
+  const labels = [t('phones.step1'), t('phones.step2'), t('phones.step3')];
+  return (
+    <ol aria-label={t('phones.stepsLabel')} style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexWrap: 'wrap', gap: '8px 16px' }}>
+      {labels.map((label, i) => <Step key={label} n={i + 1} state={i + 1 < at || at === 3 ? 'done' : i + 1 === at ? 'active' : 'todo'}>{label}</Step>)}
+    </ol>
+  );
+}
+
+function PairingCode({ offer, onCancel, onExpire }: { offer: PanelPairingOffer; onCancel(): void; onExpire(): void }) {
   const t = useT();
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
@@ -945,13 +1030,12 @@ function PairingCode({ offer, onDone, onExpire }: { offer: PanelPairingOffer; on
   return (
     <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
       <QrCode value={offer.link} size={168} label={t('phones.qr')} />
-      <div style={{ display: 'grid', gap: 8, minWidth: 200, flex: '1 1 200px' }}>
+      <div style={{ display: 'grid', gap: 6, minWidth: 200, flex: '1 1 200px' }}>
         <h2 style={{ fontSize: 15, fontWeight: 650 }}>{t('phones.scan')}</h2>
         <span className="twui-subtle">{t('phones.manual')}</span>
-        <span className="twui-mono" style={{ fontSize: 20, letterSpacing: '0.12em' }}>{offer.code.slice(0, 3)} {offer.code.slice(3)}</span>
+        <span className="twui-mono" style={{ fontSize: 24, fontWeight: 600, letterSpacing: '0.16em' }}>{offer.code.slice(0, 3)} {offer.code.slice(3)}</span>
         <span className="twui-subtle">{t('phones.expires', { time: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` })}</span>
-        <span className="twui-subtle">{t('phones.collapsedNote')}</span>
-        <div><Button size="sm" variant="ghost" onClick={onDone}>{t('phones.hide')}</Button></div>
+        <div><Button size="sm" variant="ghost" onClick={onCancel}>{t('phones.hide')}</Button></div>
       </div>
     </div>
   );
