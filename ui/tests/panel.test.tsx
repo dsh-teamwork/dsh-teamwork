@@ -15,7 +15,7 @@ const state: PanelState = {
   locale: 'zh-CN', authRevision: 0, authenticated: true, server: 'https://example.com', defaultServer: 'https://example.com',
   sync: { auto: true, running: false }, relay: 'connected', phones: [], session: null,
   teams: [{ id: 'a', name: 'Alpha', role: 'admin', consoleUrl: 'https://example.com/teams/a', workspace: '/home/ada/work' }, { id: 'b', name: 'Beta', role: 'member', consoleUrl: 'https://example.com/teams/b', workspace: '/home/ada' }],
-  presets: ['a', 'b'].map(id => ({ id: `preset-${id}`, teamId: id, teamName: id, name: `Preset ${id}`, version: 1, description: 'Review', model: 'Model', assistant: false, modelAvailable: true, contextWindowMissing: false, tools: [], plugins: [] })),
+  presets: ['a', 'b'].map(id => ({ id: `preset-${id}`, teamId: id, teamName: id, name: `Preset ${id}`, version: 1, description: 'Review', model: 'Model', assistant: false, modelAvailable: true, contextWindowMissing: false, modelOffline: false, tools: [], plugins: [] })),
   models: [], plugins: [],
 };
 /** DSH's workspaces: '/home/ada/work' is one, '/home/ada' (where DSH started) is not. */
@@ -313,7 +313,7 @@ test('shows an admin the reviews waiting in the browsed team, and a member none'
 
 test('marks a team model without its context window, and a preset on it, as not ready with the reason', async () => {
   const session = { id: 's', model: null, preset: null, started: false };
-  const model = (id: string, name: string, contextWindowMissing: boolean) => ({ id, teamId: 'a', teamName: 'a', name, version: 1, upstream: `p/${id}`, contextWindowMissing });
+  const model = (id: string, name: string, contextWindowMissing: boolean) => ({ id, teamId: 'a', teamName: 'a', name, version: 1, upstream: `p/${id}`, contextWindowMissing, modelOffline: false });
   const preset = { ...state.presets[0], model: 'Flash', modelAvailable: false, contextWindowMissing: true };
   vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', session, presets: [preset], models: [model('sized', 'Sized', false), model('flash', 'Flash', true)] });
   await mount(); await click('Show every team’s resources');
@@ -326,6 +326,23 @@ test('marks a team model without its context window, and a preset on it, as not 
   expect(row('Flash').querySelector('button:disabled')).not.toBeNull();
   expect(row('Sized').textContent).not.toContain('context window');
   expect(row('Sized').querySelector('button:disabled')).toBeNull();
+});
+
+test('marks a hosted model taken offline, and a preset on it, as not ready with the reason', async () => {
+  const session = { id: 's', model: null, preset: null, started: false };
+  const model = (id: string, name: string, modelOffline: boolean) => ({ id, teamId: 'a', teamName: 'a', name, version: 1, upstream: `p/${id}`, contextWindowMissing: false, modelOffline });
+  const preset = { ...state.presets[0], model: 'Opus', modelAvailable: false, modelOffline: true };
+  vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', session, presets: [preset], models: [model('live', 'Live', false), model('opus', 'Opus', true)] });
+  await mount(); await click('Show every team’s resources');
+  const reason = 'The team model “Opus” has been taken offline by the service that hosts it';
+  const row = (title: string) => [...document.querySelectorAll('.twui-item')].find(r => r.querySelector('.twui-item-title')?.firstChild?.textContent === title)!;
+  expect(row('Preset a').textContent).toContain(reason);
+  const tab = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(b => b.textContent?.startsWith('Models'))!;
+  await act(async () => tab.click());
+  expect(row('Opus').textContent).toContain(reason);
+  expect(row('Opus').querySelector('button:disabled')).not.toBeNull();
+  expect(row('Live').textContent).not.toContain('taken offline');
+  expect(row('Live').querySelector('button:disabled')).toBeNull();
 });
 
 // Team DSH is offline on the server: the panel offers no way into it, signed out or in.

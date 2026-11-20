@@ -607,7 +607,7 @@ function presetState(t: Translate, preset: PanelPreset, state: PanelState) {
   const plugins = pluginsNotReady(preset);
   const active = state.session?.preset?.id === preset.id;
   const list = (names: string[]) => names.join(t('list.separator'));
-  const blocked = !preset.modelAvailable ? preset.contextWindowMissing ? t('model.noContextWindow', { name: preset.model ?? '' }) : t('preset.modelGone')
+  const blocked = !preset.modelAvailable ? preset.modelOffline ? t('model.offline', { name: preset.model ?? '' }) : preset.contextWindowMissing ? t('model.noContextWindow', { name: preset.model ?? '' }) : t('preset.modelGone')
     : plugins.length ? t('preset.pluginsNotReady', { plugins: list(plugins.map((p) => p.name)) })
     : missing.length && state.session ? t('preset.toolsMissing', { tools: list(missing.map((x) => x.name)) })
     : undefined;
@@ -720,12 +720,13 @@ function ModelItem({ model, team, state, run }: { model: PanelState['models'][nu
       description={t('model.body')}
       tags={<>
         <Badge><span className="twui-mono">{model.upstream}</span></Badge>
-        {model.contextWindowMissing && <Badge tone="warning" dot>{t('preset.notReady')}</Badge>}
+        {(model.contextWindowMissing || model.modelOffline) && <Badge tone="warning" dot>{t('preset.notReady')}</Badge>}
       </>}
       actions={active ? <Badge tone="accent" dot>{t('preset.inUse')}</Badge> : (
-        <Button size="sm" disabled={!s || model.contextWindowMissing} onClick={() => run(() => api.use(s!.id, model.id), t('preset.selected', { name: model.name }))}>{t('model.use')}</Button>
+        <Button size="sm" disabled={!s || model.contextWindowMissing || model.modelOffline} onClick={() => run(() => api.use(s!.id, model.id), t('preset.selected', { name: model.name }))}>{t('model.use')}</Button>
       )}
-      notice={model.contextWindowMissing ? <Notice tone="warning">{t('model.noContextWindow', { name: model.name })}</Notice> : !s ? <Notice>{t('model.openSession')}</Notice> : undefined}
+      notice={model.modelOffline ? <Notice tone="warning">{t('model.offline', { name: model.name })}</Notice>
+        : model.contextWindowMissing ? <Notice tone="warning">{t('model.noContextWindow', { name: model.name })}</Notice> : !s ? <Notice>{t('model.openSession')}</Notice> : undefined}
     />
   );
 }

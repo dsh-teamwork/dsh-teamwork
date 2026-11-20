@@ -38,6 +38,7 @@ declare const en: {
     'use.pick': string;
     'use.modelGone': string;
     'model.noContextWindow': string;
+    'model.offline': string;
     'use.missingTools': string;
     'use.started': string;
     'use.notLoaded': string;

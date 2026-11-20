@@ -9,7 +9,8 @@ const common = { builtin: z.literal('team-assistant').optional(), id: z.string()
 const route = { provider: z.string().min(1), model: z.string().min(1), contextWindow: z.number().int().positive().max(10000000).optional(), maxTokens: z.number().int().positive().max(10000000).optional() };
 const pluginDataSchema = z.object({ artifactId: z.string().regex(/^[A-Za-z0-9_-]{1,32}$/).optional(), sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(), package: z.string().regex(/^(?:@[a-z0-9-]+\/)?[a-z0-9][a-z0-9._-]*$/), version: z.string().regex(/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/), providesTools: z.array(z.string().min(1)).optional(), description: z.string().default('') });
 const teamSchema = z.object({ teamId: z.string().min(1), teamName: z.string(), role: z.enum(['admin', 'member']), pluginVersions:z.array(z.object({configId:z.string(),name:z.string(),data:pluginDataSchema})).optional(), configs: z.array(z.discriminatedUnion('kind', [
-  z.object({ ...common, kind: z.literal('model'), data: z.object({ ...route, vision: z.boolean().optional() }) }),
+  // `offline`: a hosted model its service took out of service; it stays in the team and comes back with it.
+  z.object({ ...common, kind: z.literal('model'), data: z.object({ ...route, vision: z.boolean().optional(), offline: z.boolean().optional() }) }),
   z.object({ ...common, kind: z.literal('preset'), data: z.object({
     ...route, inheritModel: z.boolean().optional(), provider: route.provider.optional(), model: route.model.optional(), modelConfigId: z.string().min(1).optional(),
     avatar: z.string().optional(), description: z.string().optional(), instructions: z.string().optional(), outputDescription: z.string().optional(),
@@ -373,8 +374,20 @@ export function unsizedModel(snapshot: Snapshot, config: TeamConfig): string | u
   const model = config.kind === 'preset' && config.data.modelConfigId ? findConfig(snapshot, config.data.modelConfigId) : undefined;
   return model?.name ?? (config.kind === 'preset' ? `${data.provider}/${data.model}` : config.name);
 }
-/** `unsizedModel` as the member reads it; the panel words it itself from `contextWindowMissing`. */
+/**
+ * The name of the hosted model, or of the one a preset calls, that its service has taken out of service (`offline`):
+ * offered to no session until it is back, when the team's configuration still names it.
+ */
+export function offlineModel(snapshot: Snapshot, config: TeamConfig): string | undefined {
+  const data = modelData(snapshot, config);
+  if (!data || !('offline' in data) || !data.offline) return undefined;
+  const model = config.kind === 'preset' && config.data.modelConfigId ? findConfig(snapshot, config.data.modelConfigId) : undefined;
+  return model?.name ?? config.name;
+}
+/** Why a team model, or the model a preset calls, cannot run here, as the member reads it; the panel words its own. */
 export function modelLimitProblem(snapshot: Snapshot, config: TeamConfig): string | undefined {
+  const offline = offlineModel(snapshot, config);
+  if (offline !== undefined) return say('model.offline', { name: offline });
   const name = unsizedModel(snapshot, config);
   return name === undefined ? undefined : say('model.noContextWindow', { name });
 }

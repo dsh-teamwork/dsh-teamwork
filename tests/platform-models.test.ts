@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { findConfig, modelLimitProblem, TeamworkClient, unsizedModel } from '../src/client.js';
+import { findConfig, modelLimitProblem, offlineModel, TeamworkClient, unsizedModel } from '../src/client.js';
 import { platformAdapter, teamProvider, teamRoutes } from '../src/platform-models.js';
 test('team model uses platform only, with session credential and opaque config ID', async () => {
   let authorization = '', wire: any, path = '';
@@ -56,6 +56,29 @@ test('a team model without its context window is not offered, and says why', asy
     expect(unsizedModel(snapshot, config('uses-unsized'))).toBe('DeepSeek Flash');
     expect(unsizedModel(snapshot, config('legacy'))).toBe('openai/gpt');
     expect(modelLimitProblem(snapshot, config('unsized'))).toContain('“DeepSeek Flash” has no context window');
+  } finally { await rm(dir,{recursive:true,force:true}); }
+});
+test('a hosted model taken offline stays in the team but is not offered, and says why; back in service it is offered again', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'platform-offline-'));
+  let offline = true;
+  const configs = () => [
+    {id:'live',kind:'model',name:'Live',version:1,data:{provider:'hosted:billing',model:'live',contextWindow:131072}},
+    {id:'opus',kind:'model',name:'Opus',version:offline ? 2 : 3,data:{provider:'hosted:billing',model:'opus',contextWindow:200000,...(offline ? {offline:true} : {})}},
+    {id:'uses-opus',kind:'preset',name:'Reviewer',version:1,data:{modelConfigId:'opus',systemPrompt:''}},
+  ];
+  const client = new TeamworkClient('http://127.0.0.1:9', join(dir,'cache'), async input => Response.json(String(input).endsWith('/auth/plugin/token') ? {token:'t'} : {teams:[{teamId:'t',teamName:'T',role:'member',configs:configs()}]}));
+  try {
+    client.beginLogin(); await client.completeLogin('code'); await client.sync();
+    const adapter = platformAdapter(client);
+    expect((await adapter.listModels(teamProvider('t'))).map(m => m.id)).toEqual(['live']);
+    const snapshot = client.current()!, config = (id: string) => findConfig(snapshot, id)!;
+    expect(offlineModel(snapshot, config('opus'))).toBe('Opus');
+    expect(offlineModel(snapshot, config('uses-opus'))).toBe('Opus');
+    expect(offlineModel(snapshot, config('live'))).toBeUndefined();
+    expect(modelLimitProblem(snapshot, config('uses-opus'))).toContain('“Opus” has been taken offline');
+    offline = false; await client.sync();
+    expect((await adapter.listModels(teamProvider('t'))).map(m => m.id)).toEqual(['live', 'opus', 'uses-opus']);
+    expect(modelLimitProblem(client.current()!, findConfig(client.current()!, 'uses-opus')!)).toBeUndefined();
   } finally { await rm(dir,{recursive:true,force:true}); }
 });
 test('each team is its own provider, named for the team, and the routes follow the teams', async () => {

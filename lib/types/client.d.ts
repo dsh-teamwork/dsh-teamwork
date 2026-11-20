@@ -26,6 +26,7 @@ export declare const snapshotSchema: z.ZodObject<{
             kind: z.ZodLiteral<"model">;
             data: z.ZodObject<{
                 vision: z.ZodOptional<z.ZodBoolean>;
+                offline: z.ZodOptional<z.ZodBoolean>;
                 provider: z.ZodString;
                 model: z.ZodString;
                 contextWindow: z.ZodOptional<z.ZodNumber>;
@@ -88,6 +89,7 @@ export declare const findConfig: (snapshot: Snapshot | undefined, id: string) =>
         provider: string;
         model: string;
         vision?: boolean | undefined;
+        offline?: boolean | undefined;
         contextWindow?: number | undefined;
         maxTokens?: number | undefined;
     };
@@ -146,6 +148,7 @@ export declare const teamOf: (snapshot: Snapshot | undefined, configId: string) 
             provider: string;
             model: string;
             vision?: boolean | undefined;
+            offline?: boolean | undefined;
             contextWindow?: number | undefined;
             maxTokens?: number | undefined;
         };
@@ -309,6 +312,7 @@ export declare class TeamworkClient {
                     provider: string;
                     model: string;
                     vision?: boolean | undefined;
+                    offline?: boolean | undefined;
                     contextWindow?: number | undefined;
                     maxTokens?: number | undefined;
                 };
@@ -383,6 +387,7 @@ export declare class TeamworkClient {
                     provider: string;
                     model: string;
                     vision?: boolean | undefined;
+                    offline?: boolean | undefined;
                     contextWindow?: number | undefined;
                     maxTokens?: number | undefined;
                 };
@@ -465,6 +470,7 @@ export declare class TeamworkClient {
                     provider: string;
                     model: string;
                     vision?: boolean | undefined;
+                    offline?: boolean | undefined;
                     contextWindow?: number | undefined;
                     maxTokens?: number | undefined;
                 };
@@ -582,6 +588,7 @@ export declare function modelData(snapshot: Snapshot, config: TeamConfig): {
     provider: string;
     model: string;
     vision?: boolean | undefined;
+    offline?: boolean | undefined;
     contextWindow?: number | undefined;
     maxTokens?: number | undefined;
 } | undefined;
@@ -592,7 +599,12 @@ export declare function modelData(snapshot: Snapshot, config: TeamConfig): {
  * the model stays unusable until the team configures the real window.
  */
 export declare function unsizedModel(snapshot: Snapshot, config: TeamConfig): string | undefined;
-/** `unsizedModel` as the member reads it; the panel words it itself from `contextWindowMissing`. */
+/**
+ * The name of the hosted model, or of the one a preset calls, that its service has taken out of service (`offline`):
+ * offered to no session until it is back, when the team's configuration still names it.
+ */
+export declare function offlineModel(snapshot: Snapshot, config: TeamConfig): string | undefined;
+/** Why a team model, or the model a preset calls, cannot run here, as the member reads it; the panel words its own. */
 export declare function modelLimitProblem(snapshot: Snapshot, config: TeamConfig): string | undefined;
 /**
  * The server the member picked in the panel, kept beside the configuration cache
