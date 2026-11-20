@@ -73,6 +73,8 @@ export interface RelayLinkOptions {
   clientIdPath: string;
   name?: string;
   dshVersion?: string;
+  /** This plugin's own version, as the relay records it beside the DSH version (platform ADR 0061). */
+  pluginVersion?: string;
   request?: typeof fetch;
   /** The WebSocket class to dial with: Node's global by default. */
   WebSocket?: typeof globalThis.WebSocket;
@@ -200,7 +202,7 @@ export class RelayLink {
       this.set('connecting');
       return this.retry(run, this.backoff());
     }
-    const hello = { t: 'hello', token, clientId: await this.clientId(), name: this.options.name ?? hostname(), dshVersion: this.options.dshVersion ?? dshVersion(), os: hostOs() };
+    const hello = { t: 'hello', token, clientId: await this.clientId(), name: this.options.name ?? hostname(), dshVersion: this.options.dshVersion ?? dshVersion(), pluginVersion: this.options.pluginVersion ?? pluginVersion(), os: hostOs() };
     if (run !== this.run) return;
     const Socket = this.options.WebSocket ?? globalThis.WebSocket;
     // Node has a global WebSocket from 22 on; on an older runtime the phone's way in stays closed.
@@ -265,6 +267,15 @@ export const relayClientIdPath = (cachePath: string) => cachePath.replace(/\.jso
  */
 export function hostOs(platform: NodeJS.Platform = process.platform): 'macos' | 'windows' | 'linux' | undefined {
   return ({ darwin: 'macos', win32: 'windows', linux: 'linux' } as const)[platform as 'darwin' | 'win32' | 'linux'];
+}
+
+/** This plugin's own version, from its package (`lib/relay.js` sits one level below it); left out when unreadable. */
+function pluginVersion(): string | undefined {
+  try {
+    return (createRequire(import.meta.url)('../package.json') as { version?: string }).version || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** The DSH release this plugin runs in, read from a package every release pins to its own version. */

@@ -32,7 +32,7 @@ async function link(overrides: { status?: number; token?: string } = {}) {
     endpoint: () => 'https://www.example.test',
     token: () => token,
     clientIdPath: relayClientIdPath(join(dir, 'cache.json')),
-    name: 'laptop', dshVersion: '0.2.2-rc.1',
+    name: 'laptop', dshVersion: '0.2.2-rc.1', pluginVersion: '0.18.0',
     request: (async (url: string) => { asked.push(url); const status = overrides.status ?? 200; return new Response(JSON.stringify({ url: 'wss://relay.example.test/plugin' }), { status }); }) as typeof fetch,
     WebSocket: FakeSocket as unknown as typeof WebSocket,
     onStatus: s => statuses.push(s),
@@ -68,7 +68,7 @@ describe('the relay link', () => {
     const socket = FakeSocket.made[0]!;
     expect(socket.url).toBe('wss://relay.example.test/plugin');
     socket.emit('open');
-    expect(socket.sent[0]).toMatchObject({ t: 'hello', token: 'bearer-1', name: 'laptop', dshVersion: '0.2.2-rc.1', os: hostOs(), clientId: expect.any(String) });
+    expect(socket.sent[0]).toMatchObject({ t: 'hello', token: 'bearer-1', name: 'laptop', dshVersion: '0.2.2-rc.1', pluginVersion: '0.18.0', os: hostOs(), clientId: expect.any(String) });
     expect(relay.status).toBe('connecting');
     socket.emit('message', { data: JSON.stringify({ t: 'welcome', hostId: 'host-1' }) });
     expect(relay.status).toBe('connected');

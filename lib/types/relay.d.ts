@@ -79,6 +79,8 @@ export interface RelayLinkOptions {
     clientIdPath: string;
     name?: string;
     dshVersion?: string;
+    /** This plugin's own version, as the relay records it beside the DSH version (platform ADR 0061). */
+    pluginVersion?: string;
     request?: typeof fetch;
     /** The WebSocket class to dial with: Node's global by default. */
     WebSocket?: typeof globalThis.WebSocket;
