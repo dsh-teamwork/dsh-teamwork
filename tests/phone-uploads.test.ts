@@ -46,8 +46,29 @@ describe('phone uploads', () => {
     await expect(uploads.chunk('p', 's1', start.uploadId, 0, 'YWJj!')).rejects.toMatchObject({ code: 'invalid_upload' });
     uploads.drop('p');
     expect(() => uploads.start('p', { ...input(1), name: '../file.txt' }, sink(1))).toThrowError('file_name');
-    expect(() => uploads.start('p', { ...input(1), name: 'image.png' }, sink(1))).toThrowError('file_type');
+    expect(() => uploads.start('p', { ...input(1), name: 'image.heic' }, sink(1))).toThrowError('file_type');
     expect(() => uploads.start('p', input(uploadLimits.maxFileBytes + 1), sink(1))).toThrowError('file_too_large');
+  });
+  it('resolves each completed image receipt to its exact bytes in selection order', async () => {
+    const uploads = new PhoneUploads();
+    const data = Buffer.alloc(uploadLimits.chunkBytes + 1, 42);
+    const parts = [];
+    for (const name of ['first.png', 'second.jpg']) {
+      const { uploadId, chunkBytes } = uploads.start('p', { ...input(data.length), name }, async () => {
+        throw new Error('image must be staged locally');
+      });
+      for (let offset = 0; offset < data.length; offset += chunkBytes) {
+        await uploads.chunk('p', 's1', uploadId, offset, data.subarray(offset, offset + chunkBytes).toString('base64'));
+      }
+      parts.push({ type: 'file', receiptId: (await uploads.finish('p', 's1', uploadId)).receiptId });
+    }
+    expect(() => uploads.validate('other', 's1', parts)).toThrowError('upload_expired');
+    const ids = uploads.validate('p', 's1', parts);
+    expect(uploads.resolveImages(parts, ids)).toEqual([
+      { type: 'image', name: 'first.png', mediaType: 'image/png', data: data.toString('base64') },
+      { type: 'image', name: 'second.jpg', mediaType: 'image/jpeg', data: data.toString('base64') },
+    ]);
+    uploads.drop('p');
   });
   it('aborts backpressured writes and native intake on detach', async () => {
     const uploads = new PhoneUploads(); let aborted = false;

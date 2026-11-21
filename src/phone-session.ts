@@ -2,7 +2,7 @@
 import type { PanelState } from './panel.js';
 import { teamProvider } from './platform-models.js';
 
-export type PhoneFailure = 'not_text' | 'permission_refused' | 'busy' | 'not_found' | 'not_authenticated' | 'missing_tools' | 'missing_plugins' | 'preset_changed' | 'model_unavailable' | 'invalid_request' | 'unavailable' | 'file_name' | 'file_type' | 'file_too_large' | 'invalid_upload' | 'upload_expired' | 'upload_failed';
+export type PhoneFailure = 'not_text' | 'permission_refused' | 'busy' | 'not_found' | 'not_authenticated' | 'missing_tools' | 'missing_plugins' | 'preset_changed' | 'model_unavailable' | 'invalid_request' | 'unavailable' | 'file_name' | 'file_type' | 'file_too_large' | 'invalid_upload' | 'upload_expired' | 'upload_failed' | 'image_model_unsupported';
 export class PhoneSessionError extends Error {
   constructor(readonly code: PhoneFailure, message: string = code) { super(message); }
 }
@@ -15,6 +15,7 @@ export interface PhoneSessionOps {
   /** The working directory a session's files are browsed under (src/phone-files.ts). */
   fileRoot(sessionId: string): Promise<string>;
   check(sessionId: string): Promise<void>;
+  checkImages?(sessionId: string): Promise<void>;
   accepted(sessionId: string, requestId: string): boolean;
 }
 
