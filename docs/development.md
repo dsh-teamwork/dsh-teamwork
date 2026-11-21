@@ -323,9 +323,12 @@ A session's list row offers what DSH's own sidebar does that fits a phone:
 and `unarchiveSession`, each passed on only as `{ sessionId }` (a rename adds
 `title`), so `stopActivity` never reaches DSH and a running session's archive
 is refused as `workspace/session-active`. `session/list` marks every item with
-`teamwork: { pinned, archived }` from DSH's workspace registry
-(`pinnedSessionIds`, `archivedSessionIds`); a client hides the actions where an
-item has no mark, an older plugin's list. On a shared DSH each action, like any
+`teamwork: { pinned, archived, workspace }` from DSH's workspace registry
+(`pinnedSessionIds`, `archivedSessionIds`, and `list()` with each workspace's
+`sessionIds`): `workspace` is `{ id, title, index, position }`, the workspace
+that lists the session and both places in DSH's own order, or null for
+Ungrouped, so a client groups the list as DSH's sidebar does. A client hides
+the actions where an item has no mark, an older plugin's list. On a shared DSH each action, like any
 call naming a session, reaches only the member's own sessions, though pins and
 archives land in the DSH's one registry, seen at its keyboard as well. Forking
 and opening a session in another app stay on the desktop.

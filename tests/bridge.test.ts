@@ -240,19 +240,21 @@ describe('the phone bridge', () => {
     expect(sent).toContainEqual({ t: 'result', pairingId: 'p', id: 'other', status: 403, body: { error: 'method_not_allowed' } });
   });
 
-  it('marks each listed session with its place in the pin and archive sets', async () => {
+  it('marks each listed session with its place in the pin and archive sets and the workspace that lists it', async () => {
     const sent: any[] = [];
-    const items = [{ sessionId: 'a', title: 'A' }, { sessionId: 'b' }, { sessionId: 'c' }];
+    const items = [{ sessionId: 'a', title: 'A' }, { sessionId: 'b' }, { sessionId: 'c' }, { sessionId: 'd' }];
+    const workspaces = [{ id: 'w1', title: 'alpha', sessionIds: ['c', 'b'] }, { id: 'w2', title: 'beta', sessionIds: ['d', 'b'] }];
     const request = (async (url: string) => url.includes('/connect?')
       ? new Response(null, { status: 302, headers: { 'set-cookie': 'dsh=peer; Path=/' } })
       : new Response(JSON.stringify({ type: 'client-response', result: { ok: true, value: { items } } }))) as typeof fetch;
-    const b = new Bridge({ launchUrl: () => 'http://127.0.0.1:3080/?token=t', send: (frame) => sent.push(frame), request, marks: () => ({ pinned: ['b'], archived: ['c'] }) });
+    const b = new Bridge({ launchUrl: () => 'http://127.0.0.1:3080/?token=t', send: (frame) => sent.push(frame), request, marks: () => ({ pinned: ['b'], archived: ['c'], workspaces }) });
     b.handle({ t: 'call', pairingId: 'p', id: 'l', method: 'session/list', body: { args: { _request: {} } } });
     for (let i = 0; i < 4; i++) await tick();
     expect(sent[0].body.result.value.items).toEqual([
-      { sessionId: 'a', title: 'A', teamwork: { pinned: false, archived: false } },
-      { sessionId: 'b', teamwork: { pinned: true, archived: false } },
-      { sessionId: 'c', teamwork: { pinned: false, archived: true } },
+      { sessionId: 'a', title: 'A', teamwork: { pinned: false, archived: false, workspace: null } },
+      { sessionId: 'b', teamwork: { pinned: true, archived: false, workspace: { id: 'w1', title: 'alpha', index: 0, position: 1 } } },
+      { sessionId: 'c', teamwork: { pinned: false, archived: true, workspace: { id: 'w1', title: 'alpha', index: 0, position: 0 } } },
+      { sessionId: 'd', teamwork: { pinned: false, archived: false, workspace: { id: 'w2', title: 'beta', index: 1, position: 0 } } },
     ]);
   });
 
