@@ -68,6 +68,8 @@ const FILE_CALLS = new Set(['teamwork/listFiles', 'teamwork/searchFiles', 'teamw
 export interface SessionMarks {
   pinned: readonly string[];
   archived: readonly string[];
+  /** DSH's workspaces in its own order, each with the sessions it lists in its own manual order. */
+  workspaces: readonly { id: string; title: string; sessionIds: readonly string[] }[];
 }
 
 const callSchema = z.object({ t: z.literal('call'), pairingId: z.string(), id: z.string(), method: z.string(), body: z.unknown() });
@@ -321,16 +323,27 @@ export class Bridge {
     }
   }
 
-  /** A `session/list` answer with each item's place in DSH's pin and archive sets, as `teamwork: { pinned, archived }`. */
+  /**
+   * A `session/list` answer with each item's place in DSH's sidebar, as `teamwork: { pinned, archived, workspace }`:
+   * its pin and archive marks, and the workspace that lists it (`index` among the workspaces, `position` among its
+   * sessions, both DSH's own order) or null when DSH lists it under Ungrouped.
+   */
   private marked(body: unknown) {
     const marks = this.options.marks?.();
     const wire = body as { result?: { ok?: boolean; value?: { items?: unknown } } } | null;
     const items = wire?.result?.value?.items;
     if (!marks || !wire?.result?.ok || !Array.isArray(items)) return body;
     const pinned = new Set(marks.pinned), archived = new Set(marks.archived);
+    // DSH lists a session under the first workspace that accounts it, as its sidebar does.
+    const workspaces = new Map<string, { id: string; title: string; index: number; position: number }>();
+    marks.workspaces.forEach(({ id, title, sessionIds }, index) => sessionIds.forEach((sessionId, position) => {
+      if (!workspaces.has(sessionId)) workspaces.set(sessionId, { id, title, index, position });
+    }));
     const mark = (item: unknown) => {
       const id = (item as { sessionId?: unknown } | null)?.sessionId;
-      return typeof id === 'string' ? { ...(item as object), teamwork: { pinned: pinned.has(id), archived: archived.has(id) } } : item;
+      return typeof id === 'string'
+        ? { ...(item as object), teamwork: { pinned: pinned.has(id), archived: archived.has(id), workspace: workspaces.get(id) ?? null } }
+        : item;
     };
     return { ...wire, result: { ...wire.result, value: { ...wire.result.value, items: items.map(mark) } } };
   }

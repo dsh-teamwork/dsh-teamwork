@@ -43,7 +43,7 @@ export const inject = ['agentPresets', 'agents', 'llm', 'sessionProjections'];
 
 /** What the plugin reads of DSH's workspace registry: its workspaces, and its pin and archive sets (src/bridge.ts). */
 interface WorkspaceRegistry {
-  list(): { id: string; path: string; title: string }[];
+  list(): { id: string; path: string; title: string; sessionIds: readonly string[] }[];
   readonly pinnedSessionIds: readonly string[];
   readonly archivedSessionIds: readonly string[];
 }
@@ -287,7 +287,13 @@ export async function apply(ctx: Context, config: Config) {
     owners: () => shared?.enabled ? owners : undefined,
     // A registry that has not opened yet has no sets to read: the list goes unmarked, as from an older DSH.
     marks: () => {
-      try { return workspaces && { pinned: workspaces.pinnedSessionIds, archived: workspaces.archivedSessionIds }; } catch { return undefined; }
+      try {
+        return workspaces && {
+          pinned: workspaces.pinnedSessionIds,
+          archived: workspaces.archivedSessionIds,
+          workspaces: workspaces.list().map(({ id, title, sessionIds }) => ({ id, title, sessionIds })),
+        };
+      } catch { return undefined; }
     },
     workspaceAt: (path) => workspaces?.list().find(workspace => workspace.path === path)?.id,
     send: (frame) => { audit(frame, 'out'); security.send(frame); },
