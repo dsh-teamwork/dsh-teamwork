@@ -375,7 +375,10 @@ export class PhoneSecurity {
       }
       const member = await this.options.pinMember?.(pairingId);
       if (!member) return;
-      link.channel.send(await pins.locked(member) ? { t: 'pinLocked' } : { t: 'pinRequired', set: !(await pins.has(member)) });
+      const hasPin = await pins.has(member);
+      link.channel.send(await pins.locked(member) || (member === 'owner' && !hasPin)
+        ? { t: 'pinLocked' }
+        : { t: 'pinRequired', set: !hasPin });
     } catch (error) { this.options.error(error as Error); }
   }
 
@@ -385,9 +388,10 @@ export class PhoneSecurity {
     if (!pins || !member) return;
     if (this.options.pinRequired && !await this.options.pinRequired()) return link.channel.send({ t: 'unlocked' });
     const pin = typeof body.pin === 'string' ? body.pin : '';
+    if (body.t === 'setPin' && member === 'owner') return this.askPin(pairingId, link);
     if (body.t === 'setPin' && !PIN.test(pin)) return link.channel.send({ t: 'pinInvalid' });
     const result = body.t === 'setPin'
-      ? await pins.replace(member, pin, typeof body.old === 'string' ? body.old : '', !!this.options.pinRequired && member === 'owner')
+      ? await pins.replace(member, pin, typeof body.old === 'string' ? body.old : '', false)
       : await pins.check(member, pin);
     if (this.links.get(pairingId) !== link) return;
     if (!result.ok) {
@@ -397,7 +401,6 @@ export class PhoneSecurity {
       if (result.reason === 'unset') return this.askPin(pairingId, link);
       return link.channel.send(result.reason === 'wrong' ? { t: 'pinWrong', left: result.left } : { t: 'pinLocked' });
     }
-    if (body.t === 'setPin' && member === 'owner') this.relockOtherChannels(pairingId);
     link.unlocked = true;
     link.lastActive = this.now();
     link.channel.send({ t: 'unlocked' });

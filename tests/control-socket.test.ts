@@ -1,5 +1,6 @@
 import { mkdtemp, stat } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
+import { Readable } from 'node:stream';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import { controlSocketPath, serveControlSocket } from '../src/control-socket.js';
@@ -153,12 +154,20 @@ test.skipIf(process.platform === 'win32')('a personal DSH manages login, sync an
 // carries the command's content type on, or every command would be refused as malformed.
 test.skipIf(process.platform === 'win32')('the command passes the real panel routes’ request check', async () => {
   const home = await mkdtemp(join(tmpdir(), 'tw-real-'));
-  const ops = { state: async () => ({ server: 'https://teamwork.example.com', authenticated: true, teams: [], sync: { auto: true, running: false }, relay: 'connected', phones: [] }) } as unknown as PanelOps;
+  const savedPins: Array<string | null> = [];
+  const ops = { setOwnerPin: async (pin: string | null) => { savedPins.push(pin); }, state: async () => ({ server: 'https://teamwork.example.com', authenticated: true, teams: [], sync: { auto: true, running: false }, relay: 'connected', phones: [] }) } as unknown as PanelOps;
   const close = await serveControlSocket(controlSocketPath(join(home, 'dsh-teamwork', 'cache.json')), panelRoutes(ops, { say, speak: (answer) => speaking('en', answer) }), () => {});
   try {
     const out: string[] = [], err: string[] = [];
     const code = await run(['status'], socketIn(home), (l) => out.push(l), (l) => err.push(l)).catch((e: Error) => { err.push(e.message); return 1; });
     expect({ code, err: err.join('\n') }).toEqual({ code: 0, err: '' });
     expect(out.join('\n')).toContain('Teamwork server: https://teamwork.example.com');
+    const pinCommand = (args: string[], input: string) => run(args, socketIn(home), l => out.push(l), l => err.push(l), Readable.from([input]));
+    expect(await pinCommand(['pin', 'set'], '12a4\n')).toBe(2);
+    expect(savedPins).toEqual([]);
+    expect(await pinCommand(['pin', 'set'], '0012\n')).toBe(0);
+    expect(await pinCommand(['pin', 'clear'], '')).toBe(0);
+    expect(savedPins).toEqual(['0012', null]);
+    expect([...out, ...err].join('\n')).not.toContain('0012');
   } finally { await close(); }
 });
