@@ -422,7 +422,10 @@ test('marks a team model without its context window, and a preset on it, as not 
   const session = { id: 's', model: null, preset: null, started: false };
   const model = (id: string, name: string, contextWindowMissing: boolean) => ({ id, teamId: 'a', teamName: 'a', name, version: 1, upstream: `p/${id}`, contextWindowMissing, modelOffline: false });
   const preset = { ...state.presets[0], model: 'Flash', modelAvailable: false, contextWindowMissing: true };
-  vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', session, presets: [preset], models: [model('sized', 'Sized', false), model('flash', 'Flash', true)] });
+  vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', session, presets: [preset], models: [
+    { ...model('sized', 'Sized', false), contextWindow: 131072, maxTokens: 8192, vision: true },
+    model('flash', 'Flash', true),
+  ] });
   await mount(); await click('Choose');
   const reason = 'The team model “Flash” has no context window (contextWindow) configured';
   const row = (title: string) => [...document.querySelectorAll('.twui-item')].find(r => r.querySelector('.twui-item-title')?.firstChild?.textContent === title)!;
@@ -431,7 +434,14 @@ test('marks a team model without its context window, and a preset on it, as not 
   await act(async () => tab.click());
   expect(row('Flash').textContent).toContain(reason);
   expect(row('Flash').querySelector('button:disabled')).not.toBeNull();
-  expect(row('Sized').textContent).not.toContain('context window');
+  expect(row('Flash').querySelector('[aria-label="Input: text. Output: text. Image input is unspecified."] svg')).not.toBeNull();
+  expect([...row('Sized').querySelectorAll('.twui-item-tags .twui-badge')].map(badge => badge.textContent)).toEqual([
+    '0.131M tokens context window', '0.00819M tokens max output',
+  ]);
+  expect(row('Sized').querySelectorAll('[aria-label="Input: text and images. Output: text."] svg')).toHaveLength(4);
+  expect(row('Sized').querySelector('[title="8,192 tokens max output"]')).not.toBeNull();
+  expect(row('Sized').querySelector('.twui-item-title .twui-item-subtitle')?.textContent).toBe('p/sized');
+  expect(row('Sized').querySelector('[title="131,072 tokens context window"]')).not.toBeNull();
   expect(row('Sized').querySelector('button:disabled')).toBeNull();
 });
 

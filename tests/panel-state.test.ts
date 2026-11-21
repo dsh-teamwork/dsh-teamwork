@@ -104,7 +104,7 @@ test('a team model without its context window is shown as not ready and stops a 
   const dir = await mkdtemp(join(tmpdir(), 'teamwork-limits-'));
   const cachePath = join(dir, 'cache.json');
   const configs = [
-    { id: 'sized', kind: 'model', name: 'Sized', version: 1, data: { provider: 'kimi', model: 'k2', contextWindow: 131072 } },
+    { id: 'sized', kind: 'model', name: 'Sized', version: 1, data: { provider: 'kimi', model: 'k2', contextWindow: 131072, maxTokens: 8192, vision: true } },
     { id: 'unsized', kind: 'model', name: 'DeepSeek Flash', version: 1, data: { provider: 'hosted:billing', model: 'deepseek-flash' } },
     { id: 'writer', kind: 'preset', name: 'Writer', version: 1, data: { modelConfigId: 'unsized' } },
   ];
@@ -129,7 +129,7 @@ test('a team model without its context window is shown as not ready and stops a 
     await apply(ctx, { apiEndpoint: 'http://localhost:3800', cachePath, autoSync: false });
     const response = await routes.get('/api/teamwork/state')!.fetch(new Request('http://localhost/api/teamwork/state', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }));
     const state: PanelState = await response.json();
-    expect(state.models.find(m => m.id === 'sized')?.contextWindowMissing).toBe(false);
+    expect(state.models.find(m => m.id === 'sized')).toMatchObject({ contextWindow: 131072, maxTokens: 8192, vision: true, contextWindowMissing: false });
     expect(state.models.find(m => m.id === 'unsized')?.contextWindowMissing).toBe(true);
     expect(state.presets[0]).toMatchObject({ model: 'DeepSeek Flash', modelAvailable: false, contextWindowMissing: true });
 

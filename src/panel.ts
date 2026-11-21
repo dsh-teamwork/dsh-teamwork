@@ -119,7 +119,11 @@ export interface PanelState {
   } | null;
   presets: PanelPreset[];
   /** `contextWindowMissing`: the model has no context window configured; `modelOffline`: its service took it out of service. Either way it cannot be selected. */
-  models: Array<{ id: string; teamId: string; teamName: string; name: string; version: number; upstream: string; contextWindowMissing: boolean; modelOffline: boolean }>;
+  models: Array<{
+    id: string; teamId: string; teamName: string; name: string; version: number; upstream: string;
+    contextWindow?: number; maxTokens?: number; vision?: boolean;
+    contextWindowMissing: boolean; modelOffline: boolean;
+  }>;
   plugins: PanelPlugin[];
 }
 

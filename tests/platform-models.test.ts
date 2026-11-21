@@ -17,7 +17,12 @@ test('team model uses platform only, with session credential and opaque config I
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const port = (server.address() as {port:number}).port;
   const dir = await mkdtemp(join(tmpdir(), 'platform-adapter-'));
-  const client = new TeamworkClient(`http://127.0.0.1:${port}`, join(dir,'cache'), async input => Response.json(String(input).endsWith('/auth/plugin/token') ? {token:'platform-session-only'} : {teams:[{teamId:'t', teamName:'T', role:'member', configs:[{id:'config1',kind:'model',name:'Team Kimi',version:1,data:{provider:'kimi',model:'kimi-for-coding',contextWindow:131072,maxTokens:8192,vision:true}}]}]}));
+  const configs = [
+    { id: 'config1', kind: 'model', name: 'Team Kimi', version: 1, data: { provider: 'kimi', model: 'kimi-for-coding', contextWindow: 131072, maxTokens: 8192, vision: true } },
+    { id: 'preset1', kind: 'preset', name: 'Writer', version: 1, data: { modelConfigId: 'config1' } },
+    { id: 'legacy1', kind: 'preset', name: 'Legacy writer', version: 1, data: { provider: 'kimi', model: 'kimi-for-coding', contextWindow: 131072, maxTokens: 8192 } },
+  ];
+  const client = new TeamworkClient(`http://127.0.0.1:${port}`, join(dir,'cache'), async input => Response.json(String(input).endsWith('/auth/plugin/token') ? {token:'platform-session-only'} : {teams:[{teamId:'t', teamName:'T', role:'member', configs}]}));
   try {
     client.beginLogin(); await client.completeLogin('code'); await client.sync();
     const adapter = platformAdapter(client);
@@ -25,11 +30,21 @@ test('team model uses platform only, with session credential and opaque config I
     expect(info.context?.contextWindow).toBe(131072);
     expect(info.inputModalities).toEqual(['text', 'image']);
     expect(client.current()?.teams[0]?.configs[0]?.data).toMatchObject({ vision: true });
-    expect((await adapter.listModels(teamProvider('t')))[0]?.id).toBe('config1');
-    let text = ''; const chunks = [];
-    for await (const chunk of adapter.stream({provider:teamProvider('t'),model:'config1',messages:[{role:'user',content:[{type:'text',text:'Hello'}]}]})) { chunks.push(chunk); if(chunk.type==='text-delta') text+=chunk.text; }
-    expect(text, JSON.stringify(chunks)).toBe('OK');
-    expect(path).toBe('/api/llm/chat/completions'); expect(authorization).toBe('Bearer platform-session-only'); expect(wire.model).toBe('config1'); expect(wire.max_tokens ?? wire.max_completion_tokens).toBe(8192);
+    const provider = teamProvider('t');
+    expect((await adapter.listModels(provider)).map(model => model.id)).toEqual(['config1']);
+    for (const model of ['config1', 'preset1', 'legacy1']) {
+      const call = await adapter.prepareCall(provider, model);
+      expect(call.model).toMatchObject({ id: model, context: { contextWindow: 131072 }, defaultMaxTokens: 8192 });
+      let text = '';
+      for await (const chunk of call.stream({ provider, model, messages: [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }] })) {
+        if (chunk.type === 'text-delta') text += chunk.text;
+      }
+      expect(text).toBe('OK');
+      expect(path).toBe('/api/llm/chat/completions');
+      expect(authorization).toBe('Bearer platform-session-only');
+      expect(wire.model).toBe(model);
+      expect(wire.max_tokens ?? wire.max_completion_tokens).toBe(8192);
+    }
     await client.logout();
     await expect((async () => { for await (const chunk of adapter.stream({provider:teamProvider('t'),model:'config1',messages:[]})) { if(chunk.type==='finish' && chunk.reason.kind==='error') throw new Error('unauthorized'); } })()).rejects.toThrow();
   } finally { server.closeAllConnections(); await new Promise<void>(resolve=>server.close(()=>resolve())); await rm(dir,{recursive:true,force:true}); }
@@ -77,7 +92,8 @@ test('a hosted model taken offline stays in the team but is not offered, and say
     expect(offlineModel(snapshot, config('live'))).toBeUndefined();
     expect(modelLimitProblem(snapshot, config('uses-opus'))).toContain('“Opus” has been taken offline');
     offline = false; await client.sync();
-    expect((await adapter.listModels(teamProvider('t'))).map(m => m.id)).toEqual(['live', 'opus', 'uses-opus']);
+    expect((await adapter.listModels(teamProvider('t'))).map(m => m.id)).toEqual(['live', 'opus']);
+    expect((await adapter.resolveModel(teamProvider('t'), 'uses-opus')).context?.contextWindow).toBe(200000);
     expect(modelLimitProblem(client.current()!, findConfig(client.current()!, 'uses-opus')!)).toBeUndefined();
   } finally { await rm(dir,{recursive:true,force:true}); }
 });

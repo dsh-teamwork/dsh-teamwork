@@ -322,8 +322,9 @@ export const css = String.raw`
 .twui-resource-list .twui-item { border: 0; border-bottom: 1px solid var(--twui-border); border-radius: 0; box-shadow: none; background: transparent; }
 .twui-resource-list .twui-item-main { padding: 24px 2px; align-items: center; }
 .twui-resource-list .twui-tile { width: 42px; height: 42px; color: var(--twui-fg-muted); align-self: start; }
-.twui-resource-list .twui-item-subtitle { font: inherit; font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--twui-fill); color: var(--twui-fg-muted); }
+.twui-resource-list .twui-item-subtitle { min-width: 0; overflow-wrap: anywhere; font: inherit; font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--twui-fill); color: var(--twui-fg-muted); }
 .twui-resource-list .twui-item-tags { margin-top: 8px; }
+.twui-model-modalities { display: inline-flex; align-items: center; gap: 6px; color: var(--twui-fg-muted); margin-inline-end: 4px; }
 .twui-resource-list .twui-item-title { font-size: 15px; font-weight: 500; }
 /* The one entry a screen leads with (the team assistant): a strong border, and the team's navy as a bar and on its tile. */
 .twui-featured .twui-item { border-color: var(--twui-border-strong); box-shadow: inset 3px 0 0 var(--twui-brand); }
