@@ -236,7 +236,7 @@ export interface PanelOps {
     setOwnerPin(pin: string | null): Promise<void>;
     pairPhone(): Promise<PanelPairingOffer>;
     /** Confirms or refuses a phone that redeemed a code. */
-    decidePhone(id: string, accept: boolean): Promise<void>;
+    decidePhone(id: string, accept: boolean, safetyCode?: string): Promise<void>;
     /** Cuts a paired phone off. */
     revokePhone(id: string): Promise<void>;
 }

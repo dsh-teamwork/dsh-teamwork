@@ -678,8 +678,8 @@ export async function apply(ctx: Context, config: Config) {
       const link = `dshteamwork://pair?${new URLSearchParams({ server: client.endpoint, code: offer.code, key })}`;
       return { ...offer, link };
     },
-    async decidePhone(id, accept) {
-      if (accept) await security.approve(id);
+    async decidePhone(id, accept, safetyCode) {
+      if (accept) await security.approve(id, safetyCode);
       else { await security.revoke(id); await relay.request({ t: 'decide', pairingId: id, accept: false }).catch(phoneError); }
       await readPhones();
     },

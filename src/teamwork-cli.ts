@@ -11,7 +11,7 @@
  *   dsh-teamwork sync                     sync the team configuration now
  *   dsh-teamwork pin set | clear          set or disable the device PIN on this DSH
  *   dsh-teamwork logout                   sign out
- *   dsh-teamwork device pair              a pairing code, and a QR code for the DSH Teamwork phone app; a browser
+ *   dsh-teamwork device pair [--guided]   a pairing code, and a QR code for the DSH Teamwork phone app; a browser
  *                                         types the code in My DSH
  *   dsh-teamwork device list              paired and waiting devices, with a waiting device's safety code
  *   dsh-teamwork device accept <id>       accept a waiting device, once its safety code matches the one listed here
@@ -26,6 +26,8 @@ import { request } from 'node:http';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
+import { createInterface as createPrompt } from 'node:readline/promises';
+import { setTimeout as delay } from 'node:timers/promises';
 import { Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import qrcode from 'qrcode-generator';
@@ -71,25 +73,85 @@ export function terminalQr(link: string) {
 }
 
 const kinds = { ios: 'iOS phone', android: 'Android phone', web: 'web browser' } as const;
-const deviceLine = (p: PanelPhone) => p.status === 'pending'
-  ? `${p.id}  ${p.deviceName}${p.deviceKind ? ` (${kinds[p.deviceKind]})` : ''}  waiting: ${p.safetyCode && p.phoneConfirmed ? `safety code ${p.safetyCode}; if the device shows the same, dsh-teamwork device accept ${p.id}` : 'the device has not finished its encrypted handshake yet'}`
+const handshakeHelp = 'Waiting for the encrypted connection. Keep the pairing screen open on the device.';
+const confirmationHelp = 'Compare the safety code and confirm it on the device first.';
+
+const deviceLine = (p: PanelPhone, guided = false) => p.status === 'pending'
+  ? `${p.id}  ${p.deviceName}${p.deviceKind ? ` (${kinds[p.deviceKind]})` : ''}  waiting: ${p.safetyCode
+    ? `safety code ${p.safetyCode}; ${p.phoneConfirmed ? (guided ? 'confirmed on device' : `if the device shows the same, dsh-teamwork device accept ${p.id}`) : confirmationHelp}`
+    : handshakeHelp}`
   : `${p.id}  ${p.deviceName}${p.deviceKind ? ` (${kinds[p.deviceKind]})` : ''}  paired${p.verified ? '' : ' (pair it again: its key is not verified)'}${p.lastUsedAt ? `, last used ${p.lastUsedAt}` : ''}`;
 
-async function device(action: string | undefined, id: string | undefined, socketPath: string, out: (line: string) => void, err: (line: string) => void) {
+type TerminalInput = NodeJS.ReadableStream & { isTTY?: boolean };
+const codeKey = (code: string) => code.replace(/\s/g, '');
+
+async function guidePairing(socketPath: string, offer: PanelPairingOffer, existing: Set<string>, input: TerminalInput, out: (line: string) => void, err: (line: string) => void) {
+  const deadline = Date.parse(offer.expiresAt);
+  const pending = async () => (await state(socketPath)).phones.filter(phone => phone.status === 'pending' && !existing.has(phone.id));
+  const prompt = createPrompt({ input });
+  let cancelled = false;
+  const cancel = new AbortController();
+  prompt.once('close', () => { cancelled = true; cancel.abort(); });
+  prompt.once('SIGINT', () => prompt.close());
+  let last = '';
+  try {
+    while (Date.now() < deadline && !cancelled) {
+      const devices = await pending();
+      const display = devices.map(phone => deviceLine(phone, true)).join('\n');
+      if (display && display !== last) out(display);
+      last = display;
+      if (!devices.some(phone => phone.safetyCode && phone.phoneConfirmed)) {
+        await delay(Math.min(1000, Math.max(0, deadline - Date.now())));
+        continue;
+      }
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) break;
+      out('3. Type the safety code shown on the device, spaces optional, then press Enter. Press Enter on an empty line to cancel.');
+      const signal = AbortSignal.any([cancel.signal, AbortSignal.timeout(remaining)]);
+      const entered = await prompt.question('', { signal });
+      if (!entered.trim()) { cancelled = true; break; }
+      const matches = (await pending()).filter(phone => phone.phoneConfirmed && phone.safetyCode && codeKey(phone.safetyCode) === codeKey(entered));
+      const [phone] = matches;
+      if (matches.length !== 1 || !phone?.safetyCode) {
+        err('The code does not match exactly one device that has confirmed. Keep the pairing screen open and check the current safety code.');
+        continue;
+      }
+      if (Date.now() >= deadline) break;
+      await call(socketPath, 'decide-phone', { id: phone.id, accept: true, safetyCode: phone.safetyCode });
+      out(`Paired ${phone.deviceName}. If the app asks for a PIN, enter the PIN set on this DSH.`);
+      return 0;
+    }
+  } catch (error) {
+    if ((error as Error).name !== 'AbortError') throw new Error(`${(error as Error).message} To start over, run dsh-teamwork device pair --guided.`);
+  } finally { prompt.close(); }
+  err(cancelled && Date.now() < deadline ? 'Pairing cancelled.' : 'Pairing code expired. Run dsh-teamwork device pair --guided to start again.');
+  return 1;
+}
+
+async function device(action: string | undefined, id: string | undefined, socketPath: string, out: (line: string) => void, err: (line: string) => void, input: TerminalInput) {
   const phones = async () => (await state(socketPath)).phones;
   const needsId = () => { if (!id) { err(`${usage}\n(device ${action} needs the device's id, from dsh-teamwork device list)`); return false; } return true; };
   switch (action) {
     case 'pair': {
+      if (id !== undefined && id !== '--guided') { err(usage); return 2; }
+      const guided = id === '--guided';
+      const existing = guided ? new Set((await phones()).map(phone => phone.id)) : undefined;
       const offer = (await call(socketPath, 'pair-phone')) as PanelPairingOffer;
       out(terminalQr(offer.link));
       out(`Scan it in the DSH Teamwork app, or open: ${offer.link}`);
       out(`Or enter ${offer.code} in the app, or in My DSH in the Teamwork web console.`);
-      out(`Valid until ${offer.expiresAt}. Then run dsh-teamwork device list to compare the safety code.`);
+      if (existing) {
+        out('1. Open the pairing screen on the device and keep it open.');
+        out('2. When safety codes appear on both screens, compare them and confirm on the device.');
+        out(`Waiting for a new device. Pairing code valid until ${offer.expiresAt}.`);
+        return guidePairing(socketPath, offer, existing, input, out, err);
+      }
+      out(`Valid until ${offer.expiresAt}. Run dsh-teamwork device list to compare the safety code and confirm it on the device first.`);
       return 0;
     }
     case 'list': {
       const listed = await phones();
-      out(listed.length ? listed.map(deviceLine).join('\n') : 'No device is paired. Run dsh-teamwork device pair.');
+      out(listed.length ? listed.map(phone => deviceLine(phone)).join('\n') : 'No device is paired. Run dsh-teamwork device pair.');
       return 0;
     }
     case 'accept': {
@@ -97,8 +159,8 @@ async function device(action: string | undefined, id: string | undefined, socket
       const waiting = (await phones()).find((p) => p.id === id && p.status === 'pending');
       if (!waiting) { err(`No device waits as ${id}. Run dsh-teamwork device list.`); return 1; }
       // As in the panel: only a finished handshake has a safety code the person can have compared.
-      if (!waiting.safetyCode || !waiting.phoneConfirmed) { err('The device has not finished its encrypted handshake yet; wait, then run dsh-teamwork device list.'); return 1; }
-      await call(socketPath, 'decide-phone', { id, accept: true });
+      if (!waiting.safetyCode || !waiting.phoneConfirmed) { err(waiting.safetyCode ? confirmationHelp : handshakeHelp); return 1; }
+      await call(socketPath, 'decide-phone', { id, accept: true, safetyCode: waiting.safetyCode });
       out(`Accepted ${waiting.deviceName}.`);
       return 0;
     }
@@ -133,11 +195,11 @@ function describeState(s: PanelState) {
 const usage = [
   'usage: dsh-teamwork server [url] | login [--browser] | authorize <code> | status | sync | logout',
   '       dsh-teamwork pin set | clear',
-  '       dsh-teamwork device pair | list | accept <id> | reject <id> | revoke <id>',
+  '       dsh-teamwork device pair [--guided] | list | accept <id> | reject <id> | revoke <id>',
 ].join('\n');
 
 /** Runs one command against the DSH on socketPath, writing to out and err; returns the exit code. */
-export async function run(args: string[], socketPath: string, out: (line: string) => void, err: (line: string) => void, input: NodeJS.ReadableStream & { isTTY?: boolean } = process.stdin) {
+export async function run(args: string[], socketPath: string, out: (line: string) => void, err: (line: string) => void, input: TerminalInput = process.stdin) {
   const [group, action, value] = args;
   if (group === 'server') {
     if (action) await call(socketPath, 'server', { server: action });
@@ -194,7 +256,9 @@ export async function run(args: string[], socketPath: string, out: (line: string
       return 0;
     }
     case 'logout': await call(socketPath, 'logout'); out('Signed out; the team configuration is removed from this DSH.'); return 0;
-    case 'device': return device(action, value, socketPath, out, err);
+    case 'device':
+      if (args.length > 3) { err(usage); return 2; }
+      return device(action, value, socketPath, out, err, input);
   }
   err(usage);
   return 2;

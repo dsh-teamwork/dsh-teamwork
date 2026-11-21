@@ -193,7 +193,7 @@ export interface PanelOps {
   setOwnerPin(pin: string | null): Promise<void>;
   pairPhone(): Promise<PanelPairingOffer>;
   /** Confirms or refuses a phone that redeemed a code. */
-  decidePhone(id: string, accept: boolean): Promise<void>;
+  decidePhone(id: string, accept: boolean, safetyCode?: string): Promise<void>;
   /** Cuts a paired phone off. */
   revokePhone(id: string): Promise<void>;
 }
@@ -280,7 +280,7 @@ export function panelRoutes(ops: PanelOps, voice: RouteVoice): FetchRoute[] {
       return ops.setOwnerPin(body.pin);
     }),
     post('pair-phone', () => ops.pairPhone()),
-    post('decide-phone', (body) => ops.decidePhone(text(body.id, 'field.device'), body.accept === true)),
+    post('decide-phone', (body) => ops.decidePhone(text(body.id, 'field.device'), body.accept === true, typeof body.safetyCode === 'string' ? body.safetyCode : undefined)),
     post('revoke-phone', (body) => ops.revokePhone(text(body.id, 'field.device'))),
   ];
 }

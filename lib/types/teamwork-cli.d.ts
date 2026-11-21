@@ -6,8 +6,10 @@ export declare const socketIn: (home: string) => string;
 export declare function call(socketPath: string, route: string, body?: Record<string, unknown>): Promise<unknown>;
 /** The pairing link as a QR code a terminal shows: two rows per character line, so it stays square. */
 export declare function terminalQr(link: string): string;
-/** Runs one command against the DSH on socketPath, writing to out and err; returns the exit code. */
-export declare function run(args: string[], socketPath: string, out: (line: string) => void, err: (line: string) => void, input?: NodeJS.ReadableStream & {
+type TerminalInput = NodeJS.ReadableStream & {
     isTTY?: boolean;
-}): Promise<2 | 0 | 1>;
+};
+/** Runs one command against the DSH on socketPath, writing to out and err; returns the exit code. */
+export declare function run(args: string[], socketPath: string, out: (line: string) => void, err: (line: string) => void, input?: TerminalInput): Promise<2 | 0 | 1>;
+export {};
 //# sourceMappingURL=teamwork-cli.d.ts.map

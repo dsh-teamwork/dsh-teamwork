@@ -1,6 +1,6 @@
 import { mkdtemp, stat } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
-import { Readable } from 'node:stream';
+import { PassThrough, Readable } from 'node:stream';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import { controlSocketPath, serveControlSocket } from '../src/control-socket.js';
@@ -34,7 +34,7 @@ function panel() {
     record('logout', () => { authenticated = false; }),
     record('pair-phone', () => {
       phones.push({ id: 'p1', deviceName: 'Pixel', status: 'pending', createdAt: '', lastUsedAt: null });
-      return { code: 'c', expiresAt: '2026-11-19T00:00:00Z', link: 'dshteamwork://pair?server=x&code=c&key=k' };
+      return { code: 'c', expiresAt: new Date(Date.now() + 30_000).toISOString(), link: 'dshteamwork://pair?server=x&code=c&key=k' };
     }),
     record('decide-phone', (body) => {
       const index = phones.findIndex((phone) => phone.id === body.id);
@@ -124,13 +124,13 @@ test.skipIf(process.platform === 'win32')('a personal DSH manages login, sync an
     expect(pair.out).toContain('dshteamwork://pair?server=x&code=c&key=k');
     expect(pair.out).toMatch(/[█▀▄]/);
     // Before the handshake there is no safety code to compare, so it cannot be accepted.
-    expect((await cli('device', 'list')).out).toContain('has not finished its encrypted handshake');
+    expect((await cli('device', 'list')).out).toContain('Waiting for the encrypted connection');
     expect(await cli('device', 'accept', 'p1')).toMatchObject({ code: 1 });
     expect(calls.some(([name]) => name === 'decide-phone')).toBe(false);
     Object.assign(phones[0]!, { safetyCode: '12 34 56', phoneConfirmed: true });
     expect((await cli('device', 'list')).out).toContain('safety code 12 34 56; if the device shows the same, dsh-teamwork device accept p1');
     expect(await cli('device', 'accept', 'p1')).toMatchObject({ code: 0, out: 'Accepted Pixel.' });
-    expect(calls).toContainEqual(['decide-phone', { id: 'p1', accept: true }]);
+    expect(calls).toContainEqual(['decide-phone', { id: 'p1', accept: true, safetyCode: '12 34 56' }]);
     expect((await cli('device', 'list')).out).toBe('p1  Pixel  paired');
     expect(await cli('device', 'revoke', 'p1')).toMatchObject({ code: 0, out: 'Removed.' });
     expect(calls).toContainEqual(['revoke-phone', { id: 'p1' }]);
@@ -147,6 +147,35 @@ test.skipIf(process.platform === 'win32')('a personal DSH manages login, sync an
     expect(signedOut.out).toContain('Signed in: no');
     expect(signedOut.out).not.toContain('Teams:');
   } finally { await close(); }
+});
+
+test.skipIf(process.platform === 'win32')('guided pairing waits for the phone and checks its code before approval', async () => {
+  const { calls, phones, close, socket } = await serving();
+  const input = new PassThrough();
+  const errors: string[] = [];
+  let prompts = 0;
+  phones.push({ id: 'old', deviceName: 'Earlier phone', status: 'pending', createdAt: '', lastUsedAt: null, phoneConfirmed: true, safetyCode: '1111 1111' });
+  try {
+    const exit = await run(['device', 'pair', '--guided'], socket, line => {
+      expect(line).not.toContain('Earlier phone');
+      const current = phones.find(phone => phone.id === 'p1');
+      if (line.startsWith('Waiting for a new device')) Object.assign(current!, { safetyCode: '0557 6515' });
+      if (line.includes('confirm it on the device first')) current!.phoneConfirmed = true;
+      if (line.startsWith('3.')) {
+        expect(calls.some(([name]) => name === 'decide-phone')).toBe(false);
+        const entered = prompts++ === 0 ? '11111111' : '05576515';
+        setImmediate(() => input.write(entered + '\n'));
+      }
+    }, line => errors.push(line), input);
+    expect(exit).toBe(0);
+    expect(errors).toHaveLength(1);
+    expect(calls.filter(([name]) => name === 'decide-phone')).toEqual([
+      ['decide-phone', { id: 'p1', accept: true, safetyCode: '0557 6515' }],
+    ]);
+  } finally {
+    input.destroy();
+    await close();
+  }
 });
 
 

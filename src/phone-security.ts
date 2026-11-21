@@ -316,10 +316,11 @@ export class PhoneSecurity {
       }
     }
   }
-  async approve(id: string) {
+  async approve(id: string, safetyCode?: string) {
     const link = this.links.get(id);
     if (!link?.pending || !link.phoneConfirmed || !link.remoteKey || !link.code || !link.name)
       throw new Error('Compare the security codes on both devices first.');
+    if (safetyCode !== undefined && safetyCode !== link.code) throw new Error('The safety code changed. Compare it again.');
     await this.options.keys.trust(link.scope, id, link.remoteKey, link.name, link.kind);
     if (this.links.get(id) !== link) throw new Error('Device disconnected. Pair again.');
     // Both local approval and the relay's account authorization are required.

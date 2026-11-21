@@ -35,7 +35,7 @@
 dsh-teamwork server https://teamwork.example.com   # 仅自托管团队，在登录前设置
 dsh-teamwork login                # 之后：authorize <code>
 dsh-teamwork status
-dsh-teamwork device pair          # 另有 list、accept <id>、reject <id>、revoke <id>
+dsh-teamwork device pair --guided # 另有 list、accept <id>、reject <id>、revoke <id>
 ```
 
 它通过 DSH home 里插件目录下的一个 socket 连接正在运行的 DSH（见下文），只有该用户能打开。支持 Linux 和 macOS。
@@ -44,6 +44,8 @@ dsh-teamwork device pair          # 另有 list、accept <id>、reject <id>、re
 - **登录**：`dsh-teamwork login` 打印登录链接，在任意浏览器中打开并确认授权，页面会显示授权码。回到服务器运行 `dsh-teamwork authorize <code>` 完成登录。如果浏览器与 DSH 在同一台电脑上，可以用 `dsh-teamwork login --browser` 自动完成授权回调。
 - **同步**：`dsh-teamwork status` 和 `dsh-teamwork sync` 查看并同步团队配置。
 - **配对设备**：`dsh-teamwork device pair` 打印配对码，并在终端里画出手机 App 的配对二维码；浏览器在 Teamwork 网页的**我的 DSH**里输入配对码。`dsh-teamwork device list` 显示等待中设备的安全码和设备类型（iOS 手机、Android 手机或 Web 浏览器），与设备上的一致时用 `dsh-teamwork device accept <id>` 确认；`reject` 和 `revoke` 用于拒绝或移除。
+
+也可用 `dsh-teamwork device pair --guided`。终端会等待新设备。保持手机配对页面打开，核对安全码并在手机上确认，然后把手机显示的安全码输入终端即可完成配对。
 
 ## 选择模型或预设
 

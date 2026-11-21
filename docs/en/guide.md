@@ -83,11 +83,13 @@ not on your `PATH`, so install the commands once (and again after an update):
 dsh-teamwork server https://teamwork.example.com   # a self-hosted team only, before signing in
 dsh-teamwork login                # then: authorize <code>
 dsh-teamwork status
-dsh-teamwork device pair          # also: list, accept <id>, reject <id>, revoke <id>
+dsh-teamwork device pair --guided # also: list, accept <id>, reject <id>, revoke <id>
 ```
 
 It reaches the running DSH through a socket in the plugin's directory in the DSH
 home (below), which only that user can open. It runs on Linux and macOS.
+
+With `dsh-teamwork device pair --guided`, keep the pairing screen open on the device. Compare both safety codes, confirm on the device, then type the safety code shown on the device into the terminal.
 
 A personal DSH on a server works the same way: `dsh-teamwork login` prints a
 sign-in link to open in any browser. Confirm authorization to reveal the code,
