@@ -177,7 +177,7 @@ export interface PanelOps {
   updateProfile(input: { name?: string | null; locale: Locale }): Promise<PanelProfile>;
   state(sessionId: string | undefined): Promise<PanelState>;
   /** The sign-in page; `automatic` when the code comes back to this DSH by itself (src/login-callback.ts). */
-  login(): Promise<{ url: string; automatic: boolean }>;
+  login(manual?: boolean): Promise<{ url: string; automatic: boolean }>;
   authorize(code: string): Promise<void>;
   sync(): Promise<void>;
   logout(): Promise<void>;
@@ -263,7 +263,7 @@ export function panelRoutes(ops: PanelOps, voice: RouteVoice): FetchRoute[] {
       if (body.locale !== 'en' && body.locale !== 'zh-CN') throw new Error(say('profile.badLocale'));
       return ops.updateProfile(body.name === undefined ? { locale: body.locale } : { name: body.name as string | null, locale: body.locale });
     }),
-    post('login', () => ops.login()),
+    post('login', (body) => ops.login(body.manual === true)),
     post('authorize', (body) => ops.authorize(text(body.code, 'field.code'))),
     post('sync', () => ops.sync()),
     post('logout', () => ops.logout()),

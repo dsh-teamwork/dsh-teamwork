@@ -5,7 +5,7 @@
  *
  *   dsh-teamwork server [url]             the Teamwork server it uses (a self-hosted team sets its own first);
  *                                         without a url, prints it
- *   dsh-teamwork login                    a sign-in link to open in any browser; the code it shows goes to authorize
+ *   dsh-teamwork login [--browser]        a sign-in link; --browser enables callback on the same machine
  *   dsh-teamwork authorize <code>         finish signing in
  *   dsh-teamwork status                   sign-in, teams, sync, the relay and paired devices
  *   dsh-teamwork sync                     sync the team configuration now
@@ -128,7 +128,7 @@ function describeState(s: PanelState) {
 }
 
 const usage = [
-  'usage: dsh-teamwork server [url] | login | authorize <code> | status | sync | logout',
+  'usage: dsh-teamwork server [url] | login [--browser] | authorize <code> | status | sync | logout',
   '       dsh-teamwork device pair | list | accept <id> | reject <id> | revoke <id>',
 ].join('\n');
 
@@ -142,11 +142,16 @@ export async function run(args: string[], socketPath: string, out: (line: string
   }
   switch (group) {
     case 'login': {
-      const { url, automatic } = (await call(socketPath, 'login')) as { url: string; automatic: boolean };
-      out(`Open this in a browser, sign in and confirm:\n${url}`);
-      out(automatic
-        ? 'A browser on this machine finishes by itself. Anywhere else, copy the code the page shows and run: dsh-teamwork authorize <code>'
-        : 'Then copy the code the page shows and run: dsh-teamwork authorize <code>');
+      if (args.length > 2 || (action !== undefined && action !== '--browser')) { err(usage); return 2; }
+      const browser = action === '--browser';
+      const { url, automatic } = (await call(socketPath, 'login', browser ? {} : { manual: true })) as { url: string; automatic: boolean };
+      const link = new URL(url);
+      // Older running plugins still return a loopback URL for every login request.
+      if (!browser) link.searchParams.delete('redirect_uri');
+      out(`Open this in a browser, sign in and confirm:\n${link}`);
+      out(browser && automatic
+        ? 'Open the link on this machine to finish automatically. For a browser on another machine, run dsh-teamwork login.'
+        : 'After confirming, copy the code the page shows and run on this machine: dsh-teamwork authorize <code>');
       return 0;
     }
     case 'authorize':

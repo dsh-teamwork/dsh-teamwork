@@ -217,7 +217,7 @@ export interface PanelOps {
     }): Promise<PanelProfile>;
     state(sessionId: string | undefined): Promise<PanelState>;
     /** The sign-in page; `automatic` when the code comes back to this DSH by itself (src/login-callback.ts). */
-    login(): Promise<{
+    login(manual?: boolean): Promise<{
         url: string;
         automatic: boolean;
     }>;

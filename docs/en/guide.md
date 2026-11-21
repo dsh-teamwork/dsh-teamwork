@@ -90,8 +90,10 @@ It reaches the running DSH through a socket in the plugin's directory in the DSH
 home (below), which only that user can open. It runs on Linux and macOS.
 
 A personal DSH on a server works the same way: `dsh-teamwork login` prints a
-sign-in link to open in any browser, and `dsh-teamwork authorize <code>` takes
-the code the page shows. `dsh-teamwork status` and `dsh-teamwork sync` follow
+sign-in link to open in any browser. Confirm authorization to reveal the code,
+then run `dsh-teamwork authorize <code>` on the server. Use
+`dsh-teamwork login --browser` for automatic sign-in with a browser on the
+same machine as DSH. `dsh-teamwork status` and `dsh-teamwork sync` follow
 the team's configuration. `dsh-teamwork device pair` prints a pairing code and
 draws the phone app's QR code in the terminal; a browser types the code under
 **My DSH** in the Teamwork web console. `dsh-teamwork device list` then shows

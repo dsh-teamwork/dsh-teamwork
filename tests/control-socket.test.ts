@@ -27,14 +27,25 @@ function panel() {
   const phones: PanelPhone[] = [];
   const routes = [
     record('state', () => ({ server, authenticated, teams: authenticated ? [{ id: 't', name: 'Team', role: 'member', consoleUrl: '' }] : [], sync: { auto: true, running: false }, relay: 'connected', phones })),
-    record('login', () => ({ url: 'https://teamwork.example.com/plugin?challenge=c', automatic: true })),
+    record('login', () => ({ url: 'https://teamwork.example.com/plugin?challenge=c&redirect_uri=http%3A%2F%2F127.0.0.1%3A38719%2Fcallback', automatic: true })),
     record('authorize', (body) => { if (body.code !== 'ABCD-1234') throw new Error('That code is not valid.'); authenticated = true; }),
     record('sync', () => undefined),
+    record('logout', () => { authenticated = false; }),
     record('pair-phone', () => {
       phones.push({ id: 'p1', deviceName: 'Pixel', status: 'pending', createdAt: '', lastUsedAt: null });
       return { code: 'c', expiresAt: '2026-11-19T00:00:00Z', link: 'dshteamwork://pair?server=x&code=c&key=k' };
     }),
-    record('decide-phone', (body) => { if (body.accept) Object.assign(phones[0]!, { status: 'confirmed', verified: true }); }),
+    record('decide-phone', (body) => {
+      const index = phones.findIndex((phone) => phone.id === body.id);
+      if (index === -1) throw new Error('Unknown device.');
+      if (body.accept) Object.assign(phones[index]!, { status: 'confirmed', verified: true });
+      else phones.splice(index, 1);
+    }),
+    record('revoke-phone', (body) => {
+      const index = phones.findIndex((phone) => phone.id === body.id);
+      if (index === -1) throw new Error('Unknown device.');
+      phones.splice(index, 1);
+    }),
     record('server', (body) => { server = String(body.server); }),
   ];
   return { routes, calls, phones };
@@ -91,10 +102,15 @@ test('the home is found as DSH finds it', () => {
   expect(dshHome({ DSH_HOME: '~/team-dsh' })).toBe(join(homedir(), 'team-dsh'));
 });
 
-test.skipIf(process.platform === 'win32')('a personal DSH signs in, syncs and pairs a phone from the command line', async () => {
+test.skipIf(process.platform === 'win32')('a personal DSH manages login, sync and the phone pairing lifecycle from the command line', async () => {
   const { calls, phones, close, cli } = await serving();
   try {
+    const browserLogin = await cli('login', '--browser');
+    expect(browserLogin.out).toContain('redirect_uri=');
+    expect(browserLogin.out).toContain('finish automatically');
     const login = await cli('login');
+    expect(login.out).not.toContain('redirect_uri=');
+    expect(calls).toContainEqual(['login', { manual: true }]);
     expect(login.out).toContain('https://teamwork.example.com/plugin?challenge=c');
     expect(login.out).toContain('dsh-teamwork authorize <code>');
     // The page shows a whole line to paste; its code is what reaches the plugin.
@@ -115,6 +131,20 @@ test.skipIf(process.platform === 'win32')('a personal DSH signs in, syncs and pa
     expect(await cli('device', 'accept', 'p1')).toMatchObject({ code: 0, out: 'Accepted Pixel.' });
     expect(calls).toContainEqual(['decide-phone', { id: 'p1', accept: true }]);
     expect((await cli('device', 'list')).out).toBe('p1  Pixel  paired');
+    expect(await cli('device', 'revoke', 'p1')).toMatchObject({ code: 0, out: 'Removed.' });
+    expect(calls).toContainEqual(['revoke-phone', { id: 'p1' }]);
+    expect((await cli('device', 'list')).out).toContain('No device is paired');
+
+    expect((await cli('device', 'pair')).code).toBe(0);
+    expect(await cli('device', 'reject', 'p1')).toMatchObject({ code: 0, out: 'Refused.' });
+    expect(calls).toContainEqual(['decide-phone', { id: 'p1', accept: false }]);
+    expect((await cli('device', 'list')).out).toContain('No device is paired');
+
+    expect((await cli('logout')).code).toBe(0);
+    expect(calls).toContainEqual(['logout', {}]);
+    const signedOut = await cli('status');
+    expect(signedOut.out).toContain('Signed in: no');
+    expect(signedOut.out).not.toContain('Teams:');
   } finally { await close(); }
 });
 

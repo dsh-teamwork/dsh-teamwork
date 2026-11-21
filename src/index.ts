@@ -501,10 +501,10 @@ export async function apply(ctx: Context, config: Config) {
   };
   const authorize = async (code: string) => { hostManaged(); pendingInstalls.clear(); try { await client.completeLogin(code); } finally { await overlay.apply(client.current()); relay.refresh(); } stopCallback(); if (config.autoSync !== false) await configSync.sync(); };
   /** The sign-in page's address, and whether the code comes back by itself; without a listener it is pasted. */
-  const beginLogin = async () => {
+  const beginLogin = async (manual = false) => {
     hostManaged();
     stopCallback();
-    callback = await listenForCode(authorize).catch((error: Error) => { ctx.logger.warn('Cannot receive the authorization code on this machine; it has to be pasted: %s', error.message); return undefined; });
+    if (!manual) callback = await listenForCode(authorize).catch((error: Error) => { ctx.logger.warn('Cannot receive the authorization code on this machine; it has to be pasted: %s', error.message); return undefined; });
     return { url: client.beginLogin(callback?.uri), automatic: callback !== undefined };
   };
   const restore = async () => { await client.restore(); await overlay.apply(client.current()); relay.refresh(); };
