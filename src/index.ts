@@ -18,7 +18,7 @@ import { pluginState, stateText, type PluginState } from './plugin-status.js';
 import { panelRoutes, type FetchRoute, type PanelOps, type PanelPreset } from './panel.js';
 import { registerAssistantTools } from './assistant-tools.js';
 import { registerPageTool } from './page-tool.js';
-import { registerSlidesSkill } from './slides-skill.js';
+import { registerBundledSkills } from './bundled-skills.js';
 import { hostname } from 'node:os';
 import { isTeamProvider, platformAdapter, teamProvider, teamRoutes } from './platform-models.js';
 import { Bridge, bridgeRoute } from './bridge.js';
@@ -378,7 +378,7 @@ export async function apply(ctx: Context, config: Config) {
   });
   ctx.effect(() => () => shared?.stop());
   // Pages an agent publishes (src/page-tool.ts): on a Team DSH, for the member whose session it is.
-  ctx.inject(['skills'], registerSlidesSkill);
+  ctx.inject(['skills'], registerBundledSkills);
   ctx.inject(['tools'], child => registerPageTool(child, {
     client, preset: activePreset,
     starterOf: (sessionId) => shared?.enabled ? roster.ownerOf(sessionId) : undefined,
