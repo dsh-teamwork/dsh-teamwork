@@ -8,7 +8,7 @@ import { presetAvatar } from '../../src/web/avatars.js';
 import type { PanelState } from '../../src/panel.js';
 import type { Host, RenderFactorySlot } from '../../src/web/host.js';
 
-vi.mock('../../src/web/api.js', async (original) => ({ HostUnreachable: (await original<typeof import('../../src/web/api.js')>()).HostUnreachable, api: { summary: vi.fn().mockRejectedValue(new Error("Unavailable")), state: vi.fn(), profile: vi.fn(), updateProfile: vi.fn(), sync: vi.fn(), use: vi.fn(), login: vi.fn(), authorize: vi.fn(), pairPhone: vi.fn(), decidePhone: vi.fn(), revokePhone: vi.fn(), setWorkspace: vi.fn(), teamUsage: vi.fn() } }));
+vi.mock('../../src/web/api.js', async (original) => ({ HostUnreachable: (await original<typeof import('../../src/web/api.js')>()).HostUnreachable, api: { summary: vi.fn().mockRejectedValue(new Error("Unavailable")), state: vi.fn(), profile: vi.fn(), updateProfile: vi.fn(), logout: vi.fn(), sync: vi.fn(), use: vi.fn(), login: vi.fn(), authorize: vi.fn(), pairPhone: vi.fn(), decidePhone: vi.fn(), revokePhone: vi.fn(), setWorkspace: vi.fn(), teamUsage: vi.fn() } }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const profile = { id: 'user', name: 'Ada', email: 'ada@example.com', image: null, locale: 'zh-CN' as const };
 const state: PanelState = {
@@ -61,16 +61,22 @@ test('a slow profile never redirects someone who already opened the phone page',
   expect(document.body.textContent).not.toContain('先从哪个团队开始');
 });
 
-test('preserves an unsaved profile across pages, keeps it after a failed save, and allows discarding it', async () => {
-  vi.mocked(api.updateProfile).mockRejectedValue(new Error('Profile offline'));
-  await mount(); await click('我的账号'); await input('#teamwork-name', 'Draft');
-  await click('设备连接'); await click('我的账号');
-  expect(document.querySelector<HTMLInputElement>('#teamwork-name')!.value).toBe('Draft');
-  await click('保存资料');
-  expect(document.querySelector<HTMLInputElement>('#teamwork-name')!.value).toBe('Draft');
-  expect(document.querySelector('[role="alert"]')?.textContent).toContain('Profile offline');
-  await click('撤销修改');
-  expect(document.querySelector<HTMLInputElement>('#teamwork-name')!.value).toBe('Ada');
+test.each([
+  ['example.com', '切换账号', '退出并切换'],
+  ['我的账号', '退出登录', '确认退出'],
+])('confirms sign-out from %s before returning to sign-in', async (entry, action, confirm) => {
+  vi.mocked(api.logout).mockImplementation(async () => {
+    vi.mocked(api.state).mockResolvedValue({ ...state, authenticated: false, teams: [], presets: [] });
+  });
+  await mount();
+  expect(document.querySelector('footer button[aria-label="DSH 连接 · example.com"]')?.textContent).toBe('example.com');
+  await click(entry); await click(action);
+  expect(api.logout).not.toHaveBeenCalled();
+  await click('取消');
+  expect(document.querySelector('.twui-confirm')).toBeNull();
+  await click(action); await click(confirm);
+  expect(api.logout).toHaveBeenCalledTimes(1);
+  expect(document.body.textContent).toContain('在浏览器中登录');
 });
 
 test('retains revoke confirmation after a failure so the member can retry', async () => {
@@ -235,7 +241,7 @@ test('retries rejecting a request, then confirms a new request and revokes the r
 test('profile read retry stays on the account page instead of opening onboarding', async () => {
   vi.mocked(api.profile).mockRejectedValueOnce(new Error('Profile offline')).mockResolvedValueOnce(profile);
   await mount(); await click('我的账号'); await click('重试');
-  expect(document.querySelector<HTMLInputElement>('#teamwork-name')?.value).toBe('Ada');
+  expect(document.querySelector('.twui-account-identity strong')?.textContent).toBe('Ada');
   expect(document.body.textContent).not.toContain('先从哪个团队开始');
 });
 
@@ -253,9 +259,8 @@ test('hides a consumed code when a new pending phone replaces another pending ph
   expect(document.body.textContent).toContain('New request');
 });
 
-test('chooses a team, filters its resources without changing sessions, and edits the account through a custom select', async () => {
+test('chooses a team, filters its resources without changing sessions, and shows the account identity', async () => {
   vi.mocked(api.state).mockResolvedValue(state); vi.mocked(api.profile).mockResolvedValue(profile);
-  vi.mocked(api.updateProfile).mockResolvedValue({ ...profile, locale: 'en' });
   await mount(); expect(document.body.textContent).toContain('先从哪个团队开始');
   await act(async () => document.querySelector('article button')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
   expect(document.body.textContent).toContain('Preset a'); expect(document.body.textContent).not.toContain('Preset b');
@@ -263,19 +268,42 @@ test('chooses a team, filters its resources without changing sessions, and edits
   expect(document.querySelector('header .twui-select')).not.toBeNull();
   expect(document.querySelector('header')!.textContent).not.toContain('刷新');
   expect(document.querySelector('footer')!.textContent).toContain('Teamwork');
-  expect(document.querySelector('footer button')!.textContent).toBe('刷新');
+  expect(document.querySelector('footer')!.textContent).toContain('刷新');
   await click('我的账号');
-  expect(document.querySelector('select')).toBeNull();
-  await act(async () => document.querySelector<HTMLButtonElement>('#teamwork-locale')!.click());
-  await act(async () => [...document.querySelectorAll('[role="option"]')].find(o => o.textContent === 'English')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
-  expect(api.updateProfile).not.toHaveBeenCalled();
-  await click('保存资料'); expect(api.updateProfile).toHaveBeenCalledWith({ name: 'Ada', locale: 'en' });
+  const account = document.querySelector('.twui-account')!;
+  expect(account.textContent).toContain(profile.email);
+  expect(account.textContent).toContain('简体中文');
+  expect(account.querySelector('input, form')).toBeNull();
+  expect(account.querySelector('a[target="_blank"]')?.getAttribute('href')).toBe(`${state.server}/account`);
+  const memberships = [...account.querySelectorAll('.twui-account-team')].map(row => row.textContent);
+  expect(memberships).toEqual(['Alpha管理员', 'Beta成员']);
+  const leaveLinks = [...account.querySelectorAll<HTMLAnchorElement>('.twui-account-team-leave')];
+  expect(leaveLinks.map(link => [link.href, link.target, link.getAttribute('aria-label')])).toEqual([
+    [state.teams[1].consoleUrl, '_blank', '在网页退出 Beta'],
+  ]);
+  await act(async () => account.querySelectorAll<HTMLButtonElement>('.twui-account-team')[1].click());
+  expect(document.body.textContent).toContain('Preset b');
+  expect(document.body.textContent).not.toContain('Preset a');
   await click('设备连接'); expect(document.body.textContent).toContain('用手机 App 或网页「我的 DSH」操作');
   await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="返回团队资源"]')!.click());
   await act(async () => document.querySelectorAll<HTMLButtonElement>('[role="tab"]')[1].click());
   act(() => root.unmount());
   await mount();
   expect(document.querySelectorAll('[role="tab"]')[1].getAttribute('aria-selected')).toBe('true');
+});
+
+test('saves the selected language immediately and keeps the account identity', async () => {
+  vi.mocked(api.updateProfile).mockImplementation(async input => {
+    vi.mocked(api.state).mockResolvedValue({ ...state, locale: input.locale });
+    return { ...profile, locale: input.locale };
+  });
+  await mount(); await click('我的账号');
+  await act(async () => document.querySelector<HTMLButtonElement>('#teamwork-locale')!.click());
+  await act(async () => [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(option => option.textContent === 'English')!.click());
+  expect(api.updateProfile).toHaveBeenCalledWith({ locale: 'en' });
+  expect(document.querySelector('.twui-account h2')?.textContent).toBe('Account');
+  expect(document.querySelector('#teamwork-locale')?.textContent).toBe('English');
+  expect(document.querySelector('.twui-account-identity')?.textContent).toContain(profile.email);
 });
 
 test('never overlaps state polling while a slow request is pending', async () => {
@@ -494,6 +522,6 @@ test('the account page offers no Team DSH', async () => {
   vi.mocked(api.state).mockResolvedValue(state);
   await mount();
   await click('我的账号');
-  expect(document.body.textContent).toContain('退出此 DSH 的 Teamwork');
+  expect(document.querySelector('.twui-account')?.textContent).not.toContain('切换账号');
   expect(document.body.textContent).not.toContain('团队 DSH');
 });

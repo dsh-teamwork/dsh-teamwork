@@ -297,8 +297,10 @@ export const css = String.raw`
 .twui-header-actions { margin-left: auto; gap: 4px; }
 .twui-header-actions .twui-btn[aria-current="page"] { color: var(--twui-fg); background: var(--twui-fill); }
 .twui-panel-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 16px; min-height: 32px; padding: 2px 12px; border-top: 1px solid var(--twui-border); background: var(--twui-surface); color: var(--twui-fg-muted); font-size: 11px; }
-.twui-footer-identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.twui-footer-identity { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; min-width: 0; }
 .twui-footer-name { font-weight: 500; }
+.twui-footer-connection { min-width: 0; max-width: 100%; }
+.twui-footer-connection > svg { flex-shrink: 0; }
 .twui-footer-service { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .twui-footer-service .twui-signal-dot { display: inline-block; margin-right: 6px; vertical-align: 1px; }
 .twui-footer-actions { margin-left: auto; gap: 4px; }
@@ -330,13 +332,27 @@ export const css = String.raw`
 .twui-tile.twui-tile-media { background: none; overflow: hidden; }
 .twui-tile-media > svg { display: block; width: 100%; height: 100%; }
 .twui-featured .twui-item-desc { max-width: 68ch; }
-.twui-account-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; margin-top: 12px; align-items: start; }
-.twui-account-grid > section { gap: 20px; min-width: 0; }
-.twui-account-grid h3 { font-size: 15px; font-weight: 500; }
-.twui-account-grid .twui-input { width: 100%; }
+.twui-account { display: grid; gap: 24px; width: 100%; max-width: 720px; }
+.twui-account-heading { justify-content: space-between; }
+.twui-account-heading a { text-decoration: none; }
+.twui-account h3 { font-size: 15px; font-weight: 600; }
+.twui-account-identity { display: flex; align-items: center; gap: 12px; overflow-wrap: anywhere; }
+.twui-account-identity > :first-child { flex-shrink: 0; }
+.twui-account-language { border-top: 1px solid var(--twui-border); margin-top: 16px; padding-top: 16px; }
+.twui-account-teams { display: grid; margin: 0; padding: 0; list-style: none; }
+.twui-account-teams > li { display: flex; align-items: center; gap: 8px; }
+.twui-account-teams > li + li { border-top: 1px solid var(--twui-border); }
+.twui-account-team {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px;
+  flex: 1; min-width: 0; min-height: 44px; padding: 6px 8px; border: 0; border-radius: var(--twui-radius-sm);
+  background: transparent; color: var(--twui-fg); font: inherit; text-align: start; overflow-wrap: anywhere; cursor: pointer;
+}
+.twui-account-team:hover { background: var(--twui-hover); }
+.twui-account-team > svg { color: var(--twui-fg-muted); }
+.twui-account-team-leave { flex: none; text-decoration: none; }
+.twui-sign-out { border-top: 1px solid var(--twui-border); padding-top: 12px; }
 .twui-panel-content { gap: 16px; padding-top: 28px; }
 @container (max-width: 680px) {
-  .twui-account-grid { grid-template-columns: minmax(0, 1fr); gap: 32px; }
   .twui-header-actions { width: 100%; justify-content: flex-end; }
   .twui-panel-column { padding-inline: 16px; }
   .twui-resource-toolbar-actions { flex: 1 1 180px; }

@@ -170,7 +170,7 @@ export interface PanelOps {
   summary(teamId: string): Promise<PanelSummary>;
   teamUsage(teamId: string): Promise<PanelTeamUsage>;
   profile(): Promise<PanelProfile>;
-  updateProfile(input: { name: string | null; locale: Locale }): Promise<PanelProfile>;
+  updateProfile(input: { name?: string | null; locale: Locale }): Promise<PanelProfile>;
   state(sessionId: string | undefined): Promise<PanelState>;
   /** The sign-in page; `automatic` when the code comes back to this DSH by itself (src/login-callback.ts). */
   login(): Promise<{ url: string; automatic: boolean }>;
@@ -255,9 +255,9 @@ export function panelRoutes(ops: PanelOps, voice: RouteVoice): FetchRoute[] {
     post('summary', (body) => ops.summary(text(body.teamId, 'field.team'))),
     post('team-usage', (body) => ops.teamUsage(text(body.teamId, 'field.team'))),
     post('update-profile', (body) => {
-      if (body.name !== null && (typeof body.name !== 'string' || body.name.length > 80)) throw new Error(say('profile.nameTooLong'));
+      if (body.name !== undefined && body.name !== null && (typeof body.name !== 'string' || body.name.length > 80)) throw new Error(say('profile.nameTooLong'));
       if (body.locale !== 'en' && body.locale !== 'zh-CN') throw new Error(say('profile.badLocale'));
-      return ops.updateProfile({ name: body.name as string | null, locale: body.locale });
+      return ops.updateProfile(body.name === undefined ? { locale: body.locale } : { name: body.name as string | null, locale: body.locale });
     }),
     post('login', () => ops.login()),
     post('authorize', (body) => ops.authorize(text(body.code, 'field.code'))),

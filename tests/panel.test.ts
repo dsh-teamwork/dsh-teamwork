@@ -26,10 +26,11 @@ describe('panel routes', () => {
   it('proxies only editable profile fields and rejects invalid updates', async () => {
     calls.length = 0;
     expect((await post('update-profile', { name: 'Ada', locale: 'en', token: 'ignored' })).status).toBe(200);
-    expect(calls).toEqual([['profile', [{ name: 'Ada', locale: 'en' }]]]);
+    expect((await post('update-profile', { locale: 'zh-CN' })).status).toBe(200);
+    expect(calls).toEqual([['profile', [{ name: 'Ada', locale: 'en' }]], ['profile', [{ locale: 'zh-CN' }]]]);
     expect((await post('update-profile', { name: 'x'.repeat(81), locale: 'en' })).status).toBe(400);
     expect((await post('update-profile', { name: null, locale: 'invalid' })).status).toBe(400);
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(2);
   });
   it('checks browser origin and JSON on every panel POST', async () => {
     for (const route of routes.values()) {

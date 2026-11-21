@@ -209,7 +209,7 @@ export interface PanelOps {
     teamUsage(teamId: string): Promise<PanelTeamUsage>;
     profile(): Promise<PanelProfile>;
     updateProfile(input: {
-        name: string | null;
+        name?: string | null;
         locale: Locale;
     }): Promise<PanelProfile>;
     state(sessionId: string | undefined): Promise<PanelState>;
