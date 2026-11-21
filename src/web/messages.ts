@@ -140,6 +140,11 @@ const en = {
 
   // Models
   'model.body': 'Called by the team’s server, so the provider key stays there. Opens a session on it; other sessions and your local default stay as they are.',
+  'model.context': '{tokens} tokens context window',
+  'model.maxOutput': '{tokens} tokens max output',
+  'model.ioImage': 'Input: text and images. Output: text.',
+  'model.ioText': 'Input: text. Output: text.',
+  'model.ioUnknown': 'Input: text. Output: text. Image input is unspecified.',
   'model.noWorkspace': 'Add a workspace in DSH first, then start a session.',
   'model.noContextWindow': 'The team model “{name}” has no context window (contextWindow) configured, so it cannot be used yet. Ask a team admin to set it in the console, then sync again.',
   'model.offline': 'The team model “{name}” has been taken offline by the service that hosts it, so it cannot be used. Choose another model.',
@@ -426,6 +431,11 @@ const zhCN: Record<PanelMessage, string> = {
   'list.separator': '、',
 
   'model.body': '由团队服务器代为调用，provider 密钥留在服务器上。用它开启一个会话，其他会话和本地默认模型都不受影响。',
+  'model.context': '上下文窗口 {tokens} tokens',
+  'model.maxOutput': '最大输出 {tokens} tokens',
+  'model.ioImage': '输入：文本和图像。输出：文本。',
+  'model.ioText': '输入：文本。输出：文本。',
+  'model.ioUnknown': '输入：文本。输出：文本。图像输入未配置。',
   'model.noWorkspace': '先在 DSH 添加一个工作区，再开启会话。',
   'model.noContextWindow': '团队模型「{name}」没有配置上下文窗口（contextWindow），暂时不能使用。请团队管理员在控制台补充后重新同步。',
   'model.offline': '团队模型「{name}」已被托管方下线，暂时不能使用。请改用其他模型。',

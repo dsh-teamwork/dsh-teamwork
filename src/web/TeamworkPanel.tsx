@@ -957,13 +957,29 @@ async function startModelSession(t: Translate, dsh: Host, model: PanelState['mod
 
 function ModelItem({ model, state, dsh, run }: { model: PanelState['models'][number]; state: PanelState; dsh: Host; run: Run }) {
   const t = useT();
+  const number = new Intl.NumberFormat(t.locale);
+  const millions = new Intl.NumberFormat(t.locale, { maximumSignificantDigits: 3 });
+  const shortTokens = (tokens: number) => `${millions.format(tokens / 1_000_000)}M`;
+  const modalities = t(model.vision === undefined ? 'model.ioUnknown' : model.vision ? 'model.ioImage' : 'model.ioText');
   return (
     <Item
       icon="cpu"
       title={model.name}
+      subtitle={<span className="twui-mono">{model.upstream}</span>}
       description={t('model.body')}
       tags={<>
-        <Badge><span className="twui-mono">{model.upstream}</span></Badge>
+        <span className="twui-model-modalities" role="img" aria-label={modalities} title={modalities}>
+          <Icon name="text" />
+          {model.vision && <Icon name="image" />}
+          <Icon name="arrowRight" size={14} />
+          <Icon name="text" />
+        </span>
+        {model.contextWindow !== undefined && <Badge title={t('model.context', { tokens: number.format(model.contextWindow) })}>
+          {t('model.context', { tokens: shortTokens(model.contextWindow) })}
+        </Badge>}
+        {model.maxTokens !== undefined && <Badge title={t('model.maxOutput', { tokens: number.format(model.maxTokens) })}>
+          {t('model.maxOutput', { tokens: shortTokens(model.maxTokens) })}
+        </Badge>}
         {(model.contextWindowMissing || model.modelOffline) && <Badge tone="warning" dot>{t('preset.notReady')}</Badge>}
       </>}
       actions={<Button size="sm" icon="plus" disabled={model.contextWindowMissing || model.modelOffline} onClick={() => run(() => startModelSession(t, dsh, model, state))}>{t('preset.newSession')}</Button>}

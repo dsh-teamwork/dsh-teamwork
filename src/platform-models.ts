@@ -12,11 +12,19 @@ export const isTeamProvider = (provider: string | undefined) => !!provider?.star
 /** How DSH's model picker heads a team's models: `Teamwork <team>`, apart from the member's own providers. */
 export const teamGroupName = (teamName: string) => `Teamwork ${teamName}`;
 
-export function platformAdapter(client: TeamworkClient) {
+export function platformAdapter(client: TeamworkClient): PiAiAdapter {
   let previous: Snapshot | undefined;
   let profiles = new Map<string, ResolvedPiAiProviderProfile>();
   const api = openAICompletionsApi();
-  return new PiAiAdapter({
+  class TeamworkAdapter extends PiAiAdapter {
+    override async listModels(provider: string) {
+      const models = await super.listModels(provider);
+      const team = client.current()?.teams.find(team => teamProvider(team.teamId) === provider);
+      const modelIds = new Set(team?.configs.filter(config => config.kind === 'model').map(config => config.id));
+      return models.filter(model => modelIds.has(model.id));
+    }
+  }
+  return new TeamworkAdapter({
     profiles: () => {
       const snapshot = client.current();
       if (snapshot === previous) return profiles;
@@ -42,6 +50,7 @@ export function platformAdapter(client: TeamworkClient) {
           retryPolicy: resolveRetryPolicy({ mode: 'normal', maxRetries: 0 }, provider), modelErrors: new Map(), configuredMaxTokens: new Map(models.map(m => [m.id, m.maxTokens])),
           piProvider: { id: provider, name: teamGroupName(team.teamName), baseUrl,
             auth: { apiKey: { name: 'Platform session', resolve: async ({ credential }) => ({ auth: { apiKey: credential?.key }, source: 'Platform session' }) } },
+            // Preset IDs remain resolvable for active and saved sessions.
             getModels: () => models,
             stream: (model, context, options) => api.stream(model, context, options),
             streamSimple: (model, context, options) => api.streamSimple(model, context, options),

@@ -138,6 +138,9 @@ export interface PanelState {
         name: string;
         version: number;
         upstream: string;
+        contextWindow?: number;
+        maxTokens?: number;
+        vision?: boolean;
         contextWindowMissing: boolean;
         modelOffline: boolean;
     }>;
