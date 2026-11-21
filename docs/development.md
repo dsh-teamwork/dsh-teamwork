@@ -49,6 +49,20 @@ The fixture profile sets `npm_config_ignore_workspace_root_check=true` for its
 own workspace root. Successful runs clean up; failures retain diagnostics that
 can contain a local browser token. Do not publish raw host logs.
 
+## Bundled skills
+
+`skills/teamwork-slides/` ships in the package and `src/slides-skill.ts` registers it with DSH's
+skill registry (`ctx.skills.register`, resource base the skill's folder) wherever the host has one,
+so the console's presentation template and any session find it without an install. `SKILL.md` is
+the model's instructions; `template/index.html` is the deck runtime the agent copies beside the
+`deck.js` it writes. The runtime computes each layout once as positioned elements on a 1280x720
+canvas, draws them as HTML, prints them to PDF and exports the same elements with pptxgenjs (pinned
+on jsDelivr with its integrity hash), so the page and the PowerPoint file match and stay editable.
+A deck reports its own problems in its toolbar; `check.mjs` gives the agent the same checks
+without a browser, by running the template's `checks:start`…`checks:end` block on `deck.js`
+(a headless browser in the agent's shell proved too unreliable to rely on). Exporting from a published page needs the pages sandbox's
+`allow-downloads` (platform `docs/tech/pages.md`).
+
 ## Host and browser boundary
 
 The package declares `dsh.bundle.patch` and `dsh.client`, exporting its browser
