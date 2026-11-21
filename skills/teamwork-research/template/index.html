@@ -1,0 +1,344 @@
+<!doctype html>
+<!--
+  A Teamwork research report. This file is the runtime and is never edited: the report itself is report.js
+  (window.REPORT) beside it, as the teamwork-research skill's SKILL.md describes. It draws the summary, the
+  sections with numbered citations, the gaps and the sources; prints to PDF; saves the report as Markdown;
+  and checks its own citations.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Report</title>
+<style>
+  :root {
+    --paper: #fbfaf7; --ink: #1d2027; --muted: #6a6f7a; --line: #e4e1da; --soft: #f1eee7; --accent: #1f5f8b;
+    --good: #2f7d4f; --mid: #b7791f; --low: #b54a3c; --chrome: #1f2228; --bar-h: 52px;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--paper); }
+  body { margin: 0; color: var(--ink); font: 17px/1.75 var(--font); -webkit-font-smoothing: antialiased; padding-bottom: var(--bar-h); }
+  a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+  .wrap { display: grid; grid-template-columns: 220px minmax(0, 760px); gap: 56px; justify-content: center; padding: 56px 32px 80px; }
+  nav.toc { position: sticky; top: 32px; align-self: start; font-size: 14px; line-height: 1.5; }
+  nav.toc .h { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  nav.toc a { display: block; color: var(--muted); padding: 5px 0 5px 12px; border-left: 2px solid var(--line); }
+  nav.toc a.on, nav.toc a:hover { color: var(--ink); border-left-color: var(--accent); text-decoration: none; }
+  header .kicker { color: var(--accent); font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+  h1 { font-size: 36px; line-height: 1.25; margin: 10px 0 12px; letter-spacing: -.01em; }
+  header .sub { font-size: 19px; color: var(--muted); margin: 0 0 18px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; color: var(--muted); padding-bottom: 22px; border-bottom: 1px solid var(--line); }
+  .question { margin: 26px 0 0; font-size: 15px; color: var(--muted); }
+  .question b { color: var(--ink); font-weight: 600; }
+  .summary { margin: 26px 0 8px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 24px 28px; }
+  .summary .label { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .summary .answer { font-size: 21px; line-height: 1.6; font-weight: 650; margin: 10px 0 14px; }
+  .summary ul { margin: 0; padding-left: 1.2em; } .summary li { margin: 6px 0; }
+  .summary .rec { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--line); }
+  .summary .rec b { color: var(--accent); }
+  .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; letter-spacing: .04em; padding: 3px 10px; border-radius: 99px; text-transform: none; }
+  .badge.high { background: #e3f1e8; color: var(--good); } .badge.medium { background: #f8edd9; color: var(--mid); } .badge.low { background: #f6e1dd; color: var(--low); }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 18px 0 4px; }
+  .metric { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .metric .v { font-size: 26px; font-weight: 750; line-height: 1.2; color: var(--accent); }
+  .metric .l { font-size: 14px; color: var(--ink); margin-top: 4px; } .metric .n { font-size: 13px; color: var(--muted); }
+  section.s { margin-top: 44px; }
+  h2 { font-size: 24px; line-height: 1.35; margin: 0 0 6px; }
+  .s .lead { color: var(--muted); margin: 0 0 12px; font-size: 15px; }
+  p { margin: 12px 0; }
+  ul.b { padding-left: 1.2em; margin: 12px 0; } ul.b li { margin: 6px 0; }
+  sup.c { font-size: 11px; line-height: 0; margin-left: 1px; } sup.c a { padding: 0 1px; }
+  sup.c.bad a { color: var(--low); font-weight: 700; }
+  .callout { border-left: 3px solid var(--accent); background: #fff; padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+  .callout .k { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+  .callout.risk { border-color: var(--low); } .callout.risk .k { color: var(--low); }
+  .callout.gap { border-color: var(--mid); } .callout.gap .k { color: var(--mid); }
+  .callout.estimate, .callout.inference { border-color: var(--muted); } .callout.estimate .k, .callout.inference .k { color: var(--muted); }
+  .src-quote { font-size: 13px; color: #4a4f59; border-left: 2px solid var(--line); padding-left: 10px; margin: 4px 0; font-style: italic; }
+  blockquote { margin: 18px 0; padding: 4px 0 4px 18px; border-left: 3px solid var(--line); font-size: 18px; color: #3b3f48; }
+  .tbl { overflow-x: auto; margin: 16px 0; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; line-height: 1.5; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: var(--soft); font-weight: 650; }
+  tr:last-child td { border-bottom: 0; }
+  td.hl { background: #eef5fa; font-weight: 600; }
+  .caption { font-size: 13px; color: var(--muted); margin: -8px 0 16px; }
+  ol.sources { padding-left: 1.6em; font-size: 15px; line-height: 1.55; }
+  ol.sources li { margin: 10px 0; padding-left: 4px; scroll-margin-top: 24px; }
+  ol.sources li:target { background: #fff6d6; border-radius: 6px; }
+  .src-meta { color: var(--muted); font-size: 13px; } .src-url { color: var(--muted); font-size: 13px; word-break: break-all; }
+  .tier { font-size: 11px; font-weight: 700; letter-spacing: .04em; padding: 1px 7px; border-radius: 99px; margin-left: 6px; vertical-align: 1px; }
+  .tier.primary { background: #e3f1e8; color: var(--good); } .tier.secondary { background: var(--soft); color: var(--muted); } .tier.data { background: #e6eef6; color: var(--accent); }
+  #bar { position: fixed; left: 0; right: 0; bottom: 0; height: var(--bar-h); display: flex; gap: 2px; align-items: center; justify-content: center;
+    background: var(--chrome); color: #f3f3f1; font: 13px/1 system-ui, sans-serif; z-index: 10; padding: 0 8px; overflow-x: auto; }
+  #bar button { all: unset; cursor: pointer; padding: 8px 12px; border-radius: 6px; white-space: nowrap; }
+  #bar button:hover { background: rgba(255,255,255,.14); }
+  #bar .warn { color: #f5b049; }
+  #toast { position: fixed; left: 50%; bottom: calc(var(--bar-h) + 16px); transform: translateX(-50%); background: var(--chrome); color: #f3f3f1;
+    padding: 10px 16px; border-radius: 8px; font: 14px/1.5 system-ui, sans-serif; display: none; z-index: 20; max-width: 86vw; white-space: pre-wrap; }
+  @media (max-width: 980px) { .wrap { grid-template-columns: minmax(0, 760px); gap: 0; padding: 32px 18px 64px; } nav.toc { display: none; } h1 { font-size: 30px; } }
+  @media print {
+    @page { size: A4; margin: 18mm 16mm; }
+    html, body { background: #fff; } body { padding: 0; font-size: 11pt; }
+    #bar, #toast, nav.toc { display: none !important; }
+    .wrap { display: block; padding: 0; }
+    .summary, .metric, .tbl, .callout { break-inside: avoid; }
+    h2 { break-after: avoid; }
+    a { color: var(--ink); }
+    ol.sources .src-url { display: block; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap"><nav class="toc" id="toc"></nav><main id="main"></main></div>
+<div id="bar" role="toolbar">
+  <button id="b-pdf"></button>
+  <button id="b-md"></button>
+  <button id="b-warn" class="warn" hidden></button>
+</div>
+<div id="toast" role="status"></div>
+<script src="report.js"></script>
+<script>
+"use strict";
+(function () {
+  /* checks:start: check.mjs beside the skill runs this block on its own, so it uses nothing outside it. */
+  /** The problems a report's own text shows: citations to no source, sources nobody cites or cannot be found again,
+   *  figures without a citation, and a missing answer. */
+  function checkReport(r) {
+    var out = [];
+    function s(v) { return v == null ? "" : String(v); }
+    function list(v) { return Array.isArray(v) ? v : v == null ? [] : [v]; }
+    if (!r || typeof r !== "object") return ["report.js sets no window.REPORT"];
+    var ids = {}, cited = {};
+    list(r.sources).forEach(function (src, i) {
+      var at = "source " + (src && src.id != null ? src.id : "#" + (i + 1)) + ": ";
+      if (!src || src.id == null) { out.push(at + "has no id"); return; }
+      if (ids[src.id]) out.push(at + "id is used twice");
+      ids[src.id] = true;
+      if (!/^https?:\/\//.test(s(src.url))) out.push(at + "has no http(s) url, so nobody can check it");
+      if (!s(src.title).trim()) out.push(at + "has no title");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(s(src.accessed))) out.push(at + "has no accessed date (YYYY-MM-DD)");
+      if (["primary", "secondary", "data"].indexOf(src.kind) < 0) out.push(at + "kind is not primary, secondary or data");
+    });
+    // Every piece of text a reader sees, with where it is, so a citation or a figure can be traced to its place.
+    var texts = [];
+    var sum = r.summary || {};
+    texts.push(["summary", sum.answer]);
+    list(sum.points).forEach(function (p) { texts.push(["summary", p]); });
+    texts.push(["summary", sum.recommendation]);
+    list(r.metrics).forEach(function (m) { texts.push(["metrics", s(m && m.value) + " " + s(m && m.label) + " " + s(m && m.note) + (m && m.source != null ? " [" + m.source + "]" : "")]); });
+    list(r.sections).forEach(function (sec, i) {
+      var at = "section " + (i + 1);
+      if (!s(sec && sec.title).trim()) out.push(at + ": has no title");
+      list(sec && sec.blocks).forEach(function (b) {
+        b = b || {};
+        if (["text", "bullets", "table", "callout", "quote"].indexOf(b.type) < 0) { out.push(at + ": unknown block type \"" + b.type + "\""); return; }
+        if (b.type === "text") texts.push([at, b.text]);
+        if (b.type === "callout") texts.push([b.kind === "estimate" || b.kind === "inference" ? "summary" : at, b.text]);
+        if (b.type === "bullets") list(b.items).forEach(function (x) { texts.push([at, x]); });
+        if (b.type === "quote") { texts.push([at, s(b.text) + (b.source != null ? " [" + b.source + "]" : "")]); if (b.source == null) out.push(at + ": a quote names no source"); }
+        if (b.type === "table") {
+          var cols = list(b.columns).length;
+          list(b.rows).forEach(function (row, j) {
+            if (list(row).length !== cols) out.push(at + ": table row " + (j + 1) + " has " + list(row).length + " cells for " + cols + " columns");
+            list(row).forEach(function (cell) { texts.push([at + " table", cell]); });
+          });
+          texts.push([at + " table", b.caption]);
+        }
+      });
+    });
+    texts.forEach(function (t) {
+      var text = s(t[1]), marks = text.match(/\[(\d+(?:\s*[,，]\s*\d+)*)\]/g) || [];
+      marks.forEach(function (m) { m.slice(1, -1).split(/[,，]/).forEach(function (n) { n = n.trim(); cited[n] = true; if (!ids[n]) out.push(t[0] + ": cites [" + n + "], which is not in sources"); }); });
+      // A figure a reader would want to check: a number with a unit, a percentage, money or a year-like quantity.
+      var figure = /\d[\d,.]*\s*(%|％|万|亿|千|百万|million|billion|bn|m\b|k\b|x\b|×|倍|元|美元|\$|USD|RMB|CNY|EUR|users|用户|家|个|次)|[$¥€£]\s?\d/i;
+      if (t[0] !== "summary" && figure.test(text) && !marks.length && !/\b(estimate|估算|预计)\b/i.test(text)) out.push(t[0] + ": a figure has no citation: \"" + text.slice(0, 50) + "\"");
+    });
+    Object.keys(ids).forEach(function (id) { if (!cited[id]) out.push("source " + id + ": is never cited"); });
+    // A quote from the page shows the source was read, not guessed from a search result.
+    list(r.sources).forEach(function (src) { if (src && src.id != null && cited[src.id] && !s(src.quote).trim()) out.push("source " + src.id + ": has no quote from the page that supports what cites it"); });
+    if (!s(sum.answer).trim()) out.push("summary: no answer to the question");
+    if (!s(r.question).trim()) out.push("question: the report does not state the question it answers");
+    if (!list(r.sections).length) out.push("sections: none");
+    if (!list(r.sources).length) out.push("sources: none");
+    return out;
+  }
+  /* checks:end */
+
+  var UI = {
+    en: { pdf: "PDF", md: "Markdown", issues: "issues", contents: "Contents", summary: "Summary", answer: "Bottom line", rec: "Recommendation",
+      confidence: { high: "High confidence", medium: "Medium confidence", low: "Low confidence" }, question: "Question", scope: "Scope",
+      asOf: "As of", sources: "Sources", gaps: "What could not be verified", method: "How this was researched",
+      included: "Covers", excluded: "Leaves out", subq: "Sub-questions", accessed: "accessed", published: "published",
+      kinds: { primary: "primary", secondary: "secondary", data: "data" }, callout: { finding: "Finding", risk: "Risk", gap: "Gap", estimate: "Estimate", inference: "Inference" },
+      saved: "Markdown saved.", by: "By", colon: ": ", count: function (n) { return n + (n === 1 ? " source" : " sources"); } },
+    "zh-CN": { pdf: "导出 PDF", md: "导出 Markdown", issues: "处问题", contents: "目录", summary: "结论摘要", answer: "核心结论", rec: "建议",
+      confidence: { high: "高可信度", medium: "中等可信度", low: "低可信度" }, question: "研究问题", scope: "范围",
+      asOf: "数据截至", sources: "来源", gaps: "尚未核实的内容", method: "研究方法",
+      included: "包括", excluded: "不包括", subq: "子问题", accessed: "访问于", published: "发布于",
+      kinds: { primary: "一手", secondary: "二手", data: "数据" }, callout: { finding: "发现", risk: "风险", gap: "缺口", estimate: "估算", inference: "推断" },
+      saved: "Markdown 已保存。", by: "作者", colon: "：", count: function (n) { return n + " 个来源"; } }
+  };
+  var R = window.REPORT || { title: "report.js was not found", question: "", summary: {}, sections: [], sources: [] };
+  var lang = /^zh/i.test(R.lang || "") ? "zh-CN" : "en", t = UI[lang];
+  document.documentElement.lang = lang;
+  document.documentElement.style.setProperty("--font", lang === "zh-CN"
+    ? '"PingFang SC","Microsoft YaHei","Noto Sans CJK SC","Source Han Sans SC",sans-serif'
+    : 'Charter,"Iowan Old Style",Georgia,"Segoe UI",serif');
+  if (/^#?[0-9a-fA-F]{6}$/.test(R.accent || "")) document.documentElement.style.setProperty("--accent", "#" + R.accent.replace("#", ""));
+  document.title = R.title || "Report";
+
+  function s(v) { return v == null ? "" : String(v); }
+  function list(v) { return Array.isArray(v) ? v : v == null ? [] : [v]; }
+  function esc(v) { return s(v).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  var byId = {}; list(R.sources).forEach(function (src) { if (src && src.id != null) byId[src.id] = src; });
+  /** Text with its [n] citations as links to the sources, each titled with what it cites. */
+  function rich(v) {
+    return esc(v).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\[(\d+(?:\s*[,，]\s*\d+)*)\]/g, function (_, nums) {
+      return nums.split(/[,，]/).map(function (n) {
+        n = n.trim(); var src = byId[n];
+        if (!src) return '<sup class="c bad"><a href="#sources" title="?">[' + n + ']</a></sup>';
+        var tip = s(src.title) + (src.publisher ? " — " + s(src.publisher) : "") + (src.date ? " (" + s(src.date) + ")" : "");
+        return '<sup class="c"><a href="#src-' + esc(n) + '" title="' + esc(tip) + '">[' + n + ']</a></sup>';
+      }).join("");
+    });
+  }
+
+  var html = [], toc = [];
+  function anchor(id, title) { toc.push([id, title]); return id; }
+  html.push('<header><div class="kicker">' + esc(R.kicker || "") + '</div><h1>' + esc(R.title) + '</h1>');
+  if (R.subtitle) html.push('<p class="sub">' + esc(R.subtitle) + '</p>');
+  var meta = [];
+  if (R.author) meta.push(esc(t.by) + " " + esc(R.author));
+  if (R.date) meta.push(esc(R.date));
+  if ((R.scope || {}).asOf) meta.push(esc(t.asOf) + " " + esc(R.scope.asOf));
+  meta.push(esc(t.count(list(R.sources).length)));
+  html.push('<div class="meta">' + meta.map(function (m) { return "<span>" + m + "</span>"; }).join("") + "</div>");
+  if (R.question) html.push('<p class="question"><b>' + esc(t.question + t.colon) + "</b>" + rich(R.question) + "</p>");
+  html.push("</header>");
+
+  var sum = R.summary || {};
+  html.push('<section class="summary" id="' + anchor("summary", t.summary) + '"><div class="label"><span>' + esc(t.answer) + "</span>" +
+    (sum.confidence ? '<span class="badge ' + esc(sum.confidence) + '">' + esc(t.confidence[sum.confidence] || sum.confidence) + "</span>" : "") + "</div>");
+  html.push('<div class="answer">' + rich(sum.answer) + "</div>");
+  if (list(sum.points).length) html.push("<ul>" + list(sum.points).map(function (p) { return "<li>" + rich(p) + "</li>"; }).join("") + "</ul>");
+  if (sum.recommendation) html.push('<div class="rec"><b>' + esc(t.rec) + "</b> " + rich(sum.recommendation) + "</div>");
+  if (sum.confidenceWhy) html.push('<p class="caption" style="margin:12px 0 0">' + rich(sum.confidenceWhy) + "</p>");
+  html.push("</section>");
+  if (list(R.metrics).length) {
+    html.push('<div class="metrics">' + list(R.metrics).map(function (m) {
+      return '<div class="metric"><div class="v">' + esc(m.value) + '</div><div class="l">' + esc(m.label) +
+        (m.source != null ? rich(" [" + m.source + "]") : "") + "</div>" + (m.note ? '<div class="n">' + esc(m.note) + "</div>" : "") + "</div>";
+    }).join("") + "</div>");
+  }
+
+  list(R.sections).forEach(function (sec, i) {
+    sec = sec || {};
+    html.push('<section class="s" id="' + anchor("s" + (i + 1), s(sec.title)) + '"><h2>' + esc(sec.title) + "</h2>");
+    if (sec.lead) html.push('<p class="lead">' + rich(sec.lead) + "</p>");
+    list(sec.blocks).forEach(function (b) {
+      b = b || {};
+      if (b.type === "text") html.push("<p>" + rich(b.text) + "</p>");
+      else if (b.type === "bullets") html.push('<ul class="b">' + list(b.items).map(function (x) { return "<li>" + rich(x) + "</li>"; }).join("") + "</ul>");
+      else if (b.type === "callout") html.push('<div class="callout ' + esc(b.kind || "finding") + '"><div class="k">' + esc(t.callout[b.kind] || t.callout.finding) + "</div>" + rich(b.text) + "</div>");
+      else if (b.type === "quote") html.push("<blockquote>" + rich(s(b.text) + (b.source != null ? " [" + b.source + "]" : "")) + "</blockquote>");
+      else if (b.type === "table") {
+        html.push('<div class="tbl"><table><thead><tr>' + list(b.columns).map(function (c) { return "<th>" + esc(c) + "</th>"; }).join("") + "</tr></thead><tbody>" +
+          list(b.rows).map(function (row) { return "<tr>" + list(row).map(function (cell, ci) { return "<td" + (b.highlight === ci ? ' class="hl"' : "") + ">" + rich(cell) + "</td>"; }).join("") + "</tr>"; }).join("") +
+          "</tbody></table></div>");
+        if (b.caption) html.push('<p class="caption">' + rich(b.caption) + "</p>");
+      }
+    });
+    html.push("</section>");
+  });
+
+  if (list(R.gaps).length) {
+    html.push('<section class="s" id="' + anchor("gaps", t.gaps) + '"><h2>' + esc(t.gaps) + '</h2><ul class="b">' + list(R.gaps).map(function (g) { return "<li>" + rich(g) + "</li>"; }).join("") + "</ul></section>");
+  }
+  var sc = R.scope || {};
+  if (list(sc.subQuestions).length || list(sc.included).length || list(sc.excluded).length || sc.method) {
+    html.push('<section class="s" id="' + anchor("method", t.method) + '"><h2>' + esc(t.method) + "</h2>");
+    if (list(sc.subQuestions).length) html.push("<p><b>" + esc(t.subq) + "</b></p><ol>" + list(sc.subQuestions).map(function (q) { return "<li>" + rich(q) + "</li>"; }).join("") + "</ol>");
+    if (list(sc.included).length) html.push("<p><b>" + esc(t.included + t.colon) + "</b>" + list(sc.included).map(esc).join(lang === "zh-CN" ? "、" : ", ") + "</p>");
+    if (list(sc.excluded).length) html.push("<p><b>" + esc(t.excluded + t.colon) + "</b>" + list(sc.excluded).map(esc).join(lang === "zh-CN" ? "、" : ", ") + "</p>");
+    if (sc.method) html.push("<p>" + rich(sc.method) + "</p>");
+    html.push("</section>");
+  }
+  html.push('<section class="s" id="' + anchor("sources", t.sources) + '"><h2>' + esc(t.sources) + '</h2><ol class="sources">' +
+    list(R.sources).map(function (src) {
+      src = src || {};
+      var bits = [src.publisher, src.date ? t.published + " " + src.date : "", src.accessed ? t.accessed + " " + src.accessed : ""].filter(Boolean).map(esc).join(" · ");
+      return '<li id="src-' + esc(src.id) + '" value="' + esc(src.id) + '"><a href="' + esc(src.url) + '" target="_blank" rel="noopener noreferrer">' + esc(src.title || src.url) + "</a>" +
+        (src.kind ? '<span class="tier ' + esc(src.kind) + '">' + esc(t.kinds[src.kind] || src.kind) + "</span>" : "") +
+        (bits ? '<div class="src-meta">' + bits + "</div>" : "") + (src.note ? '<div class="src-meta">' + esc(src.note) + "</div>" : "") + (src.quote ? '<div class="src-quote">“' + esc(src.quote) + '”</div>' : "") +
+        '<div class="src-url">' + esc(src.url) + "</div></li>";
+    }).join("") + "</ol></section>");
+
+  document.getElementById("main").innerHTML = html.join("");
+  document.getElementById("toc").innerHTML = '<div class="h">' + esc(t.contents) + "</div>" + toc.map(function (x) { return '<a href="#' + x[0] + '">' + esc(x[1]) + "</a>"; }).join("");
+
+  // The contents follow the reading position.
+  var links = Array.prototype.slice.call(document.querySelectorAll("#toc a"));
+  var spy = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) { if (e.isIntersecting) links.forEach(function (a) { a.classList.toggle("on", a.getAttribute("href") === "#" + e.target.id); }); });
+  }, { rootMargin: "0px 0px -70% 0px" });
+  toc.forEach(function (x) { var el = document.getElementById(x[0]); if (el) spy.observe(el); });
+
+  // ---- Markdown: the same report as text, for a document or a chat -----------------------------------------------
+  function md() {
+    // Bold labels close before the space: "**Question:** text", or "**问题：**正文".
+    var label = function (v) { return "**" + v + t.colon.trim() + "**" + (lang === "zh-CN" ? "" : " "); };
+    var o = [], plain = function (v) { return s(v).replace(/\[(\d+(?:\s*[,，]\s*\d+)*)\]/g, function (_, n) { return n.split(/[,，]/).map(function (x) { return "[^" + x.trim() + "]"; }).join(""); }); };
+    o.push("# " + s(R.title)); if (R.subtitle) o.push("", "_" + s(R.subtitle) + "_");
+    o.push("", meta.join(" · ").replace(/<[^>]+>/g, ""));
+    if (R.question) o.push("", label(t.question) + plain(R.question));
+    o.push("", "## " + t.summary, "", "**" + plain(sum.answer) + "**" + (sum.confidence ? " (" + (t.confidence[sum.confidence] || sum.confidence) + ")" : ""));
+    list(sum.points).forEach(function (p) { o.push("- " + plain(p)); });
+    if (sum.recommendation) o.push("", label(t.rec) + plain(sum.recommendation));
+    if (list(R.metrics).length) { o.push(""); list(R.metrics).forEach(function (m) { o.push("- **" + s(m.value) + "** " + s(m.label) + (m.source != null ? "[^" + m.source + "]" : "") + (m.note ? " — " + s(m.note) : "")); }); }
+    list(R.sections).forEach(function (sec) {
+      o.push("", "## " + s(sec.title)); if (sec.lead) o.push("", plain(sec.lead));
+      list(sec.blocks).forEach(function (b) {
+        if (b.type === "text") o.push("", plain(b.text));
+        else if (b.type === "bullets") { o.push(""); list(b.items).forEach(function (x) { o.push("- " + plain(x)); }); }
+        else if (b.type === "callout") o.push("", "> " + label(t.callout[b.kind] || t.callout.finding) + plain(b.text));
+        else if (b.type === "quote") o.push("", "> " + plain(s(b.text) + (b.source != null ? " [" + b.source + "]" : "")));
+        else if (b.type === "table") {
+          o.push("", "| " + list(b.columns).join(" | ") + " |", "|" + list(b.columns).map(function () { return " --- |"; }).join(""));
+          list(b.rows).forEach(function (row) { o.push("| " + list(row).map(function (c) { return plain(c).replace(/\|/g, "\\|"); }).join(" | ") + " |"); });
+          if (b.caption) o.push("", "_" + plain(b.caption) + "_");
+        }
+      });
+    });
+    if (list(R.gaps).length) { o.push("", "## " + t.gaps, ""); list(R.gaps).forEach(function (g) { o.push("- " + plain(g)); }); }
+    o.push("", "## " + t.sources, "");
+    list(R.sources).forEach(function (src) { o.push("[^" + src.id + "]: " + s(src.title) + (src.publisher ? ", " + s(src.publisher) : "") + (src.date ? ", " + s(src.date) : "") + ". " + s(src.url) + (src.accessed ? " (" + t.accessed + " " + s(src.accessed) + ")" : "")); });
+    return o.join("\n") + "\n";
+  }
+  function saveMarkdown() {
+    var name = (s(R.file) || s(R.title) || "report").replace(/[\\/:*?"<>|]+/g, " ").trim() || "report";
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([md()], { type: "text/markdown;charset=utf-8" })); a.download = name + ".md";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 60000);
+    toast(t.saved, 4000);
+  }
+  function toast(msg, ms) {
+    var n = document.getElementById("toast"); n.textContent = msg; n.style.display = "block";
+    clearTimeout(toast.timer); if (ms) toast.timer = setTimeout(function () { n.style.display = "none"; }, ms);
+  }
+
+  var issues = checkReport(R);
+  document.getElementById("b-pdf").textContent = t.pdf; document.getElementById("b-pdf").onclick = function () { window.print(); };
+  document.getElementById("b-md").textContent = t.md; document.getElementById("b-md").onclick = saveMarkdown;
+  if (issues.length) {
+    var w = document.getElementById("b-warn"); w.hidden = false; w.textContent = "⚠ " + issues.length + " " + t.issues;
+    w.title = issues.join("\n"); w.onclick = function () { toast(issues.join("\n"), 15000); };
+    if (window.console) console.warn("Report issues:\n" + issues.join("\n"));
+  }
+  window.RESEARCH = { issues: issues, markdown: md };
+})();
+</script>
+</body>
+</html>

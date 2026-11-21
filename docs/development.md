@@ -51,17 +51,37 @@ can contain a local browser token. Do not publish raw host logs.
 
 ## Bundled skills
 
-`skills/teamwork-slides/` ships in the package and `src/slides-skill.ts` registers it with DSH's
-skill registry (`ctx.skills.register`, resource base the skill's folder) wherever the host has one,
-so the console's presentation template and any session find it without an install. `SKILL.md` is
-the model's instructions; `template/index.html` is the deck runtime the agent copies beside the
-`deck.js` it writes. The runtime computes each layout once as positioned elements on a 1280x720
-canvas, draws them as HTML, prints them to PDF and exports the same elements with pptxgenjs (pinned
-on jsDelivr with its integrity hash), so the page and the PowerPoint file match and stay editable.
-A deck reports its own problems in its toolbar; `check.mjs` gives the agent the same checks
-without a browser, by running the template's `checks:start`…`checks:end` block on `deck.js`
-(a headless browser in the agent's shell proved too unreliable to rely on). Exporting from a published page needs the pages sandbox's
-`allow-downloads` (platform `docs/tech/pages.md`).
+Each folder under `skills/` with a `SKILL.md` ships in the package, and `src/bundled-skills.ts`
+registers every one with DSH's skill registry (`ctx.skills.register`, resource base the skill's
+folder) wherever the host has one, so the console's templates and any session find them without
+an install. A skill is its `SKILL.md` (the model's instructions), a `template/` runtime the agent
+copies beside the data file it writes, and a `check.mjs` that runs the runtime's own
+`checks:start`…`checks:end` block on that file without a browser (a headless browser in the
+agent's shell proved too unreliable to rely on). The agent never writes HTML or CSS.
+
+- `teamwork-slides`: `deck.js`. The runtime computes each layout once as positioned elements on a
+  1280x720 canvas, draws them as HTML, prints them to PDF and exports the same elements with
+  pptxgenjs (pinned on jsDelivr with its integrity hash), so the page and the PowerPoint file
+  match and stay editable.
+- `teamwork-research`: `report.js`. The runtime draws the answer, sections with numbered
+  citations, gaps and sources; prints to PDF and saves Markdown with footnotes. Its checks hold the
+  citations together: every `[n]` names a source, every source is cited, has a URL, an access date
+  and a quote from the page, and a figure outside the summary carries a citation.
+
+Saving a file from a published page needs the pages sandbox's `allow-downloads` (platform
+`docs/tech/pages.md`).
+
+## Teamwork search
+
+`src/web-search.ts` registers a web search provider, id `teamwork`, with DSH's web seam (`ctx.web`)
+while the signed-in server offers search: after each sync the plugin asks `GET /api/web/search`, and
+registers on `available: true`, unregisters on a 404, 401 or 403, and keeps its last answer when the
+server cannot be reached. A search is `POST /api/web/search` with `{ query, count }` (count at most 20)
+and the plugin's Bearer, nothing else; the server answers `{ sources }` in the seam's shape. The
+hosted service offers it on its own DeepSeek key; a self-hosted server has no such route, so nothing
+is registered there. DSH's default provider is unchanged: a member picks Teamwork under **Web search
+and fetch** in DSH's settings. A refusal is worded for the model: a spent daily allowance (429), a
+lapsed sign-in (401), any other failure with its status.
 
 ## Host and browser boundary
 

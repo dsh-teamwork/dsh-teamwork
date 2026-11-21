@@ -166,6 +166,29 @@ export class TeamworkClient {
    * The files of a page's version, fetched through a view address minted for this member (or, on a Team DSH, for the
    * session's starter), as the console's frame fetches them.
    */
+  /**
+   * Whether the signed-in server searches the web for its members (the hosted service does, on its own key; a
+   * self-hosted server has no such route): true, false, or undefined when the server could not be asked.
+   */
+  async webSearchOffered(signal?:AbortSignal):Promise<boolean|undefined> {
+    if(!this.token)return false;
+    try{
+      const response=await this.request(`${this.endpoint}/api/web/search`,{headers:{Authorization:`Bearer ${this.token}`},signal:signal??AbortSignal.timeout(10000),redirect:'error'});
+      if(response.status===404||response.status===401||response.status===403)return false;
+      if(!response.ok)return undefined;
+      return (await response.json() as {available?:unknown}).available===true;
+    }catch{return undefined;}
+  }
+  /** One web search through the signed-in server; only the query and the count leave this computer. */
+  async webSearch(query:string,count:number|undefined,signal?:AbortSignal) {
+    if(!this.token)throw new Error('Teamwork search needs a Teamwork sign-in: run /teamwork login, or choose another search provider in DSH settings.');
+    const response=await this.request(`${this.endpoint}/api/web/search`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${this.token}`,Origin:new URL(this.endpoint).origin},body:JSON.stringify({query,...(count?{count:Math.min(count,20)}:{})}),signal:signal??AbortSignal.timeout(30000),redirect:'error'});
+    const body=await response.json().catch(()=>({})) as {error?:string};
+    if(!response.ok)throw new Error(response.status===429?'Today’s Teamwork search allowance is used up; it renews at 00:00 UTC. Choose another search provider in DSH settings to keep searching.'
+      :response.status===401?'The Teamwork sign-in has lapsed: run /teamwork login, then search again.'
+      :`Teamwork search failed (${response.status}${body.error?` ${body.error}`:''}); try again shortly.`);
+    return z.object({sources:z.array(z.object({url:z.string(),title:z.string().optional(),snippet:z.string().optional(),summary:z.string().optional(),publishedAt:z.string().optional()}))}).parse(body).sources;
+  }
   async readPage(teamId:string,pageId:string,version:number,starter:string|undefined,signal:AbortSignal) {
     if(!this.token)throw new Error('Sign in to Teamwork first');
     const epoch=this.epoch,query=starter?`?starter=${encodeURIComponent(starter)}`:'';

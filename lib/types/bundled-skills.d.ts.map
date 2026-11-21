@@ -1,0 +1,1 @@
+{"version":3,"file":"bundled-skills.d.ts","sourceRoot":"","sources":["../../src/bundled-skills.ts"],"names":[],"mappings":"AAAA;;;;;;;;;;GAUG;AACH,OAAO,KAAK,EAAE,OAAO,EAAE,MAAM,qBAAqB,CAAC;AAYnD,eAAO,MAAM,UAAU,QAAwD,CAAC;AAEhF,iDAAiD;AACjD,wBAAgB,aAAa,aAI5B;AAED,6EAA6E;AAC7E,wBAAgB,UAAU,CAAC,IAAI,EAAE,MAAM;;;;EAOtC;AAED,wBAAgB,qBAAqB,CAAC,GAAG,EAAE,OAAO,QAQjD"}

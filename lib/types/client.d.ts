@@ -281,6 +281,19 @@ export declare class TeamworkClient {
      * The files of a page's version, fetched through a view address minted for this member (or, on a Team DSH, for the
      * session's starter), as the console's frame fetches them.
      */
+    /**
+     * Whether the signed-in server searches the web for its members (the hosted service does, on its own key; a
+     * self-hosted server has no such route): true, false, or undefined when the server could not be asked.
+     */
+    webSearchOffered(signal?: AbortSignal): Promise<boolean | undefined>;
+    /** One web search through the signed-in server; only the query and the count leave this computer. */
+    webSearch(query: string, count: number | undefined, signal?: AbortSignal): Promise<{
+        url: string;
+        title?: string | undefined;
+        snippet?: string | undefined;
+        summary?: string | undefined;
+        publishedAt?: string | undefined;
+    }[]>;
     readPage(teamId: string, pageId: string, version: number, starter: string | undefined, signal: AbortSignal): Promise<{
         path: string;
         bytes: Uint8Array;
