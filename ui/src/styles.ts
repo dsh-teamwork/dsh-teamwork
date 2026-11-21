@@ -143,6 +143,11 @@ export const css = String.raw`
 
 /* List items */
 .twui-item { border: 1px solid var(--twui-border); border-radius: var(--twui-radius-lg); background: var(--twui-surface); box-shadow: var(--twui-shadow); }
+.twui-item[data-clickable] { position: relative; }
+.twui-item[data-clickable]:hover { border-color: var(--twui-border-strong); }
+.twui .twui-item-trigger { border: 0; padding: 0; background: transparent; color: inherit; font: inherit; text-align: inherit; cursor: pointer; }
+.twui-item-trigger::after { content: ""; position: absolute; inset: -1px; border-radius: var(--twui-radius-lg); }
+.twui-item[data-clickable] .twui-item-actions > * { position: relative; z-index: 1; }
 .twui-item-main { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px 14px; padding: 16px; align-items: start; }
 .twui-item-main[data-no-icon] { grid-template-columns: minmax(0, 1fr) auto; }
 .twui-tile {
@@ -301,9 +306,14 @@ export const css = String.raw`
 .twui-footer-actions .twui-btn { font-size: 11px; height: 24px; padding-inline: 6px; }
 .twui-page-title { font-size: 22px; font-weight: 600; letter-spacing: -.025em; }
 .twui-team-scope { gap: 4px; color: var(--twui-fg-muted); min-width: 0; }
-.twui-team-scope .twui-select { max-width: min(280px, 60cqw); }
+.twui-team-scope :is(.twui-select, .twui-team-name) { max-width: min(280px, 60cqw); }
+.twui-team-scope .twui-team-name { min-width: 0; color: var(--twui-fg); }
+.twui-team-name > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .twui-resource-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; justify-content: space-between; }
-.twui-resource-toolbar .twui-input { flex: 0 1 240px; }
+.twui-resource-toolbar-actions { display: flex; align-items: center; gap: 12px; max-width: 100%; margin-inline-start: auto; }
+.twui-resource-toolbar-actions > :is(.twui-input, .twui-btn) { height: 36px; }
+.twui-resource-toolbar-actions .twui-input { width: 240px; min-width: 0; }
+.twui-resource-toolbar-actions .twui-btn { flex: 0 0 auto; }
 .twui-resource-toolbar .twui-tabs { border: 0; gap: 4px; }
 .twui-resource-toolbar .twui-tab { padding: 7px 14px; margin: 0; border: 0; border-radius: var(--twui-radius-sm); }
 .twui-resource-toolbar .twui-tab[aria-selected="true"] { background: var(--twui-fill); }
@@ -329,7 +339,8 @@ export const css = String.raw`
   .twui-account-grid { grid-template-columns: minmax(0, 1fr); gap: 32px; }
   .twui-header-actions { width: 100%; justify-content: flex-end; }
   .twui-panel-column { padding-inline: 16px; }
-  .twui-resource-toolbar .twui-input { flex: 1 1 180px; }
+  .twui-resource-toolbar-actions { flex: 1 1 180px; }
+  .twui-resource-toolbar-actions .twui-input { flex: 1 1 180px; }
 }
 @container (max-width: 380px) {
   .twui-header-actions { gap: 0; }

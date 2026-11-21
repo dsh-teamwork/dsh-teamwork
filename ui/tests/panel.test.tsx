@@ -105,7 +105,10 @@ test.each([0, 1, 2])('completes first sign-in and lands correctly with %i teams'
     expect(document.querySelector('a')?.href).toBe('https://example.com/plugin');
     await input('#teamwork-code', 'code'); await click('完成授权');
     if (!count) expect(document.body.textContent).toContain('接下来加入团队');
-    else if (count === 1) expect(document.querySelector('.twui-select-primary')?.textContent).toContain('Alpha');
+    else if (count === 1) {
+      expect(document.querySelector('header .twui-team-name')?.textContent).toBe('Alpha');
+      expect(document.querySelector('header .twui-select-trigger')).toBeNull();
+    }
     else expect(document.body.textContent).toContain('先从哪个团队开始');
   } finally { open.mockRestore(); }
 });
@@ -126,15 +129,20 @@ test('reports a timed-out login and starts a fresh authorization request', async
 
 test('switches teams and survives a removed membership without changing the phone page or current session', async () => {
   vi.useFakeTimers();
-  await mount(); await click('查看全部团队资源');
+  localStorage.setItem(`teamwork:team:${state.server}:${profile.id}`, 'all');
+  await mount();
+  expect(document.querySelector('.twui-select-primary')?.textContent).toContain('Alpha');
   await act(async () => document.querySelector<HTMLButtonElement>('.twui-select-trigger')!.click());
-  await act(async () => document.querySelector('[role="option"][data-index="2"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  expect([...document.querySelectorAll('[role="option"]')].map(option => option.getAttribute('data-index'))).toEqual(['0', '1']);
+  await act(async () => document.querySelector('[role="option"][data-index="1"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
   expect(document.body.textContent).toContain('Preset b'); expect(document.body.textContent).not.toContain('Preset a');
   await click('设备连接');
   vi.mocked(api.state).mockResolvedValue({ ...state, teams: state.teams.slice(0, 1), presets: state.presets.slice(0, 1) });
   await act(async () => { await vi.advanceTimersByTimeAsync(5001); });
   expect(document.body.textContent).toContain('用手机 App 或网页「我的 DSH」操作');
-  await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="返回团队资源"]')!.click()); expect(document.querySelector('.twui-select-primary')!.textContent).toContain('全部团队');
+  await click('Alpha');
+  expect(document.querySelector('header .twui-team-name')?.textContent).toBe('Alpha');
+  expect(document.body.textContent).toContain('Preset a');
   expect(api.use).not.toHaveBeenCalled(); expect(api.decidePhone).not.toHaveBeenCalled();
 });
 
@@ -280,13 +288,13 @@ test('never overlaps state polling while a slow request is pending', async () =>
 test('switching resource teams discards a late summary and does not block resource rendering', async () => {
   let finish!: (value: Awaited<ReturnType<typeof api.summary>>) => void;
   vi.mocked(api.summary).mockImplementation(id => id === 'a' ? new Promise(resolve => { finish = resolve; }) : Promise.resolve({ budget: { remaining: '2', state: 'known', resetAt: null, tokenLimited: false, exhausted: false }, pendingReviews: 0 }));
-  await mount(); await click('查看全部团队资源');
+  await mount(); await click('选择团队');
   const select = async (index: number) => {
     await act(async () => document.querySelector<HTMLButtonElement>('.twui-select-trigger')!.click());
     await act(async () => document.querySelector(`[role="option"][data-index="${index}"]`)!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
   };
-  await select(1); expect(document.body.textContent).toContain('Preset a');
-  await select(2); expect(document.body.textContent).toContain('预算剩余 2 积分');
+  expect(document.body.textContent).toContain('Preset a');
+  await select(1); expect(document.body.textContent).toContain('预算剩余 2 积分');
   await act(async () => finish({ budget: { remaining: '999', state: 'known', resetAt: null, tokenLimited: false, exhausted: false }, pendingReviews: 0 }));
   expect(document.body.textContent).not.toContain('999');
   expect(api.use).not.toHaveBeenCalled();
@@ -307,18 +315,18 @@ test('words a request that never reached the host in the panel’s language', as
   const { HostUnreachable } = await import('../../src/web/api.js');
   vi.mocked(api.state).mockResolvedValueOnce({ ...state, locale: 'en' }).mockRejectedValue(new HostUnreachable('not-loaded'));
   vi.mocked(api.sync).mockRejectedValue(new HostUnreachable('offline'));
-  await mount(); await click('Show every team’s resources'); await click('Refresh');
+  await mount(); await click('Choose'); await click('Refresh');
   expect(document.querySelector('.twui-toast')?.textContent).toContain('Cannot reach DSH.');
   expect(document.querySelector('.twui-banner')?.textContent).toContain('Restart DSH.');
 });
 
-test('leads with the team assistant, starts a session with it, and names teams only while all are shown', async () => {
+test('leads with the team assistant, starts a session with it, and displays only the selected team', async () => {
   const assistant = { ...state.presets[0], id: 'assistant-a', name: 'Alpha assistant', assistant: true };
   vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', presets: [assistant, ...state.presets] });
-  await mount(); await click('Show every team’s resources');
+  await mount(); await click('Choose');
   const featured = document.querySelector('.twui-featured')!;
   expect(featured.textContent).toContain('Alpha assistant'); expect(featured.textContent).toContain('Team assistant');
-  expect(featured.textContent).toContain('a');
+  expect(document.body.textContent).not.toContain('Preset b');
   expect(document.querySelector('.twui-resource-list')!.textContent).not.toContain('Alpha assistant');
   // Only the assistant's action is primary; every other row's new session is secondary.
   expect([...document.querySelectorAll('.twui-btn[data-variant="primary"]')].map(b => b.textContent)).toEqual(['Ask the assistant']);
@@ -328,8 +336,6 @@ test('leads with the team assistant, starts a session with it, and names teams o
   // An example question opens the same session with the question in its input, unsent.
   await click('What did I spend this month?');
   expect(host.uiWorkspace.startSession).toHaveBeenLastCalledWith('ws-work', { agentPreset: 'team:a:assistant-a', prompt: 'What did I spend this month?', whenDraftExists: 'replace' });
-  await act(async () => document.querySelector<HTMLButtonElement>('.twui-select-trigger')!.click());
-  await act(async () => document.querySelector('[role="option"][data-index="1"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
   expect(document.querySelector('.twui-resource-list .twui-item-subtitle')).toBeNull();
   expect(document.querySelector('.twui-featured .twui-item-subtitle')).toBeNull();
 });
@@ -338,7 +344,7 @@ test('still offers a new session with the assistant while the open session alrea
   const assistant = { ...state.presets[0], id: 'assistant-a', name: 'Alpha assistant', assistant: true };
   const session = { id: 's1', model: null, preset: { id: 'assistant-a', name: 'Alpha assistant', version: 1 }, started: false };
   vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', session, presets: [assistant, ...state.presets] });
-  await mount(); await click('Show every team’s resources');
+  await mount(); await click('Choose');
   const featured = document.querySelector('.twui-featured')!;
   expect(featured.textContent).not.toContain('In use'); expect(featured.textContent).not.toContain('Use here');
   await click('Ask the assistant');
@@ -348,12 +354,12 @@ test('still offers a new session with the assistant while the open session alrea
 test('a preset always starts a session, even the one a started open session uses, and never switches the open one', async () => {
   const session = { id: 's1', model: null, preset: { id: 'preset-a', name: 'Preset a', version: 1 }, started: true };
   vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', session });
-  await mount(); await click('Show every team’s resources');
+  await mount(); await click('Choose');
   const rows = document.querySelector('.twui-resource-list')!;
   expect(rows.textContent).not.toContain('In use'); expect(rows.textContent).not.toContain('blank session');
   expect(rows.textContent).not.toContain('has started');
   const starts = [...rows.querySelectorAll<HTMLButtonElement>('button')].filter(b => b.textContent === 'Start a session');
-  expect(starts.map(b => b.disabled)).toEqual([false, false]);
+  expect(starts.map(b => b.disabled)).toEqual([false]);
   await act(async () => starts[0].click());
   expect(host.uiWorkspace.startSession).toHaveBeenLastCalledWith('ws-work', { agentPreset: 'team:a:preset-a' });
   expect(api.use).not.toHaveBeenCalled();
@@ -361,9 +367,12 @@ test('a preset always starts a session, even the one a started open session uses
 
 test('draws each preset with the avatar its admin chose, or the one its name picks', async () => {
   vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', presets: [{ ...state.presets[0], avatar: 'legal' }, state.presets[1]] });
-  await mount(); await click('Show every team’s resources');
-  const plates = [...document.querySelectorAll('.twui-resource-list .twui-tile-media rect')].map(r => r.getAttribute('fill'));
-  expect(plates).toEqual([presetAvatar('legal', 'Preset a').plate, presetAvatar(undefined, 'Preset b').plate]);
+  await mount(); await click('Choose');
+  const plate = () => document.querySelector('.twui-resource-list .twui-tile-media rect')?.getAttribute('fill');
+  expect(plate()).toBe(presetAvatar('legal', 'Preset a').plate);
+  await act(async () => document.querySelector<HTMLButtonElement>('.twui-select-trigger')!.click());
+  await act(async () => document.querySelector<HTMLElement>('[role="option"][data-index="1"]')!.click());
+  expect(plate()).toBe(presetAvatar(undefined, 'Preset b').plate);
 });
 
 test('shows an admin the reviews waiting in the browsed team, and a member none', async () => {
@@ -376,7 +385,7 @@ test('shows an admin the reviews waiting in the browsed team, and a member none'
     await click('2 to review');
     expect(open).toHaveBeenCalledWith('https://example.com/teams/a/sharing', '_blank', 'noopener');
     await act(async () => document.querySelector<HTMLButtonElement>('.twui-select-trigger')!.click());
-    await act(async () => document.querySelector('[role="option"][data-index="2"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    await act(async () => document.querySelector('[role="option"][data-index="1"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
     expect(document.body.textContent).not.toContain('to review');
   } finally { open.mockRestore(); }
 });
@@ -386,7 +395,7 @@ test('marks a team model without its context window, and a preset on it, as not 
   const model = (id: string, name: string, contextWindowMissing: boolean) => ({ id, teamId: 'a', teamName: 'a', name, version: 1, upstream: `p/${id}`, contextWindowMissing, modelOffline: false });
   const preset = { ...state.presets[0], model: 'Flash', modelAvailable: false, contextWindowMissing: true };
   vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', session, presets: [preset], models: [model('sized', 'Sized', false), model('flash', 'Flash', true)] });
-  await mount(); await click('Show every team’s resources');
+  await mount(); await click('Choose');
   const reason = 'The team model “Flash” has no context window (contextWindow) configured';
   const row = (title: string) => [...document.querySelectorAll('.twui-item')].find(r => r.querySelector('.twui-item-title')?.firstChild?.textContent === title)!;
   expect(row('Preset a').textContent).toContain(reason);
@@ -403,7 +412,7 @@ test('marks a hosted model taken offline, and a preset on it, as not ready with 
   const model = (id: string, name: string, modelOffline: boolean) => ({ id, teamId: 'a', teamName: 'a', name, version: 1, upstream: `p/${id}`, contextWindowMissing: false, modelOffline });
   const preset = { ...state.presets[0], model: 'Opus', modelAvailable: false, modelOffline: true };
   vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', session, presets: [preset], models: [model('live', 'Live', false), model('opus', 'Opus', true)] });
-  await mount(); await click('Show every team’s resources');
+  await mount(); await click('Choose');
   const reason = 'The team model “Opus” has been taken offline by the service that hosts it';
   const row = (title: string) => [...document.querySelectorAll('.twui-item')].find(r => r.querySelector('.twui-item-title')?.firstChild?.textContent === title)!;
   expect(row('Preset a').textContent).toContain(reason);
@@ -420,7 +429,7 @@ test('a team model always starts a session on it, even the one the open session 
   const model = { id: 'live', teamId: 'a', teamName: 'a', name: 'Live', version: 1, upstream: 'p/live', contextWindowMissing: false, modelOffline: false };
   vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', session, models: [model] });
   vi.mocked(host.uiWorkspace.connectWorkspace).mockResolvedValue('blank');
-  await mount(); await click('Show every team’s resources');
+  await mount(); await click('Choose');
   const tab = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(b => b.textContent?.startsWith('Models'))!;
   await act(async () => tab.click());
   expect(document.body.textContent).not.toContain('In use');

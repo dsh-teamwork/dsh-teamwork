@@ -1,9 +1,13 @@
 import { useInsertionEffect, type HTMLAttributes } from 'react';
 import { css, STYLE_ELEMENT_ID } from './styles.js';
 
-/** Adds the library's stylesheet to `doc` once; later calls find it and do nothing. */
+/** Keeps one copy of the current library stylesheet in `doc`. */
 export function ensureStyles(doc: Document = document): void {
-  if (doc.getElementById(STYLE_ELEMENT_ID)) return;
+  const existing = doc.getElementById(STYLE_ELEMENT_ID);
+  if (existing) {
+    if (existing.textContent !== css) existing.textContent = css;
+    return;
+  }
   const style = doc.createElement('style');
   style.id = STYLE_ELEMENT_ID;
   style.textContent = css;
