@@ -143,6 +143,11 @@ export const css = String.raw`
 
 /* List items */
 .twui-item { border: 1px solid var(--twui-border); border-radius: var(--twui-radius-lg); background: var(--twui-surface); box-shadow: var(--twui-shadow); }
+.twui-item[data-clickable] { position: relative; }
+.twui-item[data-clickable]:hover { border-color: var(--twui-border-strong); }
+.twui .twui-item-trigger { border: 0; padding: 0; background: transparent; color: inherit; font: inherit; text-align: inherit; cursor: pointer; }
+.twui-item-trigger::after { content: ""; position: absolute; inset: -1px; border-radius: var(--twui-radius-lg); }
+.twui-item[data-clickable] .twui-item-actions > * { position: relative; z-index: 1; }
 .twui-item-main { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px 14px; padding: 16px; align-items: start; }
 .twui-item-main[data-no-icon] { grid-template-columns: minmax(0, 1fr) auto; }
 .twui-tile {
@@ -292,8 +297,10 @@ export const css = String.raw`
 .twui-header-actions { margin-left: auto; gap: 4px; }
 .twui-header-actions .twui-btn[aria-current="page"] { color: var(--twui-fg); background: var(--twui-fill); }
 .twui-panel-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 16px; min-height: 32px; padding: 2px 12px; border-top: 1px solid var(--twui-border); background: var(--twui-surface); color: var(--twui-fg-muted); font-size: 11px; }
-.twui-footer-identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.twui-footer-identity { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; min-width: 0; }
 .twui-footer-name { font-weight: 500; }
+.twui-footer-connection { min-width: 0; max-width: 100%; }
+.twui-footer-connection > svg { flex-shrink: 0; }
 .twui-footer-service { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .twui-footer-service .twui-signal-dot { display: inline-block; margin-right: 6px; vertical-align: 1px; }
 .twui-footer-actions { margin-left: auto; gap: 4px; }
@@ -301,9 +308,14 @@ export const css = String.raw`
 .twui-footer-actions .twui-btn { font-size: 11px; height: 24px; padding-inline: 6px; }
 .twui-page-title { font-size: 22px; font-weight: 600; letter-spacing: -.025em; }
 .twui-team-scope { gap: 4px; color: var(--twui-fg-muted); min-width: 0; }
-.twui-team-scope .twui-select { max-width: min(280px, 60cqw); }
+.twui-team-scope :is(.twui-select, .twui-team-name) { max-width: min(280px, 60cqw); }
+.twui-team-scope .twui-team-name { min-width: 0; color: var(--twui-fg); }
+.twui-team-name > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .twui-resource-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; justify-content: space-between; }
-.twui-resource-toolbar .twui-input { flex: 0 1 240px; }
+.twui-resource-toolbar-actions { display: flex; align-items: center; gap: 12px; max-width: 100%; margin-inline-start: auto; }
+.twui-resource-toolbar-actions > :is(.twui-input, .twui-btn) { height: 36px; }
+.twui-resource-toolbar-actions .twui-input { width: 240px; min-width: 0; }
+.twui-resource-toolbar-actions .twui-btn { flex: 0 0 auto; }
 .twui-resource-toolbar .twui-tabs { border: 0; gap: 4px; }
 .twui-resource-toolbar .twui-tab { padding: 7px 14px; margin: 0; border: 0; border-radius: var(--twui-radius-sm); }
 .twui-resource-toolbar .twui-tab[aria-selected="true"] { background: var(--twui-fill); }
@@ -320,16 +332,31 @@ export const css = String.raw`
 .twui-tile.twui-tile-media { background: none; overflow: hidden; }
 .twui-tile-media > svg { display: block; width: 100%; height: 100%; }
 .twui-featured .twui-item-desc { max-width: 68ch; }
-.twui-account-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; margin-top: 12px; align-items: start; }
-.twui-account-grid > section { gap: 20px; min-width: 0; }
-.twui-account-grid h3 { font-size: 15px; font-weight: 500; }
-.twui-account-grid .twui-input { width: 100%; }
+.twui-account { display: grid; gap: 24px; width: 100%; max-width: 720px; }
+.twui-account-heading { justify-content: space-between; }
+.twui-account-heading a { text-decoration: none; }
+.twui-account h3 { font-size: 15px; font-weight: 600; }
+.twui-account-identity { display: flex; align-items: center; gap: 12px; overflow-wrap: anywhere; }
+.twui-account-identity > :first-child { flex-shrink: 0; }
+.twui-account-language { border-top: 1px solid var(--twui-border); margin-top: 16px; padding-top: 16px; }
+.twui-account-teams { display: grid; margin: 0; padding: 0; list-style: none; }
+.twui-account-teams > li { display: flex; align-items: center; gap: 8px; }
+.twui-account-teams > li + li { border-top: 1px solid var(--twui-border); }
+.twui-account-team {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px;
+  flex: 1; min-width: 0; min-height: 44px; padding: 6px 8px; border: 0; border-radius: var(--twui-radius-sm);
+  background: transparent; color: var(--twui-fg); font: inherit; text-align: start; overflow-wrap: anywhere; cursor: pointer;
+}
+.twui-account-team:hover { background: var(--twui-hover); }
+.twui-account-team > svg { color: var(--twui-fg-muted); }
+.twui-account-team-leave { flex: none; text-decoration: none; }
+.twui-sign-out { border-top: 1px solid var(--twui-border); padding-top: 12px; }
 .twui-panel-content { gap: 16px; padding-top: 28px; }
 @container (max-width: 680px) {
-  .twui-account-grid { grid-template-columns: minmax(0, 1fr); gap: 32px; }
   .twui-header-actions { width: 100%; justify-content: flex-end; }
   .twui-panel-column { padding-inline: 16px; }
-  .twui-resource-toolbar .twui-input { flex: 1 1 180px; }
+  .twui-resource-toolbar-actions { flex: 1 1 180px; }
+  .twui-resource-toolbar-actions .twui-input { flex: 1 1 180px; }
 }
 @container (max-width: 380px) {
   .twui-header-actions { gap: 0; }

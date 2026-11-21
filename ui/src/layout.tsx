@@ -41,7 +41,7 @@ export function Card({ children, padding = 20 }: { children: ReactNode; padding?
  * actions on the right, an optional notice under them (why an action is
  * unavailable), and an optional body below a divider (details, a confirmation).
  */
-export function Item({ icon, media, title, subtitle, description, tags, actions, notice, children }: {
+export function Item({ icon, media, title, subtitle, description, tags, actions, notice, children, onActivate }: {
   icon?: IconName;
   /** The caller's own picture in the icon's place and at its size, such as an avatar drawn as an `<svg>`. */
   media?: ReactNode;
@@ -52,14 +52,15 @@ export function Item({ icon, media, title, subtitle, description, tags, actions,
   actions?: ReactNode;
   notice?: ReactNode;
   children?: ReactNode;
+  onActivate?: () => void;
 }) {
   return (
-    <article className="twui-item">
+    <article className="twui-item" data-clickable={onActivate ? true : undefined}>
       <div className="twui-item-main" data-no-icon={icon || media ? undefined : true}>
         {media ? <span className="twui-tile twui-tile-media">{media}</span> : icon && <span className="twui-tile"><Icon name={icon} size={18} /></span>}
         <div style={{ minWidth: 0 }}>
           <h3 className="twui-item-title">
-            {title}
+            {onActivate ? <button type="button" className="twui-item-trigger" onClick={onActivate}>{title}</button> : title}
             {subtitle && <span className="twui-item-subtitle">{subtitle}</span>}
           </h3>
           {description && <p className="twui-item-desc">{description}</p>}

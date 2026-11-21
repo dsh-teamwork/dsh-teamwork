@@ -351,7 +351,7 @@ export class TeamworkClient {
     if (!this.token) return Promise.reject(new Error(say('auth.signedOut')));
     return this.api('profile');
   }
-  updateProfile(input: { name: string | null; locale: Locale }): Promise<PanelProfile> {
+  updateProfile(input: { name?: string | null; locale: Locale }): Promise<PanelProfile> {
     if (!this.token) return Promise.reject(new Error(say('auth.signedOut')));
     return this.api('profile', 'PATCH', input);
   }

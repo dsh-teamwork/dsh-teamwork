@@ -12,14 +12,13 @@ import { currentSessionTracker, workspaceAt, type Host, type RenderFactorySlot }
 import { useT, Words, words, type PanelMessage, type Translate } from './messages.js';
 
 type Tab = 'presets' | 'models' | 'plugins';
-type Page = 'resources' | 'devices' | 'profile' | 'teams' | 'team' | 'choose';
+type Page = 'resources' | 'devices' | 'profile' | 'connection' | 'teams' | 'team' | 'choose';
 type Run = (action: () => Promise<unknown>, done?: string | ((result: any) => string)) => Promise<boolean>;
 
 const REFRESH_MS = 5000;
 const SUMMARY_MS = 30000;
 // Restore browsing context when DSH unmounts the panel to show a conversation.
 const views = new Map<string, { team: string; tab: Tab; query: string }>();
-const profileDrafts = new Map<string, { name: string; locale: Locale }>();
 
 const pluginText: Record<PluginState, [PanelMessage, Tone]> = {
   ready: ['plugin.ready', 'success'],
@@ -94,7 +93,11 @@ export function TeamworkPanel({ host: dsh, renderFactorySlot }: { host: Host; re
   const [page, setPage] = useState<Page>('resources');
   /** The team whose settings page is open (`team`). */
   const [settingsTeam, setSettingsTeam] = useState<string>();
-  const [team, setTeam] = useState('all');
+  const [selectedTeam, setTeam] = useState('');
+  const browsed = state?.authenticated
+    ? state.teams.find(x => x.id === selectedTeam) ?? state.teams[0]
+    : undefined;
+  const team = browsed?.id ?? '';
   const [query, setQuery] = useState('');
   const [profile, setProfile] = useState<PanelProfile>();
   const [profileError, setProfileError] = useState<unknown>();
@@ -139,7 +142,7 @@ export function TeamworkPanel({ host: dsh, renderFactorySlot }: { host: Host; re
   useEffect(() => {
     identity.current = undefined;
     touched.current = false;
-    setProfile(undefined); setPage('resources'); setTeam('all'); setQuery('');
+    setProfile(undefined); setPage('resources'); setTeam(''); setQuery('');
   }, [authenticated, server]);
   useEffect(() => {
     setProfileError(undefined);
@@ -163,8 +166,7 @@ export function TeamworkPanel({ host: dsh, renderFactorySlot }: { host: Host; re
       try { saved = localStorage.getItem(key); } catch { /* Storage may be unavailable in embedded clients. */ }
       saved ??= view?.team ?? null;
       const teams = latest.current?.teams ?? [];
-      const selected = saved && (saved === 'all' || teams.some(t => t.id === saved)) ? saved : teams.length === 1 ? teams[0].id : 'all';
-      setTeam(selected);
+      setTeam(teams.find(t => t.id === saved)?.id ?? teams[0]?.id ?? '');
       if (saved === null && teams.length > 1) setPage('choose');
     }).catch(error => { if (!cancelled) setProfileError(error); });
     return () => { cancelled = true; };
@@ -174,7 +176,12 @@ export function TeamworkPanel({ host: dsh, renderFactorySlot }: { host: Host; re
     if (profile && identity.current) views.set(identity.current, { team, tab, query });
   }, [profile, team, tab, query]);
 
-  const navigate = (next: Page) => { touched.current = true; setPage(next); };
+  const navigate = (next: Page) => {
+    touched.current = true;
+    if (next === 'profile' && profile) setProfileAttempt(n => n + 1);
+    setPage(next);
+  };
+  const openTeamSettings = (id: string) => { setSettingsTeam(id); navigate('team'); };
 
   const selectTeam = (id: string) => {
     touched.current = true;
@@ -182,12 +189,12 @@ export function TeamworkPanel({ host: dsh, renderFactorySlot }: { host: Host; re
     if (profile) try { localStorage.setItem(`teamwork:team:${server}:${profile.id}`, id); } catch { /* Selection remains usable without persistence. */ }
   };
   useEffect(() => {
-    if (state && team !== 'all' && !state.teams.some(t => t.id === team)) {
-      setTeam('all'); setQuery('');
-      if (profile) try { localStorage.setItem(`teamwork:team:${server}:${profile.id}`, 'all'); } catch { /* Memory retains the selection. */ }
+    if (authenticated && selectedTeam && selectedTeam !== team) {
+      setTeam(team); setQuery('');
+      if (profile) try { localStorage.setItem(`teamwork:team:${server}:${profile.id}`, team); } catch { /* Memory retains the selection. */ }
       notify(t('team.gone'));
     }
-  }, [state?.teams, team]);
+  }, [authenticated, selectedTeam, team]);
 
   const notify = useCallback((message: string, tone: 'neutral' | 'danger' = 'neutral') => {
     clearTimeout(toastTimer.current);
@@ -212,7 +219,6 @@ export function TeamworkPanel({ host: dsh, renderFactorySlot }: { host: Host; re
     }
   }, [notify, refresh, t]);
 
-  const browsed = state?.authenticated ? state.teams.find(x => x.id === team) : undefined;
   const summary = useSummary(browsed?.id, `${state?.server}:${state?.authRevision}`);
 
   const toastNode = toast && <Toast tone={toast.tone}>{toast.message}</Toast>;
@@ -238,7 +244,7 @@ export function TeamworkPanel({ host: dsh, renderFactorySlot }: { host: Host; re
     );
   }
 
-  const inTeam = (item: { teamId?: string }) => team === 'all' || item.teamId === team;
+  const inTeam = (item: { teamId?: string }) => item.teamId === team;
   const matches = (item: { name: string; description?: string }) => `${item.name} ${item.description ?? ''}`.toLocaleLowerCase().includes(query.toLocaleLowerCase());
   const presets = state.presets.filter(inTeam), models = state.models.filter(inTeam), plugins = state.plugins.filter(inTeam);
   // The assistant leads the presets as its own card while nothing is searched; a search lists it with the rest.
@@ -246,12 +252,10 @@ export function TeamworkPanel({ host: dsh, renderFactorySlot }: { host: Host; re
   const listed = (tab === 'presets' ? presets.filter(p => !assistants.includes(p)) : tab === 'models' ? models : plugins).filter(matches);
   const tabs = [{ id: 'presets' as const, label: t('tabs.presets'), count: presets.length }, { id: 'models' as const, label: t('tabs.models'), count: models.length }, { id: 'plugins' as const, label: t('tabs.plugins'), count: plugins.length }];
   const choosing = page === 'choose' && state.teams.length > 1;
-  // Which team an entry belongs to matters only while every team's entries are shown together.
-  const teamLabel = (name: string) => team === 'all' && state.teams.length > 1 ? name : undefined;
   return (
     <Words.Provider value={t}>
       <Panel label="Teamwork" header={<Header state={state} page={page} team={team} reviews={browsed?.role === 'admin' ? summary?.pendingReviews ?? 0 : 0} reviewUrl={browsed ? `${browsed.consoleUrl}/sharing` : ''} selectTeam={selectTeam} navigate={navigate} />}
-        footer={<Footer state={state} budget={browsed ? (summary === undefined ? undefined : summary?.budget ?? null) : false} run={run} />}>
+        footer={<Footer state={state} connectionOpen={page === 'connection'} openConnection={() => navigate('connection')} budget={browsed ? (summary === undefined ? undefined : summary?.budget ?? null) : false} run={run} />}>
         {loadError !== undefined && <Banner tone="danger" title={t('load.stale')} action={retry}>{describe(t, loadError)}</Banner>}
         {state.sync.lastError && (
           <Banner tone="warning" title={t('sync.failedTitle')} action={<Button size="sm" icon="refresh" onClick={() => run(() => api.sync(), t('sync.done'))}>{t('common.retry')}</Button>}>
@@ -261,18 +265,26 @@ export function TeamworkPanel({ host: dsh, renderFactorySlot }: { host: Host; re
         )}
         {choosing ? <TeamChooser state={state} select={selectTeam} /> : (page === 'resources' || page === 'choose') && <>
           {!state.teams.length ? <EmptyState icon="layers" title={t('noTeam.title')} action={<div className="twui-row"><Button trailingIcon="external" onClick={() => open(`${state.server}/teams`)}>{t('noTeam.open')}</Button><Button icon="refresh" onClick={() => run(() => api.sync(), t('noTeam.refreshed'))}>{t('noTeam.refresh')}</Button></div>}>{t('noTeam.body')}</EmptyState> : <>
-            <div className="twui-resource-toolbar"><Tabs<Tab> label={t('tabs.label')} items={tabs} value={tab} onChange={setTab} /><Input aria-label={t('search.label')} placeholder={t('search.placeholder')} value={query} onChange={e => setQuery(e.target.value)} /></div>
-            {tab === 'presets' && assistants.map(p => <AssistantItem key={p.id} preset={p} team={teamLabel(p.teamName)} state={state} dsh={dsh} />)}
+            <div className="twui-resource-toolbar">
+              <Tabs<Tab> label={t('tabs.label')} items={tabs} value={tab} onChange={setTab} />
+              <div className="twui-resource-toolbar-actions">
+                <Input aria-label={t('search.label')} placeholder={t('search.placeholder')} value={query} onChange={e => setQuery(e.target.value)} />
+                <Button icon="settings" onClick={() => openTeamSettings(team)}>
+                  {t('teams.settings')}
+                </Button>
+              </div>
+            </div>
+            {tab === 'presets' && assistants.map(p => <AssistantItem key={p.id} preset={p} state={state} dsh={dsh} />)}
             <div className="twui-resource-list" key={`${team}:${tab}`}>
-              {tab === 'presets' && (listed as PanelPreset[]).map(p => <PresetItem key={p.id} preset={p} team={teamLabel(p.teamName)} state={state} dsh={dsh} onInstall={() => setTab('plugins')} />)}
-              {tab === 'models' && (listed as PanelState['models']).map(m => <ModelItem key={m.id} model={m} team={teamLabel(m.teamName)} state={state} dsh={dsh} run={run} />)}
-              {tab === 'plugins' && (listed as PanelPlugin[]).map(p => <PluginItem key={p.id} plugin={p} team={teamLabel(p.teamName ?? '')} run={run} />)}
+              {tab === 'presets' && (listed as PanelPreset[]).map(p => <PresetItem key={p.id} preset={p} state={state} dsh={dsh} onInstall={() => setTab('plugins')} />)}
+              {tab === 'models' && (listed as PanelState['models']).map(m => <ModelItem key={m.id} model={m} state={state} dsh={dsh} run={run} />)}
+              {tab === 'plugins' && (listed as PanelPlugin[]).map(p => <PluginItem key={p.id} plugin={p} run={run} />)}
               {!listed.length && !(tab === 'presets' && assistants.length) && <EmptyState icon="layers" title={query ? t('empty.noMatch') : t('empty.none')}>{query ? t('empty.noMatchBody') : t('empty.noneBody')}</EmptyState>}
             </div>
           </>}
         </>}
         {page === 'devices' && <Phones state={state} run={run} />}
-        {page === 'teams' && <><PageTitle title={t('teams.title')}>{t('teams.body')}</PageTitle>{state.teams.map(x => <Item key={x.id} icon="layers" title={x.name} tags={<Badge tone={x.role === 'admin' ? 'brand' : 'neutral'}>{role(t, x.role)}</Badge>} actions={<><Button onClick={() => { setSettingsTeam(x.id); navigate('team'); }}>{t('teams.settings')}</Button><Button onClick={() => selectTeam(x.id)}>{t('teams.browse')}</Button><Button variant="ghost" trailingIcon="external" onClick={() => open(x.consoleUrl)}>{t(x.role === 'admin' ? 'teams.manage' : 'teams.view')}</Button></>} />)}<div><Button trailingIcon="external" onClick={() => open(`${state.server}/teams`)}>{t('teams.joinOrCreate')}</Button></div></>}
+        {page === 'teams' && <><PageTitle title={t('teams.title')}>{t('teams.body')}</PageTitle>{state.teams.map(x => <Item key={x.id} icon="layers" title={x.name} onActivate={() => selectTeam(x.id)} tags={<Badge tone={x.role === 'admin' ? 'brand' : 'neutral'}>{role(t, x.role)}</Badge>} actions={<><Button icon="settings" onClick={() => openTeamSettings(x.id)}>{t('teams.settings')}</Button><Button variant="ghost" trailingIcon="external" onClick={() => open(x.consoleUrl)}>{t(x.role === 'admin' ? 'teams.manage' : 'teams.view')}</Button></>} />)}<div><Button trailingIcon="external" onClick={() => open(`${state.server}/teams`)}>{t('teams.joinOrCreate')}</Button></div></>}
         {page === 'team' && (() => {
           // A team left or deleted meanwhile has no settings to show: back to the list.
           const settings = state.teams.find(x => x.id === settingsTeam);
@@ -280,7 +292,15 @@ export function TeamworkPanel({ host: dsh, renderFactorySlot }: { host: Host; re
             ? <TeamSettings key={settings.id} team={settings} locale={state.locale} dsh={dsh} renderFactorySlot={renderFactorySlot} run={run} browse={() => selectTeam(settings.id)} />
             : <><PageTitle title={t('teams.title')}>{t('teams.body')}</PageTitle><div><Button onClick={() => navigate('teams')}>{t('nav.teams')}</Button></div></>;
         })()}
-        {page === 'profile' && <Account state={state} profile={profile} error={profileError} retry={() => setProfileAttempt(n => n + 1)} updated={next => { if (identity.current === `teamwork:team:${state.server}:${next.id}`) { setProfile(next); void refresh(); } }} run={run} />}
+        {page === 'profile' && <Account state={state} profile={profile} error={profileError} retry={() => setProfileAttempt(n => n + 1)} run={run} selectTeam={selectTeam}
+          onLocaleChange={async locale => {
+            if (!profile) return;
+            await run(async () => {
+              const next = await api.updateProfile({ locale });
+              if (identity.current === `teamwork:team:${state.server}:${next.id}`) setProfile(next);
+            }, words(locale)('account.languageSaved'));
+          }} />}
+        {page === 'connection' && <Connection state={state} run={run} />}
         {toastNode}
       </Panel>
     </Words.Provider>
@@ -497,65 +517,92 @@ function PageTitle({ title, children }: { title: string; children: ReactNode }) 
 
 function TeamChooser({ state, select }: { state: PanelState; select(id: string): void }) {
   const t = useT();
-  return <><PageTitle title={t('choose.title')}>{t('choose.body')}</PageTitle>{state.teams.map(x => <Item key={x.id} icon="layers" title={x.name} tags={<Badge tone={x.role === 'admin' ? 'brand' : 'neutral'}>{role(t, x.role)}</Badge>} actions={<Button onClick={() => select(x.id)}>{t('choose.pick')}</Button>} />)}<div><Button variant="primary" onClick={() => select('all')}>{t('choose.all')}</Button></div></>;
+  return <><PageTitle title={t('choose.title')}>{t('choose.body')}</PageTitle>{state.teams.map(x => <Item key={x.id} icon="layers" title={x.name} tags={<Badge tone={x.role === 'admin' ? 'brand' : 'neutral'}>{role(t, x.role)}</Badge>} actions={<Button onClick={() => select(x.id)}>{t('choose.pick')}</Button>} />)}</>;
 }
 
-function Account({ state, profile, error, retry, updated, run }: {
-  state: PanelState; profile?: PanelProfile; error?: unknown; retry(): void; updated(profile: PanelProfile): void; run: Run;
+function Account({ state, profile, error, retry, run, selectTeam, onLocaleChange }: {
+  state: PanelState; profile?: PanelProfile; error?: unknown; retry(): void; run: Run; selectTeam(id: string): void; onLocaleChange(locale: Locale): Promise<void>;
 }) {
   const t = useT();
-  const [name, setName] = useState('');
-  const [locale, setLocale] = useState<Locale>(t.locale);
-  const [busy, setBusy] = useState(false);
-  const [logoutConfirm, setLogoutConfirm] = useState(false);
-  const [saveError, setSaveError] = useState<unknown>();
-  const saving = useRef(false);
-  const key = profile ? `${state.server}:${profile.id}` : undefined;
-  const dirty = !!profile && (name.trim() !== (profile.name ?? '') || locale !== (profile.locale ?? t.locale));
-  useEffect(() => {
-    const draft = key ? profileDrafts.get(key) : undefined;
-    setName(draft?.name ?? profile?.name ?? ''); setLocale(draft?.locale ?? profile?.locale ?? t.locale);
-  }, [key, profile?.name, profile?.locale]);
-  const edit = (nextName: string, nextLocale: Locale) => {
-    setName(nextName); setLocale(nextLocale); setSaveError(undefined);
-    if (key) profileDrafts.set(key, { name: nextName, locale: nextLocale });
-  };
-  const save = async () => {
-    if (!profile || !key || saving.current || !dirty) return;
-    saving.current = true; setBusy(true); setSaveError(undefined);
-    // Worded in the language being saved, which is the one the panel is about to speak.
-    await run(async () => {
-      try {
-        const next = await api.updateProfile({ name: name.trim() || null, locale });
-        profileDrafts.delete(key); updated(next);
-      } catch (error) { setSaveError(error); throw error; }
-    }, words(locale)('account.saved'));
-    saving.current = false; setBusy(false);
-  };
-  return <>
-    <PageTitle title={t('account.title')}>{t('account.body')}</PageTitle>
-    <div className="twui-account-grid">
-      <section className="twui-stack" aria-label={t('account.profile')}>
-        {error !== undefined ? <Banner tone="warning" title={t('account.readFailed')} action={<Button onClick={retry}>{t('common.retry')}</Button>}>{describe(t, error)}</Banner> : !profile ? <ListSkeleton /> : <>
-          <div className="twui-row" style={{ gap: 14 }}><Monogram text={profile.name || profile.email || 'T'} size={44} /><div><h3>{profile.name || t('account.unnamed')}</h3><p className="twui-muted">{profile.email || t('account.noEmail')}</p></div></div>
-          <form className="twui-stack" onSubmit={e => { e.preventDefault(); void save(); }}>
-            <Field label={t('account.name')} htmlFor="teamwork-name"><Input id="teamwork-name" value={name} maxLength={80} disabled={busy} onChange={e => edit(e.target.value, locale)} autoComplete="name" /></Field>
-            {/* Endonyms: each language is named in itself, as the platform's picker does. */}
-            <Field label={t('account.language')} htmlFor="teamwork-locale" hint={t('account.languageHint')}><Select id="teamwork-locale" label={t('account.language')} value={locale} disabled={busy} onChange={value => edit(name, value as Locale)} options={[{ value: 'en', label: 'English' }, { value: 'zh-CN', label: '简体中文' }]} /></Field>
-            {dirty && <p className="twui-subtle">{t('account.unsaved')}</p>}
-            {saveError !== undefined && <Notice tone="danger"><span role="alert">{describe(t, saveError)}</span></Notice>}
-            <div className="twui-row"><Button type="submit" variant="primary" busy={busy} disabled={!dirty}>{t('account.save')}</Button>{dirty && <Button variant="ghost" disabled={busy} onClick={() => { if (key) profileDrafts.delete(key); setName(profile.name ?? ''); setLocale(profile.locale ?? t.locale); setSaveError(undefined); }}>{t('account.discard')}</Button>}</div>
-          </form>
-        </>}
-      </section>
-      <section className="twui-stack" aria-label={t('account.connection')}>
-        <h3>{t('account.connection')}</h3><ServerSetting state={state} run={run} />
-        <p className="twui-muted">{t('account.restartNote')}</p>
-        <div><Button variant="ghost" icon="logout" onClick={() => setLogoutConfirm(true)}>{t('account.signOut')}</Button></div>
-        {logoutConfirm && <Confirm title={t('account.signOutTitle')} description={t('account.signOutBody')} confirmLabel={t('account.signOutConfirm')} cancelLabel={t('common.cancel')} busy={busy} onCancel={() => setLogoutConfirm(false)} onConfirm={async () => { setBusy(true); await run(() => api.logout(), t('account.signedOut')); setBusy(false); }} />}
-      </section>
+  const [savingLanguage, setSavingLanguage] = useState(false);
+  return <div className="twui-account">
+    <div className="twui-row twui-account-heading">
+      <h2 className="twui-page-title">{t('account.title')}</h2>
+      <a className="twui-btn" href={`${state.server}/account`} target="_blank" rel="noopener noreferrer">
+        {t('account.editOnWeb')} <Icon name="external" size={14} />
+      </a>
     </div>
-  </>;
+    {error !== undefined ? <Banner tone="warning" title={t('account.readFailed')} action={<Button onClick={retry}>{t('common.retry')}</Button>}>{describe(t, error)}</Banner> : !profile ? <ListSkeleton /> : <Card>
+      <div className="twui-account-identity">
+        <Monogram text={profile.name || profile.email || 'T'} size={44} />
+        <div><strong>{profile.name || t('account.unnamed')}</strong><p className="twui-muted">{profile.email || t('account.noEmail')}</p></div>
+      </div>
+      <div className="twui-account-language">
+        <Field label={t('account.language')} htmlFor="teamwork-locale">
+          <Select id="teamwork-locale" label={t('account.language')} value={profile.locale ?? t.locale} disabled={savingLanguage}
+            options={[{ value: 'en', label: 'English' }, { value: 'zh-CN', label: '简体中文' }]}
+            onChange={async locale => {
+              setSavingLanguage(true);
+              try { await onLocaleChange(locale as Locale); } finally { setSavingLanguage(false); }
+            }} />
+        </Field>
+      </div>
+    </Card>}
+    <section className="twui-stack" aria-labelledby="teamwork-account-teams">
+      <h3 id="teamwork-account-teams">{t('nav.teams')}</h3>
+      <Card>
+        {state.teams.length ? <ul className="twui-account-teams">
+          {state.teams.map(team => <li key={team.id}>
+            <button type="button" className="twui-account-team" onClick={() => selectTeam(team.id)}>
+              <span>{team.name}</span>
+              <Badge tone={team.role === 'admin' ? 'brand' : 'neutral'}>{role(t, team.role)}</Badge>
+              <Icon name="chevronRight" size={14} />
+            </button>
+            {team.role === 'member' && <a className="twui-btn twui-account-team-leave" data-variant="ghost"
+              href={team.consoleUrl} target="_blank" rel="noopener noreferrer"
+              aria-label={t('account.leaveTeamLabel', { team: team.name })} title={t('account.leaveTeamHint')}>
+              {t('account.leaveTeam')} <Icon name="external" size={14} />
+            </a>}
+          </li>)}
+        </ul> : <p className="twui-muted">{t('account.noTeams')}</p>}
+      </Card>
+    </section>
+    <SignOutAction run={run} />
+  </div>;
+}
+
+function Connection({ state, run }: { state: PanelState; run: Run }) {
+  const t = useT();
+  return <div className="twui-account">
+    <h2 className="twui-page-title">{t('account.connection')}</h2>
+    <div className="twui-stack">
+      <ServerSetting state={state} run={run} />
+      <p className="twui-subtle">{t('account.restartNote')}</p>
+      <SignOutAction run={run} switchAccount />
+    </div>
+  </div>;
+}
+
+function SignOutAction({ run, switchAccount = false }: { run: Run; switchAccount?: boolean }) {
+  const t = useT();
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const signOut = async () => {
+    setBusy(true);
+    await run(() => api.logout(), t('account.signedOut'));
+    setBusy(false);
+  };
+  return <div className="twui-stack twui-sign-out">
+    <div><Button variant="danger" icon="logout" disabled={busy} aria-expanded={confirm} onClick={() => setConfirm(open => !open)}>
+      {t(switchAccount ? 'account.switch' : 'account.signOut')}
+    </Button></div>
+    {confirm && <Confirm
+      title={t(switchAccount ? 'account.switchTitle' : 'account.signOutTitle')}
+      description={t('account.signOutBody')}
+      confirmLabel={t(switchAccount ? 'account.switchConfirm' : 'account.signOutConfirm')}
+      cancelLabel={t('common.cancel')} busy={busy} onCancel={() => setConfirm(false)} onConfirm={signOut}
+    />}
+  </div>;
 }
 
 /* ── Sign-in ─────────────────────────────────────────────────────────────── */
@@ -739,7 +786,12 @@ function Header({ state, page, team, reviews, reviewUrl, selectTeam, navigate }:
   return <>
     <div className="twui-brand-lockup"><button type="button" className="twui-brand-home" aria-label={t('nav.home')} onClick={() => navigate('resources')}><BrandMark size={32} title="DSH Teamwork" /></button>
       <div className="twui-row twui-team-scope"><Button variant="ghost" onClick={() => navigate('teams')}>{t('nav.teams')}</Button>
-        {!!state.teams.length && <><Icon name="chevronRight" size={14} /><Select label={t('nav.chooseTeam')} value={team} onActivate={() => navigate('resources')} onChange={selectTeam} options={[{ value: 'all', label: t('common.allTeams') }, ...state.teams.map(x => ({ value: x.id, label: x.name, description: role(t, x.role) }))]} /></>}
+        {!!state.teams.length && <>
+          <Icon name="chevronRight" size={14} />
+          {state.teams.length === 1
+            ? <Button variant="ghost" className="twui-team-name" onClick={() => navigate('resources')}><span>{state.teams[0].name}</span></Button>
+            : <Select label={t('nav.chooseTeam')} value={team} onActivate={() => navigate('resources')} onChange={selectTeam} options={state.teams.map(x => ({ value: x.id, label: x.name, description: role(t, x.role) }))} />}
+        </>}
         {state.teams.find(x => x.id === team)?.role === 'admin' && <Badge tone="brand">{t('common.admin')}</Badge>}
       </div>
     </div>
@@ -765,12 +817,19 @@ function Budget({ budget }: { budget: PanelSummary['budget'] | null | undefined 
   return <span className="twui-footer-service" role="status" title={t('budget.hint')}>{budget?.exhausted && <span className="twui-signal-dot" aria-hidden="true" />}{label}</span>;
 }
 
-/** `budget`: false while every team is browsed, undefined while it loads, null when it could not be read. */
-function Footer({ state, budget, run }: { state: PanelState; budget: PanelSummary['budget'] | null | undefined | false; run: Run }) {
+/** `budget`: false when there is no team, undefined while it loads, null when it could not be read. */
+function Footer({ state, connectionOpen, openConnection, budget, run }: { state: PanelState; connectionOpen: boolean; openConnection(): void; budget: PanelSummary['budget'] | null | undefined | false; run: Run }) {
   const t = useT();
   const [busy, setBusy] = useState(false);
   return <>
-    <div className="twui-footer-identity"><span className="twui-footer-name">Teamwork</span><span className="twui-footer-service" title={state.server}>{state.server === state.defaultServer ? t('common.officialService') : host(state.server)} · {t('common.thisDsh')}</span></div>
+    <div className="twui-footer-identity">
+      <span className="twui-footer-name">Teamwork</span>
+      <Button variant="ghost" size="sm" icon="server" className="twui-footer-connection"
+        aria-label={`${t('account.connection')} · ${host(state.server)}`} aria-current={connectionOpen ? 'page' : undefined}
+        title={state.server} onClick={openConnection}>
+        <span className="twui-footer-service">{host(state.server)}</span>
+      </Button>
+    </div>
     <div className="twui-row twui-footer-actions">{budget !== false && <Budget budget={budget} />}<span role="status"><Badge tone={state.sync.lastError ? 'warning' : 'success'} dot>{state.sync.running ? t('sync.running') : state.sync.lastError ? t('sync.failed') : synced(t, state.sync.lastSuccess)}</Badge></span>
       <Button variant="ghost" size="sm" icon="refresh" busy={busy || state.sync.running} onClick={async () => { setBusy(true); await run(() => api.sync(), t('sync.done')); setBusy(false); }}>{t('sync.refresh')}</Button>
     </div>
@@ -807,7 +866,7 @@ function startSession(dsh: Host, preset: PanelPreset, state: PanelState, prompt?
  * The team's assistant, ahead of the other presets: what it is for, what to ask it, and how to start; an example
  * question opens a session with it typed in.
  */
-function AssistantItem({ preset, team, state, dsh }: { preset: PanelPreset; team?: string; state: PanelState; dsh: Host }) {
+function AssistantItem({ preset, state, dsh }: { preset: PanelPreset; state: PanelState; dsh: Host }) {
   const t = useT();
   const { blocked } = presetState(t, preset, state);
   return (
@@ -815,7 +874,6 @@ function AssistantItem({ preset, team, state, dsh }: { preset: PanelPreset; team
       <Item
         media={<PresetAvatar avatar={preset.avatar} name={preset.name} />}
         title={<>{preset.name}<Badge tone="brand">{t('assistant.label')}</Badge></>}
-        subtitle={team}
         description={t('assistant.body')}
         tags={<>
           <span className="twui-subtle">{t('assistant.examples')}</span>
@@ -830,7 +888,7 @@ function AssistantItem({ preset, team, state, dsh }: { preset: PanelPreset; team
   );
 }
 
-function PresetItem({ preset, team, state, dsh, onInstall }: { preset: PanelPreset; team?: string; state: PanelState; dsh: Host; onInstall(): void }) {
+function PresetItem({ preset, state, dsh, onInstall }: { preset: PanelPreset; state: PanelState; dsh: Host; onInstall(): void }) {
   const t = useT();
   const [expanded, setExpanded] = useState(false);
   const { missing, plugins, blocked } = presetState(t, preset, state);
@@ -839,7 +897,6 @@ function PresetItem({ preset, team, state, dsh, onInstall }: { preset: PanelPres
     <Item
       media={<PresetAvatar avatar={preset.avatar} name={preset.name} />}
       title={preset.name}
-      subtitle={team}
       description={preset.description || undefined}
       tags={
         <>
@@ -898,13 +955,12 @@ async function startModelSession(t: Translate, dsh: Host, model: PanelState['mod
   dsh.uiWorkspace.openSession(sessionId);
 }
 
-function ModelItem({ model, team, state, dsh, run }: { model: PanelState['models'][number]; team?: string; state: PanelState; dsh: Host; run: Run }) {
+function ModelItem({ model, state, dsh, run }: { model: PanelState['models'][number]; state: PanelState; dsh: Host; run: Run }) {
   const t = useT();
   return (
     <Item
       icon="cpu"
       title={model.name}
-      subtitle={team}
       description={t('model.body')}
       tags={<>
         <Badge><span className="twui-mono">{model.upstream}</span></Badge>
@@ -917,7 +973,7 @@ function ModelItem({ model, team, state, dsh, run }: { model: PanelState['models
   );
 }
 
-function PluginItem({ plugin, team, run }: { plugin: PanelPlugin; team?: string; run: Run }) {
+function PluginItem({ plugin, run }: { plugin: PanelPlugin; run: Run }) {
   const t = useT();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -927,7 +983,6 @@ function PluginItem({ plugin, team, run }: { plugin: PanelPlugin; team?: string;
     <Item
       icon="puzzle"
       title={plugin.name}
-      subtitle={team || undefined}
       description={plugin.description || undefined}
       tags={<>
         <span className="twui-subtle twui-mono">{spec}</span>
