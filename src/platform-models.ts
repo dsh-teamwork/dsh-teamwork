@@ -1,5 +1,6 @@
 import { PiAiAdapter, type ResolvedPiAiProviderProfile } from '@deepseek-ai/dsh-llm-pi-ai';
-import { resolveRetryPolicy } from '@deepseek-ai/dsh-llm';
+import type { Context } from '@deepseek-ai/cordis';
+import { resolveImageAttachmentAccess, resolveRetryPolicy } from '@deepseek-ai/dsh-llm';
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy';
 import type { Model } from '@earendil-works/pi-ai';
 import type { AdapterRegistrationHandle, LlmAdapter } from '@deepseek-ai/dsh-llm';
@@ -12,7 +13,7 @@ export const isTeamProvider = (provider: string | undefined) => !!provider?.star
 /** How DSH's model picker heads a team's models: `Teamwork <team>`, apart from the member's own providers. */
 export const teamGroupName = (teamName: string) => `Teamwork ${teamName}`;
 
-export function platformAdapter(client: TeamworkClient): PiAiAdapter {
+export function platformAdapter(client: TeamworkClient, ctx?: Context): PiAiAdapter {
   let previous: Snapshot | undefined;
   let profiles = new Map<string, ResolvedPiAiProviderProfile>();
   const api = openAICompletionsApi();
@@ -60,6 +61,10 @@ export function platformAdapter(client: TeamworkClient): PiAiAdapter {
       return profiles;
     },
     resolveApiKey: async () => client.platformCredential(),
+    resolveAttachments: () => ctx?.get('attachments'),
+    resolveImageAccess: (attachments, ref) => resolveImageAttachmentAccess(
+      attachments, hostPath => ctx?.get('fs')?.processPathFromHostPath(hostPath), ref,
+    ),
     auth: {
       credentials: { read: async () => undefined, list: async () => [], modify: async () => undefined, delete: async () => {} },
       authContext: { env: async () => undefined, fileExists: async () => false },
