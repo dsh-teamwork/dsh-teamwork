@@ -81,7 +81,8 @@ it('requires both local approvals, persists trust, and acknowledges durable remo
     expect(await keys.peer('server|account', 'pair')).toBeUndefined();
     phone.send({ t: 'pairConfirm' });
     await until(() => host.status('pair').phoneConfirmed);
-    await host.approve('pair');
+    await expect(host.approve('pair', 'different code')).rejects.toThrow('safety code changed');
+    await host.approve('pair', codes[0]);
     await until(() => messages.some((m) => m.t === 'pairAccepted'));
     expect(confirms).toBe(1);
     expect((await keys.peer('server|account', 'pair'))?.key).toBe(identity.publicKey);

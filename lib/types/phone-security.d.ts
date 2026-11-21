@@ -81,7 +81,7 @@ export declare class PhoneSecurity {
         pairingId: string;
     }): Promise<void>;
     send(value: unknown): void;
-    approve(id: string): Promise<void>;
+    approve(id: string, safetyCode?: string): Promise<void>;
     revoke(id: string): Promise<void>;
     /**
      * The relay's list of this computer's unrevoked pairings: a phone trusted here but absent from it was
