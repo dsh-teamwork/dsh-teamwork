@@ -98,7 +98,19 @@
   <button id="b-warn" class="warn" hidden></button>
 </div>
 <div id="toast" role="status"></div>
-<script src="deck.js"></script>
+<script>
+// Why deck.js gave no DECK, should it not: it could not be loaded, or it stopped on an error. A page's error
+// messages are hidden from it (its origin is opaque), so check.mjs is what names the line.
+window.TEAMWORK_DATA = {};
+addEventListener("error", function (e) { if (e.target === window && !TEAMWORK_DATA.error) TEAMWORK_DATA.error = e.message || "error"; });
+function dataProblem() {
+  var d = window.TEAMWORK_DATA || {};
+  if (d.unloaded) return "deck.js could not be loaded: it is not beside index.html, or the browser refused it.";
+  if (d.error) return "deck.js stopped on an error" + (/^Script error\.?$/.test(d.error) ? "" : ": " + d.error) + ". Run check.mjs on the folder to find the line.";
+  return "deck.js does not set window.DECK.";
+}
+</script>
+<script src="deck.js" onerror="TEAMWORK_DATA.unloaded = true"></script>
 <script>
 "use strict";
 (function () {
@@ -127,7 +139,7 @@
     graphite: { dark: "111111", primary: "2E2E2E", accent: "E5484D", light: "F6F6F6", surface: "FFFFFF", text: "151515", muted: "6A6A6A", soft: "E4E4E4" }
   };
 
-  var deck = window.DECK || { title: "Missing deck.js", slides: [{ layout: "cover", title: "deck.js was not found", subtitle: "Write window.DECK in deck.js beside index.html." }] };
+  var deck = window.DECK || { title: "No deck", slides: [{ layout: "cover", title: "The deck did not load", subtitle: dataProblem(), notes: dataProblem() }] };
   var lang = /^zh/i.test(deck.lang || "") ? "zh-CN" : "en";
   var t = UI[lang];
   var zh = lang === "zh-CN";

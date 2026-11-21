@@ -98,7 +98,19 @@
   <button id="b-warn" class="warn" hidden></button>
 </div>
 <div id="toast" role="status"></div>
-<script src="report.js"></script>
+<script>
+// Why report.js gave no REPORT, should it not: it could not be loaded, or it stopped on an error. A page's error
+// messages are hidden from it (its origin is opaque), so check.mjs is what names the line.
+window.TEAMWORK_DATA = {};
+addEventListener("error", function (e) { if (e.target === window && !TEAMWORK_DATA.error) TEAMWORK_DATA.error = e.message || "error"; });
+function dataProblem() {
+  var d = window.TEAMWORK_DATA || {};
+  if (d.unloaded) return "report.js could not be loaded: it is not beside index.html, or the browser refused it.";
+  if (d.error) return "report.js stopped on an error" + (/^Script error\.?$/.test(d.error) ? "" : ": " + d.error) + ". Run check.mjs on the folder to find the line.";
+  return "report.js does not set window.REPORT.";
+}
+</script>
+<script src="report.js" onerror="TEAMWORK_DATA.unloaded = true"></script>
 <script>
 "use strict";
 (function () {
@@ -180,7 +192,7 @@
       kinds: { primary: "一手", secondary: "二手", data: "数据" }, callout: { finding: "发现", risk: "风险", gap: "缺口", estimate: "估算", inference: "推断" },
       saved: "Markdown 已保存。", by: "作者", colon: "：", count: function (n) { return n + " 个来源"; } }
   };
-  var R = window.REPORT || { title: "report.js was not found", question: "", summary: {}, sections: [], sources: [] };
+  var R = window.REPORT || { title: "The report did not load", question: "", summary: { answer: dataProblem() }, sections: [], sources: [] };
   var lang = /^zh/i.test(R.lang || "") ? "zh-CN" : "en", t = UI[lang];
   document.documentElement.lang = lang;
   document.documentElement.style.setProperty("--font", lang === "zh-CN"
