@@ -85,13 +85,16 @@ describe('a channel behind the PIN', () => {
       phone.start();
       await until(() => messages.includes(expected));
       if (newPIN) {
+        phone.send({ t: 'setPin', pin: '1234', old: newPIN });
+        await until(() => messages.filter(type => type === 'pinRequired').length === 2);
+        expect(messages).not.toContain('unlocked');
         phone.send({ t: 'unlock', pin: newPIN });
         await until(() => messages.includes('unlocked'));
       }
     }
     phone.close();
   });
-  it('carries nothing until the member sets or gives their PIN, and locks again when idle', async () => {
+  it('carries nothing until a shared member sets or gives their PIN, and locks again when idle', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'pin-channel-'));
     const keys = new PhoneKeys(join(dir, 'keys.json'));
     const pins = new PinStore(join(dir, 'pins.json'));
@@ -102,7 +105,7 @@ describe('a channel behind the PIN', () => {
     let phone: SecureChannel;
     const host = new PhoneSecurity({
       keys, scope: async () => 'scope', send: (p) => queueMicrotask(() => phone.receive(p)), forward: (f) => forwarded.push(f),
-      confirm: async () => {}, changed: () => {}, error: () => {}, pins, pinMember: async () => 'owner', now: () => now,
+      confirm: async () => {}, changed: () => {}, error: () => {}, pins, pinMember: async () => 'member', now: () => now,
     });
     phone = new SecureChannel({
       importAesKey, pairingId: 'pair', channelId: newChannelId((n) => randomBytes(n)), identity, initiator: true, random: (n) => randomBytes(n),

@@ -90,8 +90,10 @@ It reaches the running DSH through a socket in the plugin's directory in the DSH
 home (below), which only that user can open. It runs on Linux and macOS.
 
 A personal DSH on a server works the same way: `dsh-teamwork login` prints a
-sign-in link to open in any browser, and `dsh-teamwork authorize <code>` takes
-the code the page shows. `dsh-teamwork status` and `dsh-teamwork sync` follow
+sign-in link to open in any browser. Confirm authorization to reveal the code,
+then run `dsh-teamwork authorize <code>` on the server. Use
+`dsh-teamwork login --browser` for automatic sign-in with a browser on the
+same machine as DSH. `dsh-teamwork status` and `dsh-teamwork sync` follow
 the team's configuration. `dsh-teamwork device pair` prints a pairing code and
 draws the phone app's QR code in the terminal; a browser types the code under
 **My DSH** in the Teamwork web console. `dsh-teamwork device list` then shows
@@ -163,7 +165,7 @@ Run these in DSH's command input, not your shell. IDs come from `/teamwork list`
 | --- | --- |
 | `/teamwork login` | Open browser authorization. |
 | `/teamwork authorize <code>` | Redeem a fallback authorization code. |
-| `/teamwork pin reset` | Clear your own PIN and lock on this computer; set a new one from your phone or browser. |
+| `/teamwork pin reset` | Clear your own PIN and lock on this computer; set a new one from the Teamwork panel or with `dsh-teamwork pin set`. |
 | `/teamwork status` | Show authentication, sync status and recent errors. |
 | `/teamwork sync` | Refresh the team's resources. |
 | `/teamwork list` | List configuration IDs. |
@@ -179,7 +181,7 @@ Run these in DSH's command input, not your shell. IDs come from `/teamwork list`
 | `/teamwork retry` | Preview recovery; `retry confirm` sends a recovery instruction, not tool replay. |
 | `/teamwork logout` | Revoke the sign-in on the server, and drop the kept token, team cache and team registrations. |
 
-Personal desktops default to PIN protection off. In the device pairing panel on the computer, set a four-digit PIN to enable it, change it, or turn it off. The PIN and any lockout belong to this host and persist when the signed-in account changes. The new owner can change or disable the PIN locally in the pairing panel.
+Personal DSH hosts default to PIN protection off. On a headless server, run `dsh-teamwork pin set` and enter four digits at the hidden prompt. Run `dsh-teamwork pin clear` to disable PIN protection. Paired phones and remote web clients only verify the PIN. In the device pairing panel on the computer, set a four-digit PIN to enable it, change it, or turn it off. The PIN and any lockout belong to this host and persist when the signed-in account changes. The new owner can change or disable the PIN locally in the pairing panel.
 
 Continue and retry do not jump ahead of queued input. A confirmation expires
 when its session, model, configuration or login binding changes. Logout leaves

@@ -41,7 +41,7 @@ dsh-teamwork device pair          # 另有 list、accept <id>、reject <id>、re
 它通过 DSH home 里插件目录下的一个 socket 连接正在运行的 DSH（见下文），只有该用户能打开。支持 Linux 和 macOS。
 
 服务器上的个人 DSH 也一样：
-- **登录**：`dsh-teamwork login` 打印登录链接，在任意浏览器中打开，再用 `dsh-teamwork authorize <code>` 填入页面上显示的授权码。
+- **登录**：`dsh-teamwork login` 打印登录链接，在任意浏览器中打开并确认授权，页面会显示授权码。回到服务器运行 `dsh-teamwork authorize <code>` 完成登录。如果浏览器与 DSH 在同一台电脑上，可以用 `dsh-teamwork login --browser` 自动完成授权回调。
 - **同步**：`dsh-teamwork status` 和 `dsh-teamwork sync` 查看并同步团队配置。
 - **配对设备**：`dsh-teamwork device pair` 打印配对码，并在终端里画出手机 App 的配对二维码；浏览器在 Teamwork 网页的**我的 DSH**里输入配对码。`dsh-teamwork device list` 显示等待中设备的安全码和设备类型（iOS 手机、Android 手机或 Web 浏览器），与设备上的一致时用 `dsh-teamwork device accept <id>` 确认；`reject` 和 `revoke` 用于拒绝或移除。
 
@@ -77,7 +77,7 @@ dsh-teamwork device pair          # 另有 list、accept <id>、reject <id>、re
 | --- | --- |
 | `/teamwork login` | 打开浏览器授权。 |
 | `/teamwork authorize <code>` | 兑换备用授权码。 |
-| `/teamwork pin reset` | 清除你自己在这台计算机上的 PIN 和锁定，再从手机或浏览器设置新的。 |
+| `/teamwork pin reset` | 清除你自己在这台计算机上的 PIN 和锁定，再从插件面板或用 `dsh-teamwork pin set` 设置新的。 |
 | `/teamwork status` | 查看登录、同步和最近错误。 |
 | `/teamwork sync` | 刷新团队资源。 |
 | `/teamwork list` | 列出配置 ID。 |
@@ -93,7 +93,7 @@ dsh-teamwork device pair          # 另有 list、accept <id>、reject <id>、re
 | `/teamwork retry` | 预览恢复；`retry confirm` 发送恢复指令，不重放工具调用。 |
 | `/teamwork logout` | 在服务端撤销登录，并删除保存的令牌、团队缓存与注册。 |
 
-个人桌面 DSH 默认关闭设备连接 PIN。可在本机的设备配对面板中设置四位 PIN、修改或关闭保护。PIN 和锁定状态保存在主机上，切换账号后继续生效。新机主可在本机配对面板修改或关闭 PIN。
+个人 DSH 默认关闭设备连接 PIN。服务器终端可用 `dsh-teamwork pin set` 设置或更改四位 PIN（输入不回显），用 `dsh-teamwork pin clear` 关闭保护。手机和远程 Web 仅验证 PIN。可在本机的设备配对面板中设置四位 PIN、修改或关闭保护。PIN 和锁定状态保存在主机上，切换账号后继续生效。新机主可在本机配对面板修改或关闭 PIN。
 
 继续和重试不会插队；会话、模型、配置或登录身份变化会使确认失效。退出不卸载明确安装过的插件；被移除成员的下一次服务端请求将被拒绝。
 

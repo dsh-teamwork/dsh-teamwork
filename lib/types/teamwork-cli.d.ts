@@ -7,5 +7,7 @@ export declare function call(socketPath: string, route: string, body?: Record<st
 /** The pairing link as a QR code a terminal shows: two rows per character line, so it stays square. */
 export declare function terminalQr(link: string): string;
 /** Runs one command against the DSH on socketPath, writing to out and err; returns the exit code. */
-export declare function run(args: string[], socketPath: string, out: (line: string) => void, err: (line: string) => void): Promise<2 | 0 | 1>;
+export declare function run(args: string[], socketPath: string, out: (line: string) => void, err: (line: string) => void, input?: NodeJS.ReadableStream & {
+    isTTY?: boolean;
+}): Promise<2 | 0 | 1>;
 //# sourceMappingURL=teamwork-cli.d.ts.map

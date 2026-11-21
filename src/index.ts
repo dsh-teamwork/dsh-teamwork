@@ -501,10 +501,10 @@ export async function apply(ctx: Context, config: Config) {
   };
   const authorize = async (code: string) => { hostManaged(); pendingInstalls.clear(); try { await client.completeLogin(code); } finally { await overlay.apply(client.current()); relay.refresh(); } stopCallback(); if (config.autoSync !== false) await configSync.sync(); };
   /** The sign-in page's address, and whether the code comes back by itself; without a listener it is pasted. */
-  const beginLogin = async () => {
+  const beginLogin = async (manual = false) => {
     hostManaged();
     stopCallback();
-    callback = await listenForCode(authorize).catch((error: Error) => { ctx.logger.warn('Cannot receive the authorization code on this machine; it has to be pasted: %s', error.message); return undefined; });
+    if (!manual) callback = await listenForCode(authorize).catch((error: Error) => { ctx.logger.warn('Cannot receive the authorization code on this machine; it has to be pasted: %s', error.message); return undefined; });
     return { url: client.beginLogin(callback?.uri), automatic: callback !== undefined };
   };
   const restore = async () => { await client.restore(); await overlay.apply(client.current()); relay.refresh(); };
@@ -770,7 +770,7 @@ export async function apply(ctx: Context, config: Config) {
             security.reset();
             bridge.dropAll();
             relay.refresh();
-            return { kind: 'success', text: 'Your phone PIN and its lock are cleared; set a new PIN on your phone\'s next connection.' };
+            return { kind: 'success', text: 'Your phone PIN and its lock are cleared; set a new PIN in the Teamwork panel or with dsh-teamwork pin set.' };
           }
           if (action === 'logout') { await logout(); return { kind: 'success', text: 'Signed out, and the team configuration removed.' }; }
           if (action === 'status') { const status = configSync.status(); return { kind: 'success', text: [`Signed in: ${status.authenticated ? 'yes' : 'no (a cache is not a valid sign-in)'}`, `Auto sync: ${status.autoSync ? 'on' : 'off'}`, `Teams: ${status.teams.length ? status.teams.join(', ') : 'none'} · configurations: ${status.configCount}`, `Last successful sync: ${status.lastSuccess ?? 'not since this start'}`, status.syncing ? 'Syncing' : '', status.lastError ?? ''].filter(Boolean).join('\n') }; }

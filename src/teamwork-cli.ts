@@ -5,10 +5,11 @@
  *
  *   dsh-teamwork server [url]             the Teamwork server it uses (a self-hosted team sets its own first);
  *                                         without a url, prints it
- *   dsh-teamwork login                    a sign-in link to open in any browser; the code it shows goes to authorize
+ *   dsh-teamwork login [--browser]        a sign-in link; --browser enables callback on the same machine
  *   dsh-teamwork authorize <code>         finish signing in
  *   dsh-teamwork status                   sign-in, teams, sync, the relay and paired devices
  *   dsh-teamwork sync                     sync the team configuration now
+ *   dsh-teamwork pin set | clear          set or disable the device PIN on this DSH
  *   dsh-teamwork logout                   sign out
  *   dsh-teamwork device pair              a pairing code, and a QR code for the DSH Teamwork phone app; a browser
  *                                         types the code in My DSH
@@ -24,6 +25,8 @@ import { realpathSync } from 'node:fs';
 import { request } from 'node:http';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { createInterface } from 'node:readline';
+import { Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import qrcode from 'qrcode-generator';
 import type { PanelPairingOffer, PanelPhone, PanelState } from './panel.js';
@@ -128,12 +131,13 @@ function describeState(s: PanelState) {
 }
 
 const usage = [
-  'usage: dsh-teamwork server [url] | login | authorize <code> | status | sync | logout',
+  'usage: dsh-teamwork server [url] | login [--browser] | authorize <code> | status | sync | logout',
+  '       dsh-teamwork pin set | clear',
   '       dsh-teamwork device pair | list | accept <id> | reject <id> | revoke <id>',
 ].join('\n');
 
 /** Runs one command against the DSH on socketPath, writing to out and err; returns the exit code. */
-export async function run(args: string[], socketPath: string, out: (line: string) => void, err: (line: string) => void) {
+export async function run(args: string[], socketPath: string, out: (line: string) => void, err: (line: string) => void, input: NodeJS.ReadableStream & { isTTY?: boolean } = process.stdin) {
   const [group, action, value] = args;
   if (group === 'server') {
     if (action) await call(socketPath, 'server', { server: action });
@@ -142,11 +146,16 @@ export async function run(args: string[], socketPath: string, out: (line: string
   }
   switch (group) {
     case 'login': {
-      const { url, automatic } = (await call(socketPath, 'login')) as { url: string; automatic: boolean };
-      out(`Open this in a browser, sign in and confirm:\n${url}`);
-      out(automatic
-        ? 'A browser on this machine finishes by itself. Anywhere else, copy the code the page shows and run: dsh-teamwork authorize <code>'
-        : 'Then copy the code the page shows and run: dsh-teamwork authorize <code>');
+      if (args.length > 2 || (action !== undefined && action !== '--browser')) { err(usage); return 2; }
+      const browser = action === '--browser';
+      const { url, automatic } = (await call(socketPath, 'login', browser ? {} : { manual: true })) as { url: string; automatic: boolean };
+      const link = new URL(url);
+      // Older running plugins still return a loopback URL for every login request.
+      if (!browser) link.searchParams.delete('redirect_uri');
+      out(`Open this in a browser, sign in and confirm:\n${link}`);
+      out(browser && automatic
+        ? 'Open the link on this machine to finish automatically. For a browser on another machine, run dsh-teamwork login.'
+        : 'After confirming, copy the code the page shows and run on this machine: dsh-teamwork authorize <code>');
       return 0;
     }
     case 'authorize':
@@ -155,6 +164,27 @@ export async function run(args: string[], socketPath: string, out: (line: string
       await call(socketPath, 'authorize', { code: args.at(-1) });
       out('Signed in. The team configuration syncs now; dsh-teamwork status shows it.');
       return 0;
+    case 'pin': {
+      if (args.length !== 2 || (action !== 'set' && action !== 'clear')) { err(usage); return 2; }
+      let pin: string | null = null;
+      if (action === 'set') {
+        const terminal = input.isTTY === true;
+        const silent = new Writable({ write(_chunk, _encoding, done) { done(); } });
+        const lines = createInterface({ input, terminal, output: silent });
+        try {
+          if (terminal) err('Enter a four-digit device PIN:');
+          const first = await lines[Symbol.asyncIterator]().next();
+          if (first.done || !/^\d{4}$/.test(first.value)) {
+            err('A PIN is four digits.');
+            return 2;
+          }
+          pin = first.value;
+        } finally { lines.close(); }
+      }
+      await call(socketPath, 'owner-pin', { pin });
+      out(pin === null ? 'Device PIN disabled.' : 'Device PIN saved.');
+      return 0;
+    }
     case 'status': out(describeState(await state(socketPath))); return 0;
     case 'sync': {
       await call(socketPath, 'sync');
