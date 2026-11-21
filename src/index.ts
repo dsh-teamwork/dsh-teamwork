@@ -299,7 +299,12 @@ export async function apply(ctx: Context, config: Config) {
         const state = await panel.state(sessionId);
         const roster = await ctx.agentPresets.remoteExportList();
         const presets = permissionPresets();
-        return { presets: phonePresets(state, [...roster.presets]), directories: directories(), teamDirectories: await teamDirectories(),
+        const imageModels = (await Promise.all(ctx.llm.listProviders().map(async ({ id }) => {
+          const models = await ctx.llm.listModels(id).catch(() => []);
+          return models.filter(model => model.inputModalities?.includes('image'))
+            .map(model => ({ provider: id, model: model.id }));
+        }))).flat();
+        return { presets: phonePresets(state, [...roster.presets]), directories: directories(), teamDirectories: await teamDirectories(), imageModels,
           // A session's permission preset and those a remote device may pick; none where DSH composes no presets.
           permissions: presets ? phonePermissions(presets, shared?.enabled === true, agent?.session) : null,
           // A session's files can be browsed, read only (src/phone-files.ts).
@@ -350,6 +355,14 @@ export async function apply(ctx: Context, config: Config) {
         if (!agent) return false;
         const matches = (source: unknown) => typeof source === 'object' && source !== null && 'kind' in source && source.kind === 'user' && 'rpcId' in source && source.rpcId === requestId;
         return [...agent.inbox.nextTurn, ...agent.inbox.nextStep].some(message => matches(message.source)) || agent.session.snapshotEvents().some(event => event.type === 'user/message' && matches(event.data.source));
+      },
+      async checkImages(sessionId) {
+        const selection = sessionAgent(sessionId)?.model.current();
+        if (selection) {
+          const models = await ctx.llm.listModels(selection.provider).catch(() => []);
+          if (models.some(model => model.id === selection.model && model.inputModalities?.includes('image'))) return;
+        }
+        throw new PhoneSessionError('image_model_unsupported');
       },
       async check(sessionId) {
         const agent = sessionAgent(sessionId);

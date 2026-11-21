@@ -112,14 +112,14 @@ describe('the phone bridge', () => {
     expect(sent.at(-1)).toMatchObject({ body: { result: { ok: false, error: { code: 'session/not-found' } } } });
   });
 
-  it('lets the native idempotent path confirm an accepted request before busy and receipt checks', async () => {
+  it('confirms an already accepted request even after its image or file receipts are retired', async () => {
     let checked = false;
     const session: PhoneSessionOps = { fileRoot: async () => process.cwd(), selectPermission: async () => ({}), accepted: (_id, requestId) => requestId === 'already-accepted', configuration: async () => ({}), selectModel: async () => ({}), check: async () => { checked = true; throw new PhoneSessionError('busy'); } };
     const { b, sent, asked } = bridge({ session });
     b.handle({ t: 'call', pairingId: 'p', id: 'retry', method: 'session/prompt', body: { args: { request: { sessionId: 's1', requestId: 'already-accepted', content: [{ type: 'file', receiptId: 'retired' }] } } } });
     for (let i = 0; i < 6; i++) await tick();
     expect(checked).toBe(false);
-    expect(asked.some(call => call.url.endsWith('/session/prompt'))).toBe(true);
+    expect(asked.some(call => call.url.endsWith('/session/prompt'))).toBe(false);
     expect(sent.at(-1)).toMatchObject({ status: 200, body: { result: { ok: true } } });
   });
 
@@ -154,6 +154,34 @@ describe('the phone bridge', () => {
     expect((await call('send', 'session/prompt', { sessionId: 's1', requestId: 'new', content: [{ type: 'file', receiptId: 'receipt' }] })).error.code).toBe('teamwork/busy');
     expect(checked).toBe(true);
     expect(asked.some(call => call.url.endsWith('/session/prompt'))).toBe(false);
+    b.dropAll();
+  });
+
+  it('blocks image receipts for a text-only session and resolves them after a model switch', async () => {
+    let vision = false;
+    const session: PhoneSessionOps = {
+      fileRoot: async () => process.cwd(), selectPermission: async () => ({}), accepted: () => false,
+      configuration: async () => ({}), selectModel: async () => ({}), check: async () => {},
+      checkImages: async () => { if (!vision) throw new PhoneSessionError('image_model_unsupported'); },
+    };
+    const { b, asked } = bridge({ session });
+    const call = (id: string, method: string, request: unknown) => b.answer('p', id, method, { args: { request } });
+    const start = await call('start', 'teamwork/uploadStart', { sessionId: 's1', name: 'picture.png', bytes: 3 });
+    const uploadId = (start.body as any).result.value.uploadId;
+    await call('chunk', 'teamwork/uploadChunk', { sessionId: 's1', uploadId, offset: 0, data: 'YWJj' });
+    const finished = await call('finish', 'teamwork/uploadFinish', { sessionId: 's1', uploadId });
+    const receiptId = (finished.body as any).result.value.receiptId;
+    const prompt = { sessionId: 's1', requestId: 'send', content: [{ type: 'file', receiptId }] };
+    expect((await call('blocked', 'session/prompt', prompt)).body).toMatchObject({
+      result: { ok: false, error: { code: 'teamwork/image_model_unsupported' } },
+    });
+    expect(asked.some(call => call.url.endsWith('/session/prompt'))).toBe(false);
+    vision = true;
+    expect((await call('allowed', 'session/prompt', prompt)).body).toMatchObject({ result: { ok: true } });
+    const forwarded = asked.find(call => call.url.endsWith('/session/prompt'));
+    expect(JSON.parse(String(forwarded?.init?.body)).payload.args.request.content).toEqual([
+      { type: 'image', mediaType: 'image/png', data: 'YWJj', name: 'picture.png' },
+    ]);
     b.dropAll();
   });
 

@@ -1,6 +1,8 @@
 import { PassThrough } from 'node:stream';
 import { z } from 'zod';
 export declare const uploadLimits: {
+    maxImageBytes: number;
+    maxMessageImageBytes: number;
     maxFiles: number;
     maxFileBytes: number;
     maxMessageBytes: number;
@@ -41,6 +43,8 @@ export declare class PhoneUploads {
     private readonly limits;
     private transfers;
     constructor(limits?: {
+        maxImageBytes: number;
+        maxMessageImageBytes: number;
         maxFiles: number;
         maxFileBytes: number;
         maxMessageBytes: number;
@@ -67,6 +71,7 @@ export declare class PhoneUploads {
         };
     }>;
     validate(pairing: string, sessionId: string, content: unknown): string[];
+    resolveImages(content: unknown[], ids: string[]): unknown[];
     cancel(pairing: string, sessionId: string, id: string): void;
     drop(pairing: string): void;
     private get;

@@ -4,10 +4,15 @@ import { PassThrough } from 'node:stream';
 import { z } from 'zod';
 import { PhoneSessionError } from './phone-session.js';
 
+const imageExtensions = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+const maxImageBytes = 512 * 1024;
+const maxMessageImageBytes = 1536 * 1024;
+
 export const uploadLimits = {
+  maxImageBytes, maxMessageImageBytes,
   maxFiles: 5, maxFileBytes: 20 * 1024 * 1024, maxMessageBytes: 50 * 1024 * 1024,
   chunkBytes: 256 * 1024,
-  extensions: ['txt', 'text', 'md', 'markdown', 'csv', 'json', 'jsonl', 'log', 'pdf', 'js', 'jsx', 'ts', 'tsx', 'py', 'go', 'rs', 'c', 'cc', 'cpp', 'h', 'hpp', 'java', 'cs', 'css', 'html', 'xml', 'yaml', 'yml', 'toml', 'ini', 'sh', 'sql', 'rb', 'php', 'swift', 'kt', 'patch', 'diff'],
+  extensions: ['txt', 'text', 'md', 'markdown', 'csv', 'json', 'jsonl', 'log', 'pdf', 'js', 'jsx', 'ts', 'tsx', 'py', 'go', 'rs', 'c', 'cc', 'cpp', 'h', 'hpp', 'java', 'cs', 'css', 'html', 'xml', 'yaml', 'yml', 'toml', 'ini', 'sh', 'sql', 'rb', 'php', 'swift', 'kt', 'patch', 'diff', ...imageExtensions],
 };
 const identity = { sessionId: z.string().min(1).max(256), uploadId: z.string().uuid() };
 export const uploadSchemas = {
@@ -21,7 +26,7 @@ export type UploadReceipt = z.infer<typeof receiptSchema>;
 interface Transfer {
   pairing: string; sessionId: string; size: number; received: number; stream: PassThrough;
   controller: AbortController; timer: ReturnType<typeof setTimeout>; deadline: ReturnType<typeof setTimeout>;
-  done: Promise<{ value: UploadReceipt } | { error: unknown }>; writing: boolean; finishing: boolean; receipt?: UploadReceipt;
+  done: Promise<{ value: UploadReceipt } | { error: unknown }>; writing: boolean; finishing: boolean; receipt?: UploadReceipt; image?: { type: 'image'; mediaType: string; data: string; name: string };
 }
 export class PhoneUploads {
   private transfers = new Map<string, Transfer>();
@@ -29,7 +34,10 @@ export class PhoneUploads {
 
   start(pairing: string, input: { sessionId: string; name: string; bytes: number }, upload: (body: PassThrough, signal: AbortSignal) => Promise<unknown>) {
     if (/[\\/\x00-\x1f\x7f]/.test(input.name)) throw new PhoneSessionError('file_name');
-    if (!this.limits.extensions.includes(input.name.split('.').pop()!.toLowerCase())) throw new PhoneSessionError('file_type');
+    const extension = input.name.split('.').pop()!.toLowerCase();
+    if (!this.limits.extensions.includes(extension)) throw new PhoneSessionError('file_type');
+    const isImage = imageExtensions.includes(extension);
+    if (isImage && (input.bytes <= 0 || input.bytes > maxImageBytes)) throw new PhoneSessionError('file_too_large');
     const active = [...this.transfers.values()].filter(t => !t.receipt);
     if (active.some(t => t.pairing === pairing) || active.length >= 2 || this.transfers.size >= 100) throw new PhoneSessionError('busy');
     if (input.bytes > this.limits.maxFileBytes) throw new PhoneSessionError('file_too_large');
@@ -45,7 +53,14 @@ export class PhoneUploads {
     };
     t.timer.unref(); t.deadline.unref();
     this.transfers.set(id, t);
-    t.done = upload(stream, controller.signal).then(value => {
+    const uploadImage = async () => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+      const mediaType = 'image/' + (extension === 'jpg' ? 'jpeg' : extension);
+      t.image = { type: 'image', mediaType, data: Buffer.concat(chunks).toString('base64'), name: input.name };
+      return { receiptId: id, file: { attachmentId: id, name: input.name, bytes: input.bytes } };
+    };
+    t.done = (isImage ? uploadImage() : upload(stream, controller.signal)).then(value => {
       const receipt = receiptSchema.parse(value);
       if (receipt.file.bytes !== t.size || this.transfers.get(id) !== t) throw new PhoneSessionError('invalid_upload');
       return { value: receipt };
@@ -90,17 +105,30 @@ export class PhoneUploads {
 
   validate(pairing: string, sessionId: string, content: unknown): string[] {
     const parts = z.array(z.object({ type: z.string(), receiptId: z.string().optional() })).parse(content);
+    if (parts.some(part => part.type === 'image')) throw new PhoneSessionError('invalid_upload');
     const files = parts.filter(p => p.type === 'file');
     if (files.length > this.limits.maxFiles) throw new PhoneSessionError('file_too_large');
-    let bytes = 0;
+    let bytes = 0, imageBytes = 0;
     const ids = files.map(part => {
       const entry = [...this.transfers.entries()].find(([, t]) => t.pairing === pairing && t.sessionId === sessionId && t.receipt?.receiptId === part.receiptId);
       if (!entry) throw new PhoneSessionError('upload_expired');
       bytes += entry[1].receipt!.file.bytes;
+      if (entry[1].image) imageBytes += entry[1].receipt!.file.bytes;
       return entry[0];
     });
-    if (bytes > this.limits.maxMessageBytes) throw new PhoneSessionError('file_too_large');
+    if (bytes > this.limits.maxMessageBytes || imageBytes > maxMessageImageBytes) throw new PhoneSessionError('file_too_large');
     return ids;
+  }
+
+  resolveImages(content: unknown[], ids: string[]): unknown[] {
+    const images = new Map(ids.flatMap(id => {
+      const upload = this.transfers.get(id);
+      return upload?.image && upload.receipt ? [[upload.receipt.receiptId, upload.image] as const] : [];
+    }));
+    return content.map(part => {
+      const receipt = part as { type?: string; receiptId?: string } | null;
+      return receipt?.type === 'file' && receipt.receiptId ? images.get(receipt.receiptId) ?? part : part;
+    });
   }
 
   cancel(pairing: string, sessionId: string, id: string) {

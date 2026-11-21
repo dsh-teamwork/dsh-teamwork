@@ -274,6 +274,7 @@ export class Bridge {
         return answer(200, { result: { ok: true, value } });
       }
       let uploaded: string[] = [];
+      let forwarded = frame.body;
       let promptSession: string | undefined;
       if (frame.method === 'session/prompt' && operations) {
         const input = z.object({ sessionId: z.string().min(1) }).safeParse(request);
@@ -284,9 +285,18 @@ export class Bridge {
         if (this.links.get(frame.pairingId) !== link) throw new PhoneSessionError('not_found');
         promptSession = input.data.sessionId;
         const prompt = request as { requestId?: string; content?: unknown };
-        if (!prompt.requestId || !operations.accepted(promptSession, prompt.requestId)) {
-          await operations.check(promptSession);
-          if (Array.isArray(prompt.content)) uploaded = this.uploads.validate(frame.pairingId, promptSession, prompt.content);
+        if (prompt.requestId && operations.accepted(promptSession, prompt.requestId)) {
+          return answer(200, { result: { ok: true } });
+        }
+        await operations.check(promptSession);
+        if (Array.isArray(prompt.content)) {
+          uploaded = this.uploads.validate(frame.pairingId, promptSession, prompt.content);
+          const content = this.uploads.resolveImages(prompt.content, uploaded);
+          if (content.some(part => typeof part === 'object' && part !== null && 'type' in part && part.type === 'image')) {
+            await operations.checkImages?.(promptSession);
+          }
+          const body = frame.body as { args: { request: object } };
+          forwarded = { ...body, args: { ...body.args, request: { ...body.args.request, content } } };
         }
       }
       // A phone or the console names a folder; DSH files a session under a workspace only when it is named by id, so a
@@ -295,7 +305,7 @@ export class Bridge {
       const workspaceId = typeof created?.cwd === 'string' && created.workspaceId === undefined ? this.options.workspaceAt?.(created.cwd) : undefined;
       const response = workspaceId
         ? await post(frame.method, { ...frame.body as object, args: { ...(frame.body as { args: object }).args, request: { ...Object.fromEntries(Object.entries(created!).filter(([key]) => key !== 'cwd')), workspaceId } } })
-        : await post();
+        : await post(frame.method, forwarded);
       const text = await response.text();
       if (promptSession && response.ok && (parseJson(text) as { result?: { ok?: boolean } } | null)?.result?.ok) {
         for (const id of uploaded) this.uploads.cancel(frame.pairingId, promptSession, id);
