@@ -71,6 +71,18 @@ agent's shell proved too unreliable to rely on). The agent never writes HTML or 
 Saving a file from a published page needs the pages sandbox's `allow-downloads` (platform
 `docs/tech/pages.md`).
 
+## Teamwork search
+
+`src/web-search.ts` registers a web search provider, id `teamwork`, with DSH's web seam (`ctx.web`)
+while the signed-in server offers search: after each sync the plugin asks `GET /api/web/search`, and
+registers on `available: true`, unregisters on a 404, 401 or 403, and keeps its last answer when the
+server cannot be reached. A search is `POST /api/web/search` with `{ query, count }` (count at most 20)
+and the plugin's Bearer, nothing else; the server answers `{ sources }` in the seam's shape. The
+hosted service offers it on its own DeepSeek key; a self-hosted server has no such route, so nothing
+is registered there. DSH's default provider is unchanged: a member picks Teamwork under **Web search
+and fetch** in DSH's settings. A refusal is worded for the model: a spent daily allowance (429), a
+lapsed sign-in (401), any other failure with its status.
+
 ## Host and browser boundary
 
 The package declares `dsh.bundle.patch` and `dsh.client`, exporting its browser

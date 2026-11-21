@@ -19,6 +19,7 @@ import { panelRoutes, type FetchRoute, type PanelOps, type PanelPreset } from '.
 import { registerAssistantTools } from './assistant-tools.js';
 import { registerPageTool } from './page-tool.js';
 import { registerBundledSkills } from './bundled-skills.js';
+import { teamworkSearch } from './web-search.js';
 import { hostname } from 'node:os';
 import { isTeamProvider, platformAdapter, teamProvider, teamRoutes } from './platform-models.js';
 import { Bridge, bridgeRoute } from './bridge.js';
@@ -176,8 +177,10 @@ export async function apply(ctx: Context, config: Config) {
   });
   ctx.inject(['tools'], child => registerAssistantTools(child, client, activePreset, () => configSync.sync(), async(id,version)=>{const item=pinnedPlugin(client.current(),id,version);if(!item)throw Error('Plugin version is unavailable');return installPlugin(item);}));
   // The relay admits an account in at least one team; one it refused for being in none rejoins once a sync finds one.
+  // Teamwork search (src/web-search.ts) is offered while the signed-in server searches; each sync asks it again.
+  const search = teamworkSearch(client);
   const configSync = new ConfigSync(client, overlay, config.autoSync ?? true, config.syncIntervalMs ?? 60000,
-    () => { if (client.current()?.teams.length) relay.rejoin(); });
+    () => { if (client.current()?.teams.length) relay.rejoin(); void search.refresh(); });
   /** Whether DSH offers a local model here, as its own catalogue decides: a provider with no key lists none. */
   const localCallable = async (selection: { provider: string; model: string }) => {
     if (!ctx.llm.listProviders().some(provider => provider.id === selection.provider)) return false;
@@ -379,6 +382,7 @@ export async function apply(ctx: Context, config: Config) {
   ctx.effect(() => () => shared?.stop());
   // Pages an agent publishes (src/page-tool.ts): on a Team DSH, for the member whose session it is.
   ctx.inject(['skills'], registerBundledSkills);
+  ctx.inject(['web'], child => search.attach(child));
   ctx.inject(['tools'], child => registerPageTool(child, {
     client, preset: activePreset,
     starterOf: (sessionId) => shared?.enabled ? roster.ownerOf(sessionId) : undefined,

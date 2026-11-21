@@ -29,6 +29,7 @@ demonstration team.
 | --- | --- |
 | Shared models and presets | Sync team resources and create sessions from native DSH agent presets. |
 | Team assistant | Ask about configuration, personal usage and applicable budgets; administrators get their authorized management operations. |
+| Teamwork search | Signed in to a server that offers it (the hosted service does), DSH lists **Teamwork** under Web search and fetch: web search through the server, with no search key of your own. |
 | Research reports | The bundled `teamwork-research` skill breaks a question down, reads primary sources and publishes a report with numbered citations, gaps and dated sources, which prints to PDF and saves as Markdown. |
 | Presentations | The bundled `teamwork-slides` skill plans a talk, writes the slides and speaker notes, and publishes a deck that presents full screen and exports to PDF and an editable PowerPoint file. |
 | Reviewed sharing | Prepare local plugin packages and submit new or updated plugins/presets for administrator review. |
