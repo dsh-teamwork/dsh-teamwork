@@ -74,7 +74,9 @@ you need is in this file and that example; do not read `index.html` to learn how
    - List in `gaps` what you could not establish, what rests on one source, and what may be out of
      date. A report that says what it could not find is worth more than one that guesses.
 6. **Check it** with Node: `node "<this skill's directory>/check.mjs" <report folder>`. It prints
-   the problems as JSON; `[]` means none. Fix them in `report.js` and run it again. Do not open the
+   the problems as JSON; `[]` means none. Fix them in `report.js` and run it again. **Publish only
+   once it prints `[]`**, and run it again after every change: a `report.js` that does not run shows
+   the person an empty report. Do not open the
    report in a browser yourself.
 7. **Publish** the folder with `teamwork_page` (`action: "create"`, `kind: "html"`, the report's
    title, `directory` the report folder). Give the person the link. For a change, edit `report.js`

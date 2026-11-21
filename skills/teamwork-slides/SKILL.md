@@ -34,7 +34,9 @@ A deck is two files in a folder of its own:
    characters a minute). Notes carry the detail the slide leaves out; the slide never repeats them.
 5. **Check it** with Node: `node "<this skill's directory>/check.mjs" <deck folder>`. It prints the
    problems as JSON (a layout that would cut content off, too many or too long bullets, a missing
-   note, a mistake in `deck.js`); `[]` means none. Fix them in `deck.js` and run it again. Do not
+   note, a mistake in `deck.js`); `[]` means none. Fix them in `deck.js` and run it again. **Publish
+   only once it prints `[]`**, and run it again after every change: a `deck.js` that does not run shows
+   the person an empty deck. Do not
    open the deck in a browser yourself: the page shrinks text that is a little long and shows what
    still does not fit in its toolbar.
 6. **Publish** the folder with `teamwork_page` (`action: "create"`, `kind: "html"`, the deck's title,
