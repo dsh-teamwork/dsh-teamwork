@@ -29,6 +29,8 @@ declare const en: {
     'auth.signedOut': string;
     'auth.hostManaged': string;
     'auth.shared': string;
+    'nativeWeb.pin': string;
+    'nativeWeb.noWeb': string;
     'auth.changed': string;
     'summary.team': string;
     'summary.unavailable': string;

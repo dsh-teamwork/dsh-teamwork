@@ -141,3 +141,69 @@ test('a team model without its context window is shown as not ready and stops a 
     await expect(request({ agent: agent('sized') }, next)).resolves.toBe('config');
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test('native Web is off by default, refused while it cannot work, kept across a restart and turned off by signing out', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'teamwork-native-web-'));
+  const cachePath = join(dir, 'cache.json');
+  await writeFile(cachePath, JSON.stringify({ teams: [] }));
+  // One DSH process: the plugin's routes, and DSH's own Web server only where `web` is set.
+  const boot = async (web: boolean) => {
+    const routes = new Map<string, FetchRoute>();
+    const cleanup: Array<() => unknown> = [];
+    const services: Record<string, any> = {};
+    const ctx: any = {
+      llm: { registerAdapter: () => Object.assign(() => {}, { replace() {} }) },
+      sessionProjections: { register: async () => ({ dispose() {} }) },
+      agentPresets: { register: async () => async () => {} },
+      agents: { get: () => undefined },
+      logger: { warn: vi.fn(), debug() {} },
+      get: (name: string) => services[name],
+      provide: (name: string, service: unknown) => { services[name] = service; },
+      on: () => () => {},
+      effect: (fn: () => (() => unknown)) => { cleanup.push(fn()); },
+      connection: { fetch: { register: (route: FetchRoute) => { routes.set(route.path, route); return async () => {}; } } },
+      inject: (names: string[], fn: (ctx: unknown) => void) => {
+        if (names.length === 1 && names[0] === 'connection') fn(ctx);
+        if (web && names.join() === 'connection,webServer') {
+          fn({ connection: { authenticatedUrl: (base: string) => `${base}/?token=launch` }, webServer: { getOrigin: () => 'http://127.0.0.1:3080' }, effect: ctx.effect });
+        }
+      },
+    };
+    await apply(ctx, { apiEndpoint: 'http://localhost:3800', cachePath, autoSync: false });
+    const call = (route: string, body: unknown) => routes.get(`/api/teamwork/${route}`)!.fetch(new Request(`http://localhost/api/teamwork/${route}`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    }));
+    const state = async (): Promise<PanelState> => (await call('state', {})).json();
+    return { call, state, services, stop: async () => { for (const dispose of cleanup.reverse()) await dispose(); } };
+  };
+  try {
+    // DSH serves no Web here: the switch is shown, off, and cannot be turned on.
+    let dsh = await boot(false);
+    expect((await dsh.state()).nativeWeb).toEqual({ enabled: false, blocked: 'web' });
+    expect((await dsh.call('native-web', { enabled: true })).status).toBe(400);
+    expect((await dsh.call('native-web', { enabled: 'yes' })).status).toBe(400);
+    await dsh.stop();
+
+    dsh = await boot(true);
+    expect((await dsh.state()).nativeWeb).toEqual({ enabled: false });
+    expect((await dsh.call('native-web', { enabled: true })).status).toBe(200);
+    expect((await dsh.state()).nativeWeb).toEqual({ enabled: true });
+    await dsh.stop();
+    // A restart keeps the owner's choice.
+    dsh = await boot(true);
+    expect((await dsh.state()).nativeWeb).toEqual({ enabled: true });
+    // A device PIN keeps it from working while it stays on, and turning it on again is refused until the PIN goes.
+    expect((await dsh.call('owner-pin', { pin: '1234' })).status).toBe(200);
+    expect((await dsh.state()).nativeWeb).toEqual({ enabled: true, blocked: 'pin' });
+    expect((await dsh.call('native-web', { enabled: false })).status).toBe(200);
+    expect((await dsh.call('native-web', { enabled: true })).status).toBe(400);
+    expect((await dsh.call('owner-pin', { pin: null })).status).toBe(200);
+    expect((await dsh.call('native-web', { enabled: true })).status).toBe(200);
+    // Signing out turns it off, so it never carries over to another account.
+    await dsh.services.dshTeamwork.logout();
+    expect((await dsh.state()).nativeWeb).toEqual({ enabled: false });
+    await dsh.stop();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

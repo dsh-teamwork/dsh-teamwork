@@ -1071,6 +1071,38 @@ const deviceLine = (t: Translate, device: PanelPhone, rest: string) => {
 const shortTime = (t: Translate, iso: string) => new Date(iso).toLocaleString(t.locale, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 /**
+ * The owner's native Web switch (`src/web-relay.ts`, platform ADR 0064): off by default. On, My DSH on the web and the
+ * phone's computer switcher open this DSH's whole Web interface for the account signed in here, through the platform.
+ * Turning it on asks first; a device PIN or a DSH with no Web server keeps it from working, and says so.
+ */
+function NativeWeb({ state, busy, perform }: {
+  state: NonNullable<PanelState['nativeWeb']>;
+  busy?: string;
+  perform(key: string, action: () => Promise<unknown>, done?: string): Promise<unknown>;
+}) {
+  const t = useT();
+  const [confirming, setConfirming] = useState(false);
+  const { enabled, blocked } = state;
+  const set = (on: boolean) => void perform('native-web', async () => { await api.setNativeWeb(on); setConfirming(false); }, t(on ? 'phones.webTurnedOn' : 'phones.webTurnedOff'));
+  return (
+    <Item
+      icon="external"
+      title={t('phones.webTitle')}
+      tags={<Badge tone={enabled && !blocked ? 'success' : 'neutral'} dot>{t(enabled ? 'phones.webOn' : 'phones.webOff')}</Badge>}
+      description={blocked ? t(blocked === 'pin' ? 'phones.webBlockedPin' : 'phones.webBlockedWeb') : t('phones.webHint')}
+      actions={!confirming && (enabled
+        ? <Button size="sm" variant="ghost" disabled={!!busy} busy={busy === 'native-web'} onClick={() => set(false)}>{t('phones.webDisable')}</Button>
+        : <Button size="sm" variant="primary" disabled={!!busy || !!blocked} onClick={() => setConfirming(true)}>{t('phones.webEnable')}</Button>)}
+      >
+      {confirming && <ItemBody>
+        <Confirm title={t('phones.webEnableTitle')} description={t('phones.webEnableBody')} confirmLabel={t('phones.webEnable')} cancelLabel={t('common.cancel')}
+          busy={busy === 'native-web'} onConfirm={() => set(true)} onCancel={() => setConfirming(false)} />
+      </ItemBody>}
+    </Item>
+  );
+}
+
+/**
  * The personal desktop's own PIN for its paired devices (`src/pin-lock.ts`): off by default, set here with the
  * computer's own authority, so changing or turning it off asks for no old PIN; it closes every open device channel.
  */
@@ -1263,6 +1295,7 @@ function Phones({ state, run }: { state: PanelState; run: Run }) {
       {state.ownerPinEnabled !== undefined && <>
         <h3 style={{ fontSize: 15, fontWeight: 600 }}>{t('phones.security')}</h3>
         <OwnerPin enabled={state.ownerPinEnabled} busy={busy} perform={perform} />
+        {state.nativeWeb && <NativeWeb state={state.nativeWeb} busy={busy} perform={perform} />}
       </>}
     </>
   );

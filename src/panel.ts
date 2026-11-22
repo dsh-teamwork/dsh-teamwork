@@ -108,6 +108,11 @@ export interface PanelState {
   /** Phones paired with this computer; empty while the relay is not connected. */
   phones: PanelPhone[];
   ownerPinEnabled?: boolean;
+  /**
+   * The owner's native Web switch (`src/web-relay.ts`), on a personal computer only. `blocked` says what keeps it
+   * from working: a device PIN is set, or DSH serves no Web here.
+   */
+  nativeWeb?: { enabled: boolean; blocked?: 'pin' | 'web' };
   /** The session the member has open, when the host has it loaded. */
   session: {
     id: string;
@@ -191,6 +196,8 @@ export interface PanelOps {
   install(id: string, version: string): Promise<string>;
   /** A fresh pairing code from the relay; earlier unused codes stop working. */
   setOwnerPin(pin: string | null): Promise<void>;
+  /** Turns native Web on or off for the account signed in here; on is refused while it is blocked. */
+  setNativeWeb(on: boolean): Promise<void>;
   pairPhone(): Promise<PanelPairingOffer>;
   /** Confirms or refuses a phone that redeemed a code. */
   decidePhone(id: string, accept: boolean, safetyCode?: string): Promise<void>;
@@ -278,6 +285,10 @@ export function panelRoutes(ops: PanelOps, voice: RouteVoice): FetchRoute[] {
     post('owner-pin', body => {
       if (body.pin !== null && typeof body.pin !== 'string') throw new Error(say('request.invalid'));
       return ops.setOwnerPin(body.pin);
+    }),
+    post('native-web', body => {
+      if (typeof body.enabled !== 'boolean') throw new Error(say('request.invalid'));
+      return ops.setNativeWeb(body.enabled);
     }),
     post('pair-phone', () => ops.pairPhone()),
     post('decide-phone', (body) => ops.decidePhone(text(body.id, 'field.device'), body.accept === true, typeof body.safetyCode === 'string' ? body.safetyCode : undefined)),

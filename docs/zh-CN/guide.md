@@ -120,7 +120,7 @@ dsh-teamwork device pair --guided # 另有 list、accept <id>、reject <id>、re
 
 由宿主自行为 DSH 登录的环境（例如 DSH Teamwork 云电脑）可以把 `tokenFile` 设为一个文件的绝对路径，文件内容是插件令牌。插件启动时读取它，并跟随之后的每次变化（包括原子替换）；文件为空或不存在即视为退出登录。此模式下不能在插件里登录、退出或切换服务器，服务器由 `apiEndpoint` 指定，也不会连接手机中转。
 
-在个人 DSH profile 的 Teamwork 配置中设定 `webRelay: true`，重启宿主后，可从网页版「我的 DSH」和手机 App 的电脑切换列表打开「原生 DSH Web」。平台须配置桌面 Web 域名，宿主须在线且提供本机回环 Web 服务。首版支持未启用本机 PIN 的个人宿主。该入口的 HTTPS 由平台网关终止。
+要从网页版「我的 DSH」和手机 App 的电脑切换列表打开这台 DSH 的完整 Web 界面，请在 Teamwork 面板的设备安全设置中开启「原生 DSH Web」。它默认关闭，开启后立即生效，无需重启。它需要这台电脑运行 DSH 自己的 Web 服务（`dsh web`）且未设置设备 PIN，仅适用于个人电脑。该入口的 HTTPS 由 Teamwork 服务器终止，服务器须已配置桌面 Web 域名。退出登录或切换服务器会自动关闭。
 
 ## 数据与设备连接
 
