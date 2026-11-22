@@ -1,3 +1,4 @@
+import { ReasoningEffortId } from '@deepseek-ai/dsh-llm';
 import { test, expect } from 'vitest';
 import { createServer } from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -18,7 +19,7 @@ test('team model uses platform only, with session credential and opaque config I
   const port = (server.address() as {port:number}).port;
   const dir = await mkdtemp(join(tmpdir(), 'platform-adapter-'));
   const configs = [
-    { id: 'config1', kind: 'model', name: 'Team Kimi', version: 1, data: { provider: 'kimi', model: 'kimi-for-coding', contextWindow: 131072, maxTokens: 8192, vision: true } },
+    { id: 'config1', kind: 'model', name: 'Team Kimi', version: 1, data: { provider: 'kimi', model: 'kimi-for-coding', contextWindow: 131072, maxTokens: 8192, vision: true, reasoningEfforts: ['low', 'max'] } },
     { id: 'preset1', kind: 'preset', name: 'Writer', version: 1, data: { modelConfigId: 'config1' } },
     { id: 'legacy1', kind: 'preset', name: 'Legacy writer', version: 1, data: { provider: 'kimi', model: 'kimi-for-coding', contextWindow: 131072, maxTokens: 8192 } },
   ];
@@ -28,6 +29,7 @@ test('team model uses platform only, with session credential and opaque config I
     const adapter = platformAdapter(client);
     const info = await adapter.resolveModel(teamProvider('t'), 'config1');
     expect(info.context?.contextWindow).toBe(131072);
+    expect(info.reasoning?.efforts.map(({ id }) => id)).toEqual(['low', 'max']);
     expect(info.inputModalities).toEqual(['text', 'image']);
     expect(client.current()?.teams[0]?.configs[0]?.data).toMatchObject({ vision: true });
     const provider = teamProvider('t');
@@ -45,6 +47,15 @@ test('team model uses platform only, with session credential and opaque config I
       expect(wire.model).toBe(model);
       expect(wire.max_tokens ?? wire.max_completion_tokens).toBe(8192);
     }
+    expect(wire.reasoning_effort).toBeUndefined();
+    for await (const chunk of adapter.stream({
+      provider: teamProvider('t'), model: 'config1', reasoningEffort: ReasoningEffortId('max'),
+      system: 'Instructions', messages: [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }],
+    })) {
+      if (chunk.type === 'finish') expect(chunk.reason.kind).not.toBe('error');
+    }
+    expect(wire.reasoning_effort).toBe('max');
+    expect(wire.messages[0].role).toBe('system');
     await client.logout();
     await expect((async () => { for await (const chunk of adapter.stream({provider:teamProvider('t'),model:'config1',messages:[]})) { if(chunk.type==='finish' && chunk.reason.kind==='error') throw new Error('unauthorized'); } })()).rejects.toThrow();
   } finally { server.closeAllConnections(); await new Promise<void>(resolve=>server.close(()=>resolve())); await rm(dir,{recursive:true,force:true}); }
