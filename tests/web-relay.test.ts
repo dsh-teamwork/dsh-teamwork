@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loopbackWebURL, NativeWebSwitch, pageCookie, rewriteWebRequest } from '../src/web-relay.js';
+import { loopbackWebURL, NativeWebSwitch, pageCookie, rewriteWebRequest, WebTunnels } from '../src/web-relay.js';
 
 const launch = new URL('http://127.0.0.1:4000/?token=local');
 
@@ -92,5 +92,24 @@ describe('the native Web switch', () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('the native Web tunnels a computer serves', () => {
+  it('counts them, remembers the last activity, and ends every one at once', () => {
+    const tunnels = new WebTunnels();
+    expect(tunnels.state).toEqual({ tunnels: 0 });
+    const control = new AbortController();
+    const first = tunnels.signal(control.signal), second = tunnels.signal(control.signal);
+    tunnels.opened(); tunnels.opened();
+    expect(tunnels.state.tunnels).toBe(2);
+    expect(tunnels.state.lastActivity).toEqual(expect.any(String));
+    tunnels.endAll();
+    expect(first.aborted && second.aborted).toBe(true);
+    expect(control.signal.aborted).toBe(false);
+    tunnels.closed(); tunnels.closed();
+    expect(tunnels.state.tunnels).toBe(0);
+    // A tunnel opened after the disconnect lives on.
+    expect(tunnels.signal(control.signal).aborted).toBe(false);
   });
 });

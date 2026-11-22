@@ -12,6 +12,7 @@
  *   dsh-teamwork pin set | clear          set or disable the device PIN on this DSH
  *   dsh-teamwork web on | off             let the Teamwork server open this DSH's whole Web interface for the account
  *                                         signed in here (native DSH Web), or stop it
+ *   dsh-teamwork web disconnect           end every native Web session open now; the switch stays on
  *   dsh-teamwork logout                   sign out
  *   dsh-teamwork device pair [--guided]   a pairing code, and a QR code for the DSH Teamwork phone app; a browser
  *                                         types the code in My DSH
@@ -191,8 +192,15 @@ function describeState(s: PanelState) {
     ...(s.sync.lastError ? [`Sync error: ${s.sync.lastError}`] : []),
     `Relay: ${s.relay}`,
     `Devices: ${s.phones.length ? s.phones.map((p) => `${p.deviceName} (${p.status === 'pending' ? 'waiting' : 'paired'})`).join(', ') : 'none'}`,
-    ...(s.nativeWeb ? [`Native Web: ${s.nativeWeb.enabled ? 'on' : 'off'}${s.nativeWeb.blocked ? ` — ${blockedBy[s.nativeWeb.blocked]}` : ''}`] : []),
+    ...(s.nativeWeb ? [`Native Web: ${s.nativeWeb.enabled ? 'on' : 'off'}${s.nativeWeb.blocked ? ` — ${blockedBy[s.nativeWeb.blocked]}` : ''}${nativeWebUse(s.nativeWeb.active)}`] : []),
   ].join('\n');
+}
+
+/** What this computer sees of native Web's use: tunnels open now, or when one last moved. */
+function nativeWebUse(active: { tunnels: number; lastActivity?: string } | undefined) {
+  if (!active) return '';
+  if (active.tunnels > 0) return `, in use now (${active.tunnels} connection${active.tunnels === 1 ? '' : 's'})`;
+  return active.lastActivity ? `, last used ${active.lastActivity}` : '';
 }
 
 /** Why native Web cannot work here while it is on, or cannot be turned on. */
@@ -201,7 +209,7 @@ const blockedBy = { pin: 'unavailable while a device PIN is set', web: 'needs DS
 const usage = [
   'usage: dsh-teamwork server [url] | login [--browser] | authorize <code> | status | sync | logout',
   '       dsh-teamwork pin set | clear',
-  '       dsh-teamwork web on | off',
+  '       dsh-teamwork web on | off | disconnect',
   '       dsh-teamwork device pair [--guided] | list | accept <id> | reject <id> | revoke <id>',
 ].join('\n');
 
@@ -255,6 +263,11 @@ export async function run(args: string[], socketPath: string, out: (line: string
       return 0;
     }
     case 'web': {
+      if (args.length === 2 && action === 'disconnect') {
+        await call(socketPath, 'native-web-disconnect');
+        out('Every native DSH Web session is ended; opening it again needs a new entry from Teamwork. The switch stays on.');
+        return 0;
+      }
       if (args.length !== 2 || (action !== 'on' && action !== 'off')) { err(usage); return 2; }
       await call(socketPath, 'native-web', { enabled: action === 'on' });
       out(action === 'on'

@@ -84,7 +84,7 @@ dsh-teamwork server https://teamwork.example.com   # a self-hosted team only, be
 dsh-teamwork login                # then: authorize <code>
 dsh-teamwork status
 dsh-teamwork device pair --guided # also: list, accept <id>, reject <id>, revoke <id>
-dsh-teamwork web on               # native DSH Web (below); web off stops it
+dsh-teamwork web on               # native DSH Web (below); also: off, disconnect
 ```
 
 It reaches the running DSH through a socket in the plugin's directory in the DSH
@@ -222,7 +222,7 @@ changing servers are refused, `apiEndpoint` names the server, and the phone
 relay is never opened.
 Do not duplicate the package's `insert` entry in a profile.
 
-To open this DSH's full Web interface from My DSH on the web and from the mobile computer switcher, turn on **Native DSH Web** under the device security settings in the Teamwork panel, or, on a server, run `dsh-teamwork web on` (`dsh-teamwork web off` stops it, and `dsh-teamwork status` shows it). It is off by default, and it applies at once, with no restart. It needs this computer's own DSH Web server (`dsh web`) and no device PIN, and it is offered on personal computers only. The Teamwork server terminates HTTPS for this entry and must have its desktop Web domain configured. Signing out or changing server turns it off again.
+To open this DSH's full Web interface from My DSH on the web and from the mobile computer switcher, turn on **Native DSH Web** under the device security settings in the Teamwork panel, or, on a server, run `dsh-teamwork web on` (`dsh-teamwork web off` stops it, and `dsh-teamwork status` shows it). It is off by default, and it applies at once, with no restart. It needs this computer's own DSH Web server (`dsh web`) and no device PIN, and it is offered on personal computers only. The Teamwork server terminates HTTPS for this entry and must have its desktop Web domain configured. Signing out or changing server turns it off again. While it is on, the panel shows whether it is in use; **Disconnect all**, or `dsh-teamwork web disconnect`, ends every session open now and leaves the switch on. A session also ends after thirty minutes without traffic, and after eight hours in any case.
 
 ## Data and device access
 

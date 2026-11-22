@@ -179,29 +179,29 @@ test('native Web is off by default, refused while it cannot work, kept across a 
   try {
     // DSH serves no Web here: the switch is shown, off, and cannot be turned on.
     let dsh = await boot(false);
-    expect((await dsh.state()).nativeWeb).toEqual({ enabled: false, blocked: 'web' });
+    expect((await dsh.state()).nativeWeb).toEqual({ enabled: false, blocked: 'web', active: { tunnels: 0 } });
     expect((await dsh.call('native-web', { enabled: true })).status).toBe(400);
     expect((await dsh.call('native-web', { enabled: 'yes' })).status).toBe(400);
     await dsh.stop();
 
     dsh = await boot(true);
-    expect((await dsh.state()).nativeWeb).toEqual({ enabled: false });
+    expect((await dsh.state()).nativeWeb).toEqual({ enabled: false, active: { tunnels: 0 } });
     expect((await dsh.call('native-web', { enabled: true })).status).toBe(200);
-    expect((await dsh.state()).nativeWeb).toEqual({ enabled: true });
+    expect((await dsh.state()).nativeWeb).toEqual({ enabled: true, active: { tunnels: 0 } });
     await dsh.stop();
     // A restart keeps the owner's choice.
     dsh = await boot(true);
-    expect((await dsh.state()).nativeWeb).toEqual({ enabled: true });
+    expect((await dsh.state()).nativeWeb).toEqual({ enabled: true, active: { tunnels: 0 } });
     // A device PIN keeps it from working while it stays on, and turning it on again is refused until the PIN goes.
     expect((await dsh.call('owner-pin', { pin: '1234' })).status).toBe(200);
-    expect((await dsh.state()).nativeWeb).toEqual({ enabled: true, blocked: 'pin' });
+    expect((await dsh.state()).nativeWeb).toEqual({ enabled: true, blocked: 'pin', active: { tunnels: 0 } });
     expect((await dsh.call('native-web', { enabled: false })).status).toBe(200);
     expect((await dsh.call('native-web', { enabled: true })).status).toBe(400);
     expect((await dsh.call('owner-pin', { pin: null })).status).toBe(200);
     expect((await dsh.call('native-web', { enabled: true })).status).toBe(200);
     // Signing out turns it off, so it never carries over to another account.
     await dsh.services.dshTeamwork.logout();
-    expect((await dsh.state()).nativeWeb).toEqual({ enabled: false });
+    expect((await dsh.state()).nativeWeb).toEqual({ enabled: false, active: { tunnels: 0 } });
     await dsh.stop();
   } finally {
     await rm(dir, { recursive: true, force: true });

@@ -119,6 +119,10 @@ export interface PanelState {
     nativeWeb?: {
         enabled: boolean;
         blocked?: 'pin' | 'web';
+        active: {
+            tunnels: number;
+            lastActivity?: string;
+        };
     };
     /** The session the member has open, when the host has it loaded. */
     session: {
@@ -244,6 +248,8 @@ export interface PanelOps {
     setOwnerPin(pin: string | null): Promise<void>;
     /** Turns native Web on or off for the account signed in here; on is refused while it is blocked. */
     setNativeWeb(on: boolean): Promise<void>;
+    /** Ends every native Web session the server holds for this computer, and every tunnel open here. */
+    disconnectNativeWeb(): Promise<void>;
     pairPhone(): Promise<PanelPairingOffer>;
     /** Confirms or refuses a phone that redeemed a code. */
     decidePhone(id: string, accept: boolean, safetyCode?: string): Promise<void>;

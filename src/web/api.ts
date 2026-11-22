@@ -47,6 +47,7 @@ export const api = {
   install: (id: string, version: string) => call<{ message: string }>('install', { id, version }),
   setOwnerPin: (pin: string | null) => call<void>('owner-pin', { pin }),
   setNativeWeb: (enabled: boolean) => call<void>('native-web', { enabled }),
+  disconnectNativeWeb: () => call<void>('native-web-disconnect'),
   pairPhone: () => call<PanelPairingOffer>('pair-phone', {}),
   decidePhone: (id: string, accept: boolean) => call<void>('decide-phone', { id, accept }),
   revokePhone: (id: string) => call<void>('revoke-phone', { id }),

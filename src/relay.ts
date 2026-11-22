@@ -49,7 +49,9 @@ export type RelayRequest =
   | { t: 'offer' }
   | { t: 'pairings' }
   | { t: 'decide'; pairingId: string; accept: boolean }
-  | { t: 'revoke'; pairingId: string };
+  | { t: 'revoke'; pairingId: string }
+  /** End every native Web session of this computer; its phones stay (the server's ADR 0065). */
+  | { t: 'webRevoke' };
 
 /** A pairing as the relay lists it (`src/pairing.ts`, `PairingView`). */
 export const pairingSchema = z.object({
