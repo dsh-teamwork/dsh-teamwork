@@ -1,7 +1,33 @@
+import { randomBytes } from 'node:crypto';
+import { access, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { connect as tcp } from 'node:net';
+import { dirname } from 'node:path';
 import { Transform } from 'node:stream';
 import { connect as tls } from 'node:tls';
 import WebSocket, { createWebSocketStream } from 'ws';
+
+/**
+ * The owner's switch for native Web (platform ADR 0064), set in the Teamwork panel: on, the platform may proxy this
+ * DSH's whole Web interface to the account signed in here. Off by default, and turned off again by signing out or
+ * changing server, so it never carries over to another account or another platform. The file
+ * (`<cache>.web.json`, mode 0600) holds nothing; its presence is the switch.
+ */
+export class NativeWebSwitch {
+  private value?: Promise<boolean>;
+  constructor(readonly path: string) {}
+  static beside(cachePath: string) { return new NativeWebSwitch(cachePath.replace(/(\.json)?$/, '.web.json')); }
+  on(): Promise<boolean> { return (this.value ??= access(this.path).then(() => true, () => false)); }
+  async set(on: boolean) {
+    if (!on) await rm(this.path, { force: true });
+    else {
+      await mkdir(dirname(this.path), { recursive: true, mode: 0o700 });
+      const temporary = `${this.path}.${randomBytes(8).toString('hex')}.tmp`;
+      try { await writeFile(temporary, '{}', { mode: 0o600 }); await rename(temporary, this.path); }
+      finally { await rm(temporary, { force: true }); }
+    }
+    this.value = Promise.resolve(on);
+  }
+}
 
 const HEADER_LIMIT = 64 * 1024;
 const COOKIE_CACHE_MS = 5 * 60_000;

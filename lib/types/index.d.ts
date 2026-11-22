@@ -6,7 +6,6 @@ export interface Config {
     apiEndpoint: string;
     cachePath: string;
     autoSync?: boolean;
-    webRelay?: boolean;
     syncIntervalMs?: number;
     tokenFile?: string;
     mcpServers?: Record<string, {

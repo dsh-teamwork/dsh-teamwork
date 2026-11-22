@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { loopbackWebURL, pageCookie, rewriteWebRequest } from '../src/web-relay.js';
+import { mkdtemp, rm, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { loopbackWebURL, NativeWebSwitch, pageCookie, rewriteWebRequest } from '../src/web-relay.js';
 
 const launch = new URL('http://127.0.0.1:4000/?token=local');
 
@@ -70,5 +73,24 @@ describe('DSH page credential cache', () => {
     vi.setSystemTime(start + refreshMs);
     await pageCookie(launch, signal);
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('the native Web switch', () => {
+  it('is off until the owner turns it on, readable by them alone, and gone once turned off', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'native-web-switch-'));
+    try {
+      const cache = join(dir, 'cache.json');
+      expect(await NativeWebSwitch.beside(cache).on()).toBe(false);
+      await NativeWebSwitch.beside(cache).set(true);
+      const saved = NativeWebSwitch.beside(cache);
+      expect(await saved.on()).toBe(true);
+      expect((await stat(saved.path)).mode & 0o777).toBe(0o600);
+      await saved.set(false);
+      expect(await NativeWebSwitch.beside(cache).on()).toBe(false);
+      await expect(stat(saved.path)).rejects.toThrow();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

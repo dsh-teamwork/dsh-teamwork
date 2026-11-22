@@ -96,7 +96,7 @@ panel actions reuse operations. Session continuation/retry/cancellation are comm
 State polls wait for the previous request, failures preserve the displayed data,
 and dependency inventory is shared only within one state request.
 
-The server selection persists beside the cache as `<cache>.server.json`.
+The server selection persists beside the cache as `<cache>.server.json`. The owner's native Web switch (`NativeWebSwitch`, `src/web-relay.ts`) is `<cache>.web.json`, mode 0600, whose presence means on; signing out, changing server or leaving shared mode removes it.
 Changing it revokes the old token at its server and clears old identity/resources.
 The token persists as `<cache>.token.json` (`{ server, token }`, mode 0600,
 replaced atomically) and is restored only for the same server; it names a
