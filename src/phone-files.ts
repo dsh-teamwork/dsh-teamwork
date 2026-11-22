@@ -4,7 +4,9 @@
  * path is resolved to its real path first, so neither `..` nor a symbolic link reaches past it, and an absolute path is
  * taken only when it lies inside. DSH's own `workspaceFiles` reads beyond the workspace, so it is not passed on.
  */
+import { createHash } from 'node:crypto';
 import { lstat, open, readdir, realpath, stat } from 'node:fs/promises';
+import { constants, type BigIntStats } from 'node:fs';
 import { relative, resolve, sep } from 'node:path';
 import { PhoneSessionError } from './phone-session.js';
 
@@ -87,4 +89,95 @@ export async function readText(root: string, path: string) {
   } finally {
     await handle.close();
   }
+}
+
+
+type OfficeExtension = 'doc' | 'docx' | 'ppt' | 'pptx';
+
+export interface PreviewOfficeKit {
+  convert(request: {
+    extension: OfficeExtension;
+    priority: 'foreground';
+    source: { key: string; version: string; bytes: number; read(signal: AbortSignal, maxBytes: number): Promise<{ bytes: Uint8Array; version: string }> };
+  }, signal: AbortSignal): Promise<{ pdf: Uint8Array; generation: string; cacheKey: string }>;
+}
+
+const DOCUMENT_LIMIT = 16 * 1024 * 1024;
+const DOCUMENT_CHUNK = 128 * 1024;
+
+/** Transfer one display document range, including PDFs rendered from Office files by the Host. */
+export async function readDocument(root: string, path: string, offset: number, version?: string, office?: PreviewOfficeKit) {
+  const { target } = await within(root, path);
+  const extension = /\.(pdf|xlsx?|docx?|pptx?)$/i.exec(target)?.[1]?.toLowerCase();
+  if (extension !== 'pdf' && extension !== 'xls' && extension !== 'xlsx' && extension !== 'doc' && extension !== 'docx' && extension !== 'ppt' && extension !== 'pptx') {
+    throw new PhoneSessionError('file_type');
+  }
+  const stamp = (value: BigIntStats) =>
+    [value.dev, value.ino, value.size, value.mtimeNs, value.ctimeNs].join(':');
+  async function check() {
+    const info = await stat(target, { bigint: true });
+    if (!info.isFile() || (await within(root, path)).target !== target) throw new PhoneSessionError('not_found');
+    if (info.size > BigInt(DOCUMENT_LIMIT)) throw new PhoneSessionError('document_too_large');
+    return info;
+  }
+
+  const source = await check();
+  const sourceVersion = stamp(source);
+  const bytes = Number(source.size);
+  async function read(start: number, count: number) {
+    const handle = await open(target, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
+    try {
+      const current = async () => stamp((await handle.stat({ bigint: true })));
+      if (await current() !== sourceVersion) throw new PhoneSessionError('invalid_request');
+      const buffer = Buffer.alloc(count);
+      let done = 0;
+      while (done < count) {
+        const { bytesRead } = await handle.read(buffer, done, count - done, start + done);
+        if (!bytesRead) throw new PhoneSessionError('invalid_request');
+        done += bytesRead;
+      }
+      if (await current() !== sourceVersion || stamp((await check())) !== sourceVersion) {
+        throw new PhoneSessionError('invalid_request');
+      }
+      return buffer;
+    } finally {
+      await handle.close();
+    }
+  }
+
+  const ensureRange = (revision: string, size: number) => {
+    if (size > DOCUMENT_LIMIT) throw new PhoneSessionError('document_too_large');
+    if (offset >= size || (offset !== 0 && !version) || (version && revision !== version)) {
+      throw new PhoneSessionError('invalid_request');
+    }
+  };
+  if (extension === 'pdf' || extension === 'xls' || extension === 'xlsx') {
+    ensureRange(sourceVersion, bytes);
+    const chunk = await read(offset, Math.min(DOCUMENT_CHUNK, bytes - offset));
+    return { version: sourceVersion, size: bytes, offset, data: chunk.toString('base64') };
+  }
+  if (!office) throw new PhoneSessionError('preview_unavailable');
+  const signal = AbortSignal.timeout(65_000);
+  let rendered: Awaited<ReturnType<PreviewOfficeKit['convert']>>;
+  try {
+    rendered = await office.convert({ extension, priority: 'foreground', source: {
+      key: target, version: sourceVersion, bytes,
+      async read(upstream, maxBytes) {
+        upstream.throwIfAborted();
+        if (bytes > maxBytes) throw new PhoneSessionError('document_too_large');
+        const input = await read(0, bytes);
+        upstream.throwIfAborted();
+        return { bytes: input, version: sourceVersion };
+      },
+    } }, signal);
+  } catch (error) {
+    if (error instanceof PhoneSessionError) throw error;
+    const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined;
+    throw new PhoneSessionError(code === 'input-too-large' || code === 'output-too-large' ? 'document_too_large' : code === 'unavailable' ? 'preview_unavailable' : 'unavailable');
+  }
+  if (stamp((await check())) !== sourceVersion) throw new PhoneSessionError('invalid_request');
+  const revision = createHash('sha256').update(JSON.stringify([sourceVersion, rendered.generation, rendered.cacheKey])).digest('hex');
+  const size = rendered.pdf.length;
+  ensureRange(revision, size);
+  return { version: revision, size, offset, data: Buffer.from(rendered.pdf.subarray(offset, offset + DOCUMENT_CHUNK)).toString('base64') };
 }

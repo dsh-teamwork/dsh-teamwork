@@ -1,6 +1,7 @@
 /** The paired phone's session configuration, with no credentials or desktop-default mutation. */
+import type { PreviewOfficeKit } from './phone-files.js';
 import type { PanelState } from './panel.js';
-export type PhoneFailure = 'not_text' | 'permission_refused' | 'busy' | 'not_found' | 'not_authenticated' | 'missing_tools' | 'missing_plugins' | 'preset_changed' | 'model_unavailable' | 'invalid_request' | 'unavailable' | 'file_name' | 'file_type' | 'file_too_large' | 'invalid_upload' | 'upload_expired' | 'upload_failed' | 'image_model_unsupported';
+export type PhoneFailure = 'preview_unavailable' | 'document_too_large' | 'not_text' | 'permission_refused' | 'busy' | 'not_found' | 'not_authenticated' | 'missing_tools' | 'missing_plugins' | 'preset_changed' | 'model_unavailable' | 'invalid_request' | 'unavailable' | 'file_name' | 'file_type' | 'file_too_large' | 'invalid_upload' | 'upload_expired' | 'upload_failed' | 'image_model_unsupported';
 export declare class PhoneSessionError extends Error {
     readonly code: PhoneFailure;
     constructor(code: PhoneFailure, message?: string);
@@ -22,6 +23,7 @@ export interface PhoneSessionOps {
     }): Promise<unknown>;
     /** The working directory a session's files are browsed under (src/phone-files.ts). */
     fileRoot(sessionId: string): Promise<string>;
+    officeKit?(): PreviewOfficeKit | undefined;
     check(sessionId: string): Promise<void>;
     checkImages?(sessionId: string): Promise<void>;
     accepted(sessionId: string, requestId: string): boolean;

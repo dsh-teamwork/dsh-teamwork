@@ -28,4 +28,32 @@ export declare function readText(root: string, path: string): Promise<{
     bytes: number;
     truncated: boolean;
 }>;
+type OfficeExtension = 'doc' | 'docx' | 'ppt' | 'pptx';
+export interface PreviewOfficeKit {
+    convert(request: {
+        extension: OfficeExtension;
+        priority: 'foreground';
+        source: {
+            key: string;
+            version: string;
+            bytes: number;
+            read(signal: AbortSignal, maxBytes: number): Promise<{
+                bytes: Uint8Array;
+                version: string;
+            }>;
+        };
+    }, signal: AbortSignal): Promise<{
+        pdf: Uint8Array;
+        generation: string;
+        cacheKey: string;
+    }>;
+}
+/** Transfer one display document range, including PDFs rendered from Office files by the Host. */
+export declare function readDocument(root: string, path: string, offset: number, version?: string, office?: PreviewOfficeKit): Promise<{
+    version: string;
+    size: number;
+    offset: number;
+    data: string;
+}>;
+export {};
 //# sourceMappingURL=phone-files.d.ts.map
