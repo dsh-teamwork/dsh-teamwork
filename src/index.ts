@@ -352,7 +352,7 @@ export async function apply(ctx: Context, config: Config) {
         return { current: presets.current(agent.session) };
       },
       officeKit() {
-        const candidate: unknown = Reflect.apply(ctx.get, ctx, ['officeKit']);
+        const candidate: unknown = ctx.get('officeKit');
         if (candidate && typeof candidate === 'object' && 'convert' in candidate && typeof candidate.convert === 'function') {
           return candidate as PreviewOfficeKit;
         }

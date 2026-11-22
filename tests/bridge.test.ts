@@ -122,7 +122,9 @@ describe('the phone bridge', () => {
       await writeFile(join(root, 'report.pdf'), 'changed');
       await expect(readDocument(root, 'report.pdf', 0, head.version)).rejects.toMatchObject({ code: 'invalid_request' });
 
+      let conversions = 0;
       const office = { async convert(request: Parameters<import('../src/phone-files').PreviewOfficeKit['convert']>[0], signal: AbortSignal) {
+        conversions++;
         expect(request.extension).toBe('docx');
         const input = await request.source.read(signal, 32);
         expect(Buffer.from(input.bytes).toString()).toBe('office');
@@ -130,7 +132,17 @@ describe('the phone bridge', () => {
       } };
       await writeFile(join(root, 'report.docx'), 'office');
       await expect(readDocument(root, 'report.docx', 0)).rejects.toMatchObject({ code: 'preview_unavailable' });
-      expect(await readDocument(root, 'report.docx', 0, undefined, office)).toMatchObject({ size: pdf.length, offset: 0, data: head.data });
+      const rendered = await readDocument(root, 'report.docx', 0, undefined, office);
+      expect(rendered).toMatchObject({ size: pdf.length, offset: 0, data: head.data });
+      // The ranges after the first read the same render; a changed source renders again.
+      expect(await readDocument(root, 'report.docx', 128 * 1024, rendered.version, office)).toMatchObject({ data: tail.data });
+      expect(conversions).toBe(1);
+      await writeFile(join(root, 'report.docx'), 'office');
+      await expect(readDocument(root, 'report.docx', 128 * 1024, rendered.version, office)).rejects.toMatchObject({ code: 'invalid_request' });
+      expect(conversions).toBe(2);
+
+      await writeFile(join(root, 'empty.pdf'), '');
+      await expect(readDocument(root, 'empty.pdf', 0)).rejects.toMatchObject({ code: 'document_empty' });
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
