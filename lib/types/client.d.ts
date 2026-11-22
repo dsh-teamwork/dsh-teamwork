@@ -26,6 +26,14 @@ export declare const snapshotSchema: z.ZodObject<{
             kind: z.ZodLiteral<"model">;
             data: z.ZodObject<{
                 vision: z.ZodOptional<z.ZodBoolean>;
+                reasoningEfforts: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+                    minimal: "minimal";
+                    low: "low";
+                    medium: "medium";
+                    high: "high";
+                    xhigh: "xhigh";
+                    max: "max";
+                }>>>;
                 offline: z.ZodOptional<z.ZodBoolean>;
                 provider: z.ZodString;
                 model: z.ZodString;
@@ -89,6 +97,7 @@ export declare const findConfig: (snapshot: Snapshot | undefined, id: string) =>
         provider: string;
         model: string;
         vision?: boolean | undefined;
+        reasoningEfforts?: ("minimal" | "low" | "medium" | "high" | "xhigh" | "max")[] | undefined;
         offline?: boolean | undefined;
         contextWindow?: number | undefined;
         maxTokens?: number | undefined;
@@ -148,6 +157,7 @@ export declare const teamOf: (snapshot: Snapshot | undefined, configId: string) 
             provider: string;
             model: string;
             vision?: boolean | undefined;
+            reasoningEfforts?: ("minimal" | "low" | "medium" | "high" | "xhigh" | "max")[] | undefined;
             offline?: boolean | undefined;
             contextWindow?: number | undefined;
             maxTokens?: number | undefined;
@@ -325,6 +335,7 @@ export declare class TeamworkClient {
                     provider: string;
                     model: string;
                     vision?: boolean | undefined;
+                    reasoningEfforts?: ("minimal" | "low" | "medium" | "high" | "xhigh" | "max")[] | undefined;
                     offline?: boolean | undefined;
                     contextWindow?: number | undefined;
                     maxTokens?: number | undefined;
@@ -400,6 +411,7 @@ export declare class TeamworkClient {
                     provider: string;
                     model: string;
                     vision?: boolean | undefined;
+                    reasoningEfforts?: ("minimal" | "low" | "medium" | "high" | "xhigh" | "max")[] | undefined;
                     offline?: boolean | undefined;
                     contextWindow?: number | undefined;
                     maxTokens?: number | undefined;
@@ -485,6 +497,7 @@ export declare class TeamworkClient {
                     provider: string;
                     model: string;
                     vision?: boolean | undefined;
+                    reasoningEfforts?: ("minimal" | "low" | "medium" | "high" | "xhigh" | "max")[] | undefined;
                     offline?: boolean | undefined;
                     contextWindow?: number | undefined;
                     maxTokens?: number | undefined;
@@ -603,6 +616,7 @@ export declare function modelData(snapshot: Snapshot, config: TeamConfig): {
     provider: string;
     model: string;
     vision?: boolean | undefined;
+    reasoningEfforts?: ("minimal" | "low" | "medium" | "high" | "xhigh" | "max")[] | undefined;
     offline?: boolean | undefined;
     contextWindow?: number | undefined;
     maxTokens?: number | undefined;

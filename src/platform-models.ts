@@ -38,9 +38,19 @@ export function platformAdapter(client: TeamworkClient, ctx?: Context): PiAiAdap
         const models: Model<'openai-completions'>[] = team.configs.flatMap(c => {
           const data = c.kind === 'plugin' ? undefined : modelData(snapshot!, c);
           if (data?.contextWindow === undefined || ('offline' in data && data.offline)) return [];
+          const efforts = 'reasoningEfforts' in data ? data.reasoningEfforts ?? [] : [];
+          const thinkingLevelMap = {
+            off: null,
+            minimal: efforts.includes('minimal') ? 'minimal' : null,
+            low: efforts.includes('low') ? 'low' : null,
+            medium: efforts.includes('medium') ? 'medium' : null,
+            high: efforts.includes('high') ? 'high' : null,
+            xhigh: efforts.includes('xhigh') ? 'xhigh' : null,
+            max: efforts.includes('max') ? 'max' : null,
+          };
           return [{
             id: c.id, name: c.name, provider, api: 'openai-completions' as const, baseUrl,
-            reasoning: false, input: 'vision' in data && data.vision ? ['text' as const, 'image' as const] : ['text' as const], contextWindow: data.contextWindow, maxTokens: data.maxTokens ?? Math.min(4096, data.contextWindow),
+            reasoning: efforts.length > 0, thinkingLevelMap, compat: { supportsDeveloperRole: false, supportsReasoningEffort: true, thinkingFormat: 'openai' }, input: 'vision' in data && data.vision ? ['text' as const, 'image' as const] : ['text' as const], contextWindow: data.contextWindow, maxTokens: data.maxTokens ?? Math.min(4096, data.contextWindow),
             cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
           }];
         });
