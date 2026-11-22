@@ -30,6 +30,12 @@ export declare const ALLOWED_STREAMS: ReadonlySet<string>;
 export interface SessionMarks {
     pinned: readonly string[];
     archived: readonly string[];
+    /** DSH's workspaces in its own order, each with the sessions it lists in its own manual order. */
+    workspaces: readonly {
+        id: string;
+        title: string;
+        sessionIds: readonly string[];
+    }[];
 }
 /** A frame the relay passes to the bridge. */
 export declare const forwardedSchema: z.ZodUnion<readonly [z.ZodObject<{
@@ -91,7 +97,11 @@ export declare class Bridge {
         body: unknown;
     }>;
     private run;
-    /** A `session/list` answer with each item's place in DSH's pin and archive sets, as `teamwork: { pinned, archived }`. */
+    /**
+     * A `session/list` answer with each item's place in DSH's sidebar, as `teamwork: { pinned, archived, workspace }`:
+     * its pin and archive marks, and the workspace that lists it (`index` among the workspaces, `position` among its
+     * sessions, both DSH's own order) or null when DSH lists it under Ungrouped.
+     */
     private marked;
     private mux;
     private muxNow;
