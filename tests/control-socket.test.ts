@@ -1,4 +1,4 @@
-import { mkdtemp, stat } from 'node:fs/promises';
+import { mkdtemp, rm, stat } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { PassThrough, Readable } from 'node:stream';
 import { join } from 'node:path';
@@ -199,4 +199,37 @@ test.skipIf(process.platform === 'win32')('the command passes the real panel rou
     expect(savedPins).toEqual(['0012', null]);
     expect([...out, ...err].join('\n')).not.toContain('0012');
   } finally { await close(); }
+});
+
+// `dsh-teamwork web on|off` is the panel's native Web switch for a DSH on a server, through the same route: a refusal
+// comes back in the host's words, and status says where the switch stands.
+test.skipIf(process.platform === 'win32')('native Web is switched and shown from the command line', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'tw-web-'));
+  let nativeWeb: { enabled: boolean; blocked?: 'pin' | 'web' } = { enabled: false };
+  const ops = {
+    setNativeWeb: async (on: boolean) => {
+      if (on && nativeWeb.blocked) throw new Error(say(nativeWeb.blocked === 'pin' ? 'nativeWeb.pin' : 'nativeWeb.noWeb'));
+      nativeWeb = { ...nativeWeb, enabled: on };
+    },
+    state: async () => ({ server: 'https://teamwork.example.com', authenticated: true, teams: [], sync: { auto: true, running: false }, relay: 'connected', phones: [], nativeWeb }),
+  } as unknown as PanelOps;
+  const close = await serveControlSocket(controlSocketPath(join(home, 'dsh-teamwork', 'cache.json')), panelRoutes(ops, { say, speak: (answer) => speaking('en', answer) }), () => {});
+  const out: string[] = [], err: string[] = [];
+  const command = (...args: string[]) => run(args, socketIn(home), l => out.push(l), l => err.push(l)).catch((e: Error) => { err.push(e.message); return 1; });
+  try {
+    expect(await command('web')).toBe(2);
+    expect(await command('web', 'maybe')).toBe(2);
+    expect(await command('web', 'on')).toBe(0);
+    expect(out.at(-1)).toContain('Native DSH Web is on');
+    expect(await command('status')).toBe(0);
+    expect(out.at(-1)).toContain('Native Web: on');
+    expect(await command('web', 'off')).toBe(0);
+    expect(out.at(-1)).toBe('Native DSH Web is off.');
+    nativeWeb = { enabled: false, blocked: 'web' };
+    expect(await command('web', 'on')).toBe(1);
+    expect(err.at(-1)).toContain('DSH Web');
+    expect(nativeWeb.enabled).toBe(false);
+    expect(await command('status')).toBe(0);
+    expect(out.at(-1)).toContain('Native Web: off — needs DSH Web on this machine (dsh web)');
+  } finally { await close(); await rm(home, { recursive: true, force: true }); }
 });
