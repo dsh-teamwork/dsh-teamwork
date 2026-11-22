@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { loopbackWebURL, rewriteWebRequest } from '../src/web-relay.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { loopbackWebURL, pageCookie, rewriteWebRequest } from '../src/web-relay.js';
 
 const launch = new URL('http://127.0.0.1:4000/?token=local');
 
@@ -40,5 +40,35 @@ describe('desktop web relay', () => {
     'GET / HTTP/1.1\r\n Cookie: folded', 'GET / HTTP/1.1\r\nHost : invalid',
   ])('rejects malformed or non-origin-form requests', (request) => {
     expect(() => rewriteWebRequest(Buffer.from(request), launch, 'local=identity')).toThrow();
+  });
+});
+
+describe('DSH page credential cache', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it.each([
+    ['Max-Age=10', 9_000],
+    ['Expires=Sun, 22 Nov 2026 00:00:10 GMT', 9_000],
+    ['Max-Age=2592000', 300_000],
+  ])('renews before DSH cookie expiry or the cache cap (%s)', async (attributes, refreshMs) => {
+    vi.useFakeTimers();
+    const start = Date.parse('2026-11-22T00:00:00Z');
+    vi.setSystemTime(start);
+    const fetch = vi.fn(async () => new Response(null, {
+      status: 303,
+      headers: { 'Set-Cookie': `dsh=local; ${attributes}` },
+    }));
+    vi.stubGlobal('fetch', fetch);
+    const signal = new AbortController().signal;
+    await Promise.all([pageCookie(launch, signal), pageCookie(launch, signal)]);
+    vi.setSystemTime(start + refreshMs - 1);
+    await pageCookie(launch, signal);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(start + refreshMs);
+    await pageCookie(launch, signal);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });
