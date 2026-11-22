@@ -1,3 +1,4 @@
+import { connectWebRelay } from './web-relay.js';
 import { PhoneKeys, PhoneSecurity } from './phone-security.js';
 import { Context } from '@deepseek-ai/cordis';
 import z from '@deepseek-ai/schemastery';
@@ -63,10 +64,10 @@ function hostComposition(ctx: Context): unknown[] {
   ctx.logger.warn('The default agent preset %s is not a profile row; team presets compose no host tools', id);
   return [];
 }
-export interface Config { apiEndpoint: string; cachePath: string; autoSync?: boolean; syncIntervalMs?: number; tokenFile?: string; mcpServers?: Record<string, { command: string; args: string[] }>; }
+export interface Config { apiEndpoint: string; cachePath: string; autoSync?: boolean; webRelay?: boolean; syncIntervalMs?: number; tokenFile?: string; mcpServers?: Record<string, { command: string; args: string[] }>; }
 /** The hosted service. A member can pick another server in the panel; the profile's `apiEndpoint` sets the default. */
 export const DEFAULT_SERVER = 'https://www.dshteamwork.com';
-export const Config: z<Config> = z.object({ apiEndpoint: z.string().default(DEFAULT_SERVER), cachePath: z.string().required(), autoSync: z.boolean().default(true), syncIntervalMs: z.number().default(60000), tokenFile: z.string(),
+export const Config: z<Config> = z.object({ apiEndpoint: z.string().default(DEFAULT_SERVER), cachePath: z.string().required(), autoSync: z.boolean().default(true), webRelay: z.boolean().default(false), syncIntervalMs: z.number().default(60000), tokenFile: z.string(),
   // A host that provides the token (a cloud computer) may also provide local MCP servers, such as its desktop's browser.
   mcpServers: z.dict(z.object({ command: z.string().required(), args: z.array(z.string()).default([]) })).default({}) });
 export async function apply(ctx: Context, config: Config) {
@@ -443,6 +444,13 @@ export async function apply(ctx: Context, config: Config) {
     // A shared DSH reaches it with its host token, as its team's host.
     token: () => !config.tokenFile && client.authenticated() ? client.platformCredential() : undefined,
     clientIdPath: relayClientIdPath(config.cachePath),
+    webAvailable: async () => Boolean(config.webRelay && launchUrl && !shared?.enabled && !await pins.ownerEnabled()),
+    onWebDial: (url, id, signal) => {
+      void (async () => {
+        const launch = launchUrl?.();
+        if (launch && !shared?.enabled && !await pins.ownerEnabled()) await connectWebRelay(launch, url, id, signal);
+      })().catch(() => ctx.logger.debug('desktop web relay connection failed'));
+    },
     onStatus: (status) => {
       ctx.logger.debug('relay: %s', status);
       if (status === 'connected') void readPhones();
@@ -730,7 +738,8 @@ export async function apply(ctx: Context, config: Config) {
     const { connection, webServer } = scoped as unknown as { connection: { authenticatedUrl(base: string): string }; webServer: { getOrigin(): string } };
     scoped.effect(() => {
       launchUrl = () => connection.authenticatedUrl(webServer.getOrigin());
-      return () => { launchUrl = undefined; bridge.dropAll(); };
+      if (config.webRelay && relay.status === 'connected') relay.refresh();
+      return () => { launchUrl = undefined; bridge.dropAll(); if (config.webRelay) relay.refresh(); };
     });
   });
   ctx.inject(['commands'], (child) => {

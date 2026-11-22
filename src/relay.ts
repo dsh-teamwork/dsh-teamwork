@@ -63,6 +63,7 @@ export class RelayError extends Error {
 }
 
 const REQUEST_TIMEOUT_MS = 10_000;
+const webDialSchema = z.object({ t: z.literal('webDial'), id: z.string().regex(/^[a-f0-9]{64}$/) });
 
 export interface RelayLinkOptions {
   /** The server the member signed in to, read on every attempt. */
@@ -75,6 +76,8 @@ export interface RelayLinkOptions {
   dshVersion?: string;
   /** This plugin's own version, as the relay records it beside the DSH version (platform ADR 0061). */
   pluginVersion?: string;
+  webAvailable?: () => Promise<boolean>;
+  onWebDial?: (url: URL, id: string, lifetime: AbortSignal) => void;
   request?: typeof fetch;
   /** The WebSocket class to dial with: Node's global by default. */
   WebSocket?: typeof globalThis.WebSocket;
@@ -91,6 +94,7 @@ export interface RelayLinkOptions {
 export class RelayLink {
   private state: RelayStatus = 'off';
   private socket?: WebSocket;
+  private socketLifetime?: AbortController;
   private timer?: ReturnType<typeof setTimeout>;
   private attempt = 0;
   /** Bumped by every refresh and stop, so a late callback of an older run changes nothing. */
@@ -160,6 +164,8 @@ export class RelayLink {
 
   private halt() {
     this.failRequests();
+    this.socketLifetime?.abort();
+    this.socketLifetime = undefined;
     clearTimeout(this.timer);
     this.timer = undefined;
     const socket = this.socket;
@@ -202,17 +208,26 @@ export class RelayLink {
       this.set('connecting');
       return this.retry(run, this.backoff());
     }
-    const hello = { t: 'hello', token, clientId: await this.clientId(), name: this.options.name ?? hostname(), dshVersion: this.options.dshVersion ?? dshVersion(), pluginVersion: this.options.pluginVersion ?? pluginVersion(), os: hostOs() };
+    const web = await this.options.webAvailable?.().catch(() => false);
+    const hello = { t: 'hello', token, web, clientId: await this.clientId(), name: this.options.name ?? hostname(), dshVersion: this.options.dshVersion ?? dshVersion(), pluginVersion: this.options.pluginVersion ?? pluginVersion(), os: hostOs() };
     if (run !== this.run) return;
     const Socket = this.options.WebSocket ?? globalThis.WebSocket;
     // Node has a global WebSocket from 22 on; on an older runtime the phone's way in stays closed.
     if (Socket === undefined) return this.set('off');
     const socket = new Socket(url);
     this.socket = socket;
+    const lifetime = this.socketLifetime = new AbortController();
+    socket.addEventListener('close', () => lifetime.abort(), { once: true });
     socket.addEventListener('open', () => socket.send(JSON.stringify(hello)));
     socket.addEventListener('message', (event) => {
       if (run !== this.run) return;
       const frame = parseJson(String(event.data));
+      const dial = webDialSchema.safeParse(frame);
+      if (web && dial.success && this.state === 'connected') {
+        const dataURL = new URL('/relay/web/tunnel', url);
+        this.options.onWebDial?.(dataURL, dial.data.id, lifetime.signal);
+        return;
+      }
       const welcome = welcomeSchema.safeParse(frame);
       if (welcome.success) {
         this.hostId = welcome.data.hostId;
