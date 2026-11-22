@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ALLOWED_CALLS, ALLOWED_STREAMS, Bridge, bridgeRoute } from '../src/bridge';
+import { readDocument } from '../src/phone-files';
 import { MAX_MESSAGE } from '../src/secure-channel';
 import { PhoneSessionError, type PhoneSessionOps } from '../src/phone-session';
 
@@ -52,7 +53,7 @@ describe('the phone bridge', () => {
   it('holds the allow-list', () => {
     expect([...ALLOWED_CALLS].sort()).toEqual([
       '$events/result', 'session/cancel', 'session/create', 'session/list', 'session/modelCatalog', 'session/page',
-      'session/prompt', 'session/rename', 'session/state', 'teamwork/configuration', 'teamwork/listFiles', 'teamwork/readFile', 'teamwork/searchFiles', 'teamwork/selectModel', 'teamwork/selectPermission', 'teamwork/uploadCancel', 'teamwork/uploadChunk', 'teamwork/uploadFinish', 'teamwork/uploadStart', 'userQuestions/answer',
+      'session/prompt', 'session/rename', 'session/state', 'teamwork/configuration', 'teamwork/listFiles', 'teamwork/readDocument', 'teamwork/readFile', 'teamwork/searchFiles', 'teamwork/selectModel', 'teamwork/selectPermission', 'teamwork/uploadCancel', 'teamwork/uploadChunk', 'teamwork/uploadFinish', 'teamwork/uploadStart', 'userQuestions/answer',
       'workspace/archiveSession', 'workspace/pinSession', 'workspace/unarchiveSession', 'workspace/unpinSession',
     ]);
     expect([...ALLOWED_STREAMS].sort()).toEqual(['$events', 'session/follow']);
@@ -100,6 +101,47 @@ describe('the phone bridge', () => {
     expect(sent).toContainEqual(expect.objectContaining({ id: 'list', body: { result: { ok: true, value: { path: '', entries: [{ name: 'notes.md', kind: 'file', bytes: 2 }], truncated: false } } } }));
     expect(sent).toContainEqual(expect.objectContaining({ id: 'read', body: { result: { ok: true, value: { path: 'notes.md', text: 'hi', bytes: 2, truncated: false } } } }));
     expect(sent).toContainEqual(expect.objectContaining({ id: 'out', body: { result: { ok: false, error: { code: 'teamwork/not_found' } } } }));
+  });
+
+  it('reads PDF ranges and converts Office through the Host while keeping the workspace boundary', async () => {
+    const { mkdtemp, writeFile, symlink, rm } = await import('node:fs/promises');
+    const { join } = await import('node:path');
+    const dir = await mkdtemp(join((await import('node:os')).tmpdir(), 'pdf-preview-'));
+    const root = join(dir, 'work');
+    const { mkdir } = await import('node:fs/promises');
+    await mkdir(root);
+    try {
+      const pdf = Buffer.alloc(128 * 1024 + 7, 33);
+      await writeFile(join(root, 'report.pdf'), pdf);
+      await writeFile(join(dir, 'outside.pdf'), 'outside');
+      await symlink(join(dir, 'outside.pdf'), join(root, 'link.pdf'));
+      await expect(readDocument(root, 'link.pdf', 0)).rejects.toMatchObject({ code: 'not_found' });
+      const head = await readDocument(root, 'report.pdf', 0);
+      const tail = await readDocument(root, 'report.pdf', 128 * 1024, head.version);
+      expect(Buffer.concat([Buffer.from(head.data, 'base64'), Buffer.from(tail.data, 'base64')])).toEqual(pdf);
+      await writeFile(join(root, 'report.pdf'), 'changed');
+      await expect(readDocument(root, 'report.pdf', 0, head.version)).rejects.toMatchObject({ code: 'invalid_request' });
+
+      const office = { async convert(request: Parameters<import('../src/phone-files').PreviewOfficeKit['convert']>[0], signal: AbortSignal) {
+        expect(request.extension).toBe('docx');
+        const input = await request.source.read(signal, 32);
+        expect(Buffer.from(input.bytes).toString()).toBe('office');
+        return { pdf, generation: 'generation', cacheKey: 'converted' };
+      } };
+      await writeFile(join(root, 'report.docx'), 'office');
+      await expect(readDocument(root, 'report.docx', 0)).rejects.toMatchObject({ code: 'preview_unavailable' });
+      const rendered = await readDocument(root, 'report.docx', 0, undefined, office);
+      expect(rendered).toMatchObject({ size: pdf.length, offset: 0, data: head.data });
+      // The next range carries the first one's version; a changed source refuses it.
+      expect(await readDocument(root, 'report.docx', 128 * 1024, rendered.version, office)).toMatchObject({ data: tail.data });
+      await writeFile(join(root, 'report.docx'), 'office');
+      await expect(readDocument(root, 'report.docx', 128 * 1024, rendered.version, office)).rejects.toMatchObject({ code: 'invalid_request' });
+
+      await writeFile(join(root, 'empty.pdf'), '');
+      await expect(readDocument(root, 'empty.pdf', 0)).rejects.toMatchObject({ code: 'document_empty' });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it('checks desktop admission before invoking session configuration operations', async () => {

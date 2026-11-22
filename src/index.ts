@@ -24,6 +24,7 @@ import { teamworkSearch } from './web-search.js';
 import { hostname } from 'node:os';
 import { isTeamProvider, platformAdapter, teamProvider, teamRoutes } from './platform-models.js';
 import { Bridge, bridgeRoute } from './bridge.js';
+import type { PreviewOfficeKit } from './phone-files.js';
 import { PhoneSessionError, phonePresets } from './phone-session.js';
 import { phonePermissions, type PermissionPresets } from './phone-permission.js';
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm';
@@ -350,6 +351,13 @@ export async function apply(ctx: Context, config: Config) {
         const run = await commandRegistry.execute(agent, `/permission ${request.preset}`, [], AbortSignal.timeout(10_000));
         if (!run || run.result.kind !== 'success') throw new PhoneSessionError('unavailable');
         return { current: presets.current(agent.session) };
+      },
+      officeKit() {
+        const candidate: unknown = ctx.get('officeKit');
+        if (candidate && typeof candidate === 'object' && 'convert' in candidate && typeof candidate.convert === 'function') {
+          return candidate as PreviewOfficeKit;
+        }
+        return undefined;
       },
       async fileRoot(sessionId) {
         const agent = sessionAgent(sessionId);
