@@ -104,18 +104,6 @@ export interface PreviewOfficeKit {
 
 const DOCUMENT_LIMIT = 16 * 1024 * 1024;
 const DOCUMENT_CHUNK = 128 * 1024;
-/** How long the last Office render is kept for the ranges after its first: a client reads them one after another. */
-const RENDER_KEPT_MS = 2 * 60_000;
-
-/** The last Office file rendered, by its real path and the version of its source, so each range does not convert it again. */
-let lastRender: { key: string; revision: string; pdf: Uint8Array; timer: ReturnType<typeof setTimeout> } | undefined;
-function keepRender(key: string, revision: string, pdf: Uint8Array) {
-  if (lastRender) clearTimeout(lastRender.timer);
-  const timer = setTimeout(() => { if (lastRender?.timer === timer) lastRender = undefined; }, RENDER_KEPT_MS);
-  timer.unref?.();
-  lastRender = { key, revision, pdf, timer };
-  return lastRender;
-}
 
 /** Transfer one display document range, including PDFs rendered from Office files by the Host. */
 export async function readDocument(root: string, path: string, offset: number, version?: string, office?: PreviewOfficeKit) {
@@ -169,13 +157,8 @@ export async function readDocument(root: string, path: string, offset: number, v
     const chunk = await read(offset, Math.min(DOCUMENT_CHUNK, bytes - offset));
     return { version: sourceVersion, size: bytes, offset, data: chunk.toString('base64') };
   }
-  const key = JSON.stringify([target, sourceVersion]);
-  if (lastRender?.key === key) {
-    const { revision, pdf } = keepRender(key, lastRender.revision, lastRender.pdf);
-    ensureRange(revision, pdf.length);
-    return { version: revision, size: pdf.length, offset, data: Buffer.from(pdf.subarray(offset, offset + DOCUMENT_CHUNK)).toString('base64') };
-  }
   if (!office) throw new PhoneSessionError('preview_unavailable');
+  // Each range asks the kit again: it keeps its renders by source version and content, so only the first converts.
   // Within every caller's wait: the live relay's 75 s for this call, a cloud computer's server's 60 s for a response.
   const signal = AbortSignal.timeout(55_000);
   let rendered: Awaited<ReturnType<PreviewOfficeKit['convert']>>;
@@ -200,6 +183,5 @@ export async function readDocument(root: string, path: string, offset: number, v
   const size = rendered.pdf.length;
   if (!size) throw new PhoneSessionError('unavailable');
   ensureRange(revision, size);
-  keepRender(key, revision, rendered.pdf);
   return { version: revision, size, offset, data: Buffer.from(rendered.pdf.subarray(offset, offset + DOCUMENT_CHUNK)).toString('base64') };
 }
