@@ -48,6 +48,9 @@ export function platformAdapter(client: TeamworkClient, ctx?: Context): PiAiAdap
             xhigh: efforts.includes('xhigh') ? 'xhigh' : null,
             max: efforts.includes('max') ? 'max' : null,
           };
+          // The gateway hides the upstream, so pi-ai cannot detect its dialect: send the plain
+          // OpenAI reasoning_effort (the gateway translates it) and a system role every upstream
+          // accepts. Without efforts, `reasoning: false` keeps the effort out of the request.
           return [{
             id: c.id, name: c.name, provider, api: 'openai-completions' as const, baseUrl,
             reasoning: efforts.length > 0, thinkingLevelMap, compat: { supportsDeveloperRole: false, supportsReasoningEffort: true, thinkingFormat: 'openai' }, input: 'vision' in data && data.vision ? ['text' as const, 'image' as const] : ['text' as const], contextWindow: data.contextWindow, maxTokens: data.maxTokens ?? Math.min(4096, data.contextWindow),
