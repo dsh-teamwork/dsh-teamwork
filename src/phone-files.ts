@@ -176,7 +176,8 @@ export async function readDocument(root: string, path: string, offset: number, v
     return { version: revision, size: pdf.length, offset, data: Buffer.from(pdf.subarray(offset, offset + DOCUMENT_CHUNK)).toString('base64') };
   }
   if (!office) throw new PhoneSessionError('preview_unavailable');
-  const signal = AbortSignal.timeout(65_000);
+  // Within every caller's wait: the live relay's 75 s for this call, a cloud computer's server's 60 s for a response.
+  const signal = AbortSignal.timeout(55_000);
   let rendered: Awaited<ReturnType<PreviewOfficeKit['convert']>>;
   try {
     rendered = await office.convert({ extension, priority: 'foreground', source: {
