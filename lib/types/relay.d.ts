@@ -81,6 +81,8 @@ export interface RelayLinkOptions {
     dshVersion?: string;
     /** This plugin's own version, as the relay records it beside the DSH version (platform ADR 0061). */
     pluginVersion?: string;
+    webAvailable?: () => Promise<boolean>;
+    onWebDial?: (url: URL, id: string, lifetime: AbortSignal) => void;
     request?: typeof fetch;
     /** The WebSocket class to dial with: Node's global by default. */
     WebSocket?: typeof globalThis.WebSocket;
@@ -97,6 +99,7 @@ export declare class RelayLink {
     private readonly options;
     private state;
     private socket?;
+    private socketLifetime?;
     private timer?;
     private attempt;
     /** Bumped by every refresh and stop, so a late callback of an older run changes nothing. */

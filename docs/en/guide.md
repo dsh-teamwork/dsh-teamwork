@@ -221,6 +221,8 @@ changing servers are refused, `apiEndpoint` names the server, and the phone
 relay is never opened.
 Do not duplicate the package's `insert` entry in a profile.
 
+Set `webRelay: true` on the personal DSH profile to offer **Open native DSH Web** in My DSH on the web and in the mobile computer switcher. Restart the host after changing the setting. The platform must have its desktop Web domain configured. The host must be online and expose its own loopback Web server. This release offers the entry on personal hosts without a local PIN. The platform terminates HTTPS for this entry.
+
 ## Data and device access
 
 The sign-in is kept beside the cache, readable only by you, so a restart keeps
