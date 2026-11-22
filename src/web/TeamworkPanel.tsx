@@ -1082,16 +1082,23 @@ function NativeWeb({ state, busy, perform }: {
 }) {
   const t = useT();
   const [confirming, setConfirming] = useState(false);
-  const { enabled, blocked } = state;
+  const { enabled, blocked, active } = state;
   const set = (on: boolean) => void perform('native-web', async () => { await api.setNativeWeb(on); setConfirming(false); }, t(on ? 'phones.webTurnedOn' : 'phones.webTurnedOff'));
+  const disconnect = () => void perform('native-web-disconnect', () => api.disconnectNativeWeb(), t('phones.webDisconnected'));
+  // Who is using it, as far as this computer can tell: tunnels open now, or when one last moved.
+  const use = active.tunnels > 0 ? t('phones.webInUse', { count: active.tunnels })
+    : active.lastActivity ? t('phones.webLastUsed', { time: shortTime(t, active.lastActivity) }) : undefined;
   return (
     <Item
       icon="external"
       title={t('phones.webTitle')}
       tags={<Badge tone={enabled && !blocked ? 'success' : 'neutral'} dot>{t(enabled ? 'phones.webOn' : 'phones.webOff')}</Badge>}
-      description={blocked ? t(blocked === 'pin' ? 'phones.webBlockedPin' : 'phones.webBlockedWeb') : t('phones.webHint')}
+      description={blocked ? t(blocked === 'pin' ? 'phones.webBlockedPin' : 'phones.webBlockedWeb') : enabled && use ? `${t('phones.webHint')} ${use}` : t('phones.webHint')}
       actions={!confirming && (enabled
-        ? <Button size="sm" variant="ghost" disabled={!!busy} busy={busy === 'native-web'} onClick={() => set(false)}>{t('phones.webDisable')}</Button>
+        ? <>
+          <Button size="sm" variant="secondary" disabled={!!busy} busy={busy === 'native-web-disconnect'} onClick={disconnect}>{t('phones.webDisconnect')}</Button>
+          <Button size="sm" variant="ghost" disabled={!!busy} busy={busy === 'native-web'} onClick={() => set(false)}>{t('phones.webDisable')}</Button>
+        </>
         : <Button size="sm" variant="primary" disabled={!!busy || !!blocked} onClick={() => setConfirming(true)}>{t('phones.webEnable')}</Button>)}
       >
       {confirming && <ItemBody>

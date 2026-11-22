@@ -1,4 +1,4 @@
-import { connectWebRelay, NativeWebSwitch } from './web-relay.js';
+import { connectWebRelay, NativeWebSwitch, WebTunnels } from './web-relay.js';
 import { PhoneKeys, PhoneSecurity } from './phone-security.js';
 import { Context } from '@deepseek-ai/cordis';
 import z from '@deepseek-ai/schemastery';
@@ -237,6 +237,7 @@ export async function apply(ctx: Context, config: Config) {
   const pins = new PinStore(pinsPath(config.cachePath));
   // The owner's native Web switch (src/web-relay.ts), and what keeps it from working while on.
   const nativeWeb = NativeWebSwitch.beside(config.cachePath);
+  const webTunnels = new WebTunnels();
   const nativeWebBlocked = async (): Promise<'pin' | 'web' | undefined> =>
     await pins.ownerEnabled() ? 'pin' : launchUrl ? undefined : 'web';
   // The audit archive (src/audit-archive.ts): every frame of a member's, sealed to the team admin's key.
@@ -460,7 +461,7 @@ export async function apply(ctx: Context, config: Config) {
     onWebDial: (url, id, signal) => {
       void (async () => {
         const launch = launchUrl?.();
-        if (launch && !shared?.enabled && await nativeWeb.on() && !await pins.ownerEnabled()) await connectWebRelay(launch, url, id, signal);
+        if (launch && !shared?.enabled && await nativeWeb.on() && !await pins.ownerEnabled()) await connectWebRelay(launch, url, id, signal, webTunnels);
       })().catch(() => ctx.logger.debug('desktop web relay connection failed'));
     },
     onStatus: (status) => {
@@ -650,7 +651,7 @@ export async function apply(ctx: Context, config: Config) {
         sync: { auto: status.autoSync, running: status.syncing, lastSuccess: status.lastSuccess, lastError: status.lastError },
         relay: relay.status,
         ownerPinEnabled: shared?.enabled || config.tokenFile ? undefined : await pins.ownerEnabled(),
-        nativeWeb: shared?.enabled || config.tokenFile ? undefined : { enabled: await nativeWeb.on(), blocked: await nativeWebBlocked() },
+        nativeWeb: shared?.enabled || config.tokenFile ? undefined : { enabled: await nativeWeb.on(), blocked: await nativeWebBlocked(), active: webTunnels.state },
         phones: await Promise.all(phones.map(async phone => ({ ...phone, ...await security.details(phone.id) }))),
         session: agent ? {
           id: String(agent.id),
@@ -697,6 +698,12 @@ export async function apply(ctx: Context, config: Config) {
       await nativeWeb.set(on);
       // Advertise it, or withdraw it and close what the platform has open.
       relay.refresh();
+    },
+    async disconnectNativeWeb() {
+      if (shared?.enabled || config.tokenFile) throw new Error('Personal desktop DSH only.');
+      // Our side first, so nothing keeps moving whether or not the server hears it.
+      webTunnels.endAll();
+      await relay.request({ t: 'webRevoke' }).catch(phoneError);
     },
     async setOwnerPin(pin) {
       if (shared?.enabled || config.tokenFile) throw new Error('Personal desktop DSH only.');

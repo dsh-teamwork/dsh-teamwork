@@ -48,6 +48,10 @@ export type RelayRequest = {
 } | {
     t: 'revoke';
     pairingId: string;
+}
+/** End every native Web session of this computer; its phones stay (the server's ADR 0065). */
+ | {
+    t: 'webRevoke';
 };
 /** A pairing as the relay lists it (`src/pairing.ts`, `PairingView`). */
 export declare const pairingSchema: z.ZodObject<{

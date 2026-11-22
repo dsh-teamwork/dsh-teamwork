@@ -41,6 +41,25 @@ class RelayWebSocket extends WebSocket {
   }
 }
 
+/**
+ * The native Web tunnels this computer serves, for the panel and `dsh-teamwork status` to show use, and for
+ * "Disconnect all" to end every one at once (the server's ADR 0065).
+ */
+export class WebTunnels {
+  private open = 0;
+  private last?: number;
+  private ended = new AbortController();
+  get state(): { tunnels: number; lastActivity?: string } {
+    return { tunnels: this.open, ...(this.last ? { lastActivity: new Date(this.last).toISOString() } : {}) };
+  }
+  /** The signal a new tunnel lives under: the control connection's, ended early by endAll. */
+  signal(lifetime: AbortSignal) { return AbortSignal.any([lifetime, this.ended.signal]); }
+  opened() { this.open++; this.moved(); }
+  closed() { this.open--; }
+  moved() { this.last = Date.now(); }
+  endAll() { this.ended.abort(); this.ended = new AbortController(); }
+}
+
 export function loopbackWebURL(url: URL) {
   return ['127.0.0.1', '[::1]', 'localhost'].includes(url.hostname)
     && ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password;
@@ -89,7 +108,8 @@ export function rewriteWebRequest(header: Buffer, launch: URL, cookie: string): 
 }
 
 /** One HTTP connection, or one upgraded WebSocket, to the current DSH instance. */
-export async function connectWebRelay(launchURL: string, dataURL: URL, id: string, lifetime: AbortSignal) {
+export async function connectWebRelay(launchURL: string, dataURL: URL, id: string, lifetime: AbortSignal, tunnels?: WebTunnels) {
+  if (tunnels) lifetime = tunnels.signal(lifetime);
   const launch = new URL(launchURL);
   if (!loopbackWebURL(launch) || lifetime.aborted) return;
   if (dataURL.protocol !== 'wss:' && !(dataURL.protocol === 'ws:' && ['127.0.0.1', '[::1]', 'localhost'].includes(dataURL.hostname))) return;
@@ -108,11 +128,14 @@ export async function connectWebRelay(launchURL: string, dataURL: URL, id: strin
   let header = Buffer.alloc(0);
   let first = true;
   const timeout = setTimeout(close, 10_000);
+  let closed = false;
+  tunnels?.opened();
   function close() {
     clearTimeout(timeout);
     lifetime.removeEventListener('abort', close);
     local.destroy();
     tunnel.destroy();
+    if (!closed) { closed = true; tunnels?.closed(); }
   }
 
   const request = new Transform({
@@ -142,6 +165,7 @@ export async function connectWebRelay(launchURL: string, dataURL: URL, id: strin
   request.on('error', close);
   tunnel.on('error', close).on('close', close);
   local.on('error', close);
+  if (tunnels) { tunnel.on('data', () => tunnels.moved()); local.on('data', () => tunnels.moved()); }
   // Both pipes propagate backpressure, including when DSH reads an upload slowly.
   tunnel.pipe(request).pipe(local, { end: false });
   local.pipe(tunnel);

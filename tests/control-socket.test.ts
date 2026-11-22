@@ -205,8 +205,10 @@ test.skipIf(process.platform === 'win32')('the command passes the real panel rou
 // comes back in the host's words, and status says where the switch stands.
 test.skipIf(process.platform === 'win32')('native Web is switched and shown from the command line', async () => {
   const home = await mkdtemp(join(tmpdir(), 'tw-web-'));
-  let nativeWeb: { enabled: boolean; blocked?: 'pin' | 'web' } = { enabled: false };
+  let nativeWeb: { enabled: boolean; blocked?: 'pin' | 'web'; active: { tunnels: number; lastActivity?: string } } = { enabled: false, active: { tunnels: 0 } };
+  let disconnected = 0;
   const ops = {
+    disconnectNativeWeb: async () => { disconnected++; nativeWeb = { ...nativeWeb, active: { tunnels: 0, lastActivity: nativeWeb.active.lastActivity } }; },
     setNativeWeb: async (on: boolean) => {
       if (on && nativeWeb.blocked) throw new Error(say(nativeWeb.blocked === 'pin' ? 'nativeWeb.pin' : 'nativeWeb.noWeb'));
       nativeWeb = { ...nativeWeb, enabled: on };
@@ -223,9 +225,18 @@ test.skipIf(process.platform === 'win32')('native Web is switched and shown from
     expect(out.at(-1)).toContain('Native DSH Web is on');
     expect(await command('status')).toBe(0);
     expect(out.at(-1)).toContain('Native Web: on');
+    // Someone is using it: status says so, and disconnect ends it while the switch stays on.
+    nativeWeb = { ...nativeWeb, active: { tunnels: 2, lastActivity: '2026-11-22T14:00:00.000Z' } };
+    expect(await command('status')).toBe(0);
+    expect(out.at(-1)).toContain('Native Web: on, in use now (2 connections)');
+    expect(await command('web', 'disconnect')).toBe(0);
+    expect(disconnected).toBe(1);
+    expect(out.at(-1)).toContain('The switch stays on.');
+    expect(await command('status')).toBe(0);
+    expect(out.at(-1)).toContain('Native Web: on, last used 2026-11-22T14:00:00.000Z');
     expect(await command('web', 'off')).toBe(0);
     expect(out.at(-1)).toBe('Native DSH Web is off.');
-    nativeWeb = { enabled: false, blocked: 'web' };
+    nativeWeb = { enabled: false, blocked: 'web', active: { tunnels: 0 } };
     expect(await command('web', 'on')).toBe(1);
     expect(err.at(-1)).toContain('DSH Web');
     expect(nativeWeb.enabled).toBe(false);

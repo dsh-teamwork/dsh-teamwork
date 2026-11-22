@@ -12,9 +12,28 @@ export declare class NativeWebSwitch {
     on(): Promise<boolean>;
     set(on: boolean): Promise<void>;
 }
+/**
+ * The native Web tunnels this computer serves, for the panel and `dsh-teamwork status` to show use, and for
+ * "Disconnect all" to end every one at once (the server's ADR 0065).
+ */
+export declare class WebTunnels {
+    private open;
+    private last?;
+    private ended;
+    get state(): {
+        tunnels: number;
+        lastActivity?: string;
+    };
+    /** The signal a new tunnel lives under: the control connection's, ended early by endAll. */
+    signal(lifetime: AbortSignal): AbortSignal;
+    opened(): void;
+    closed(): void;
+    moved(): void;
+    endAll(): void;
+}
 export declare function loopbackWebURL(url: URL): boolean;
 export declare function pageCookie(launch: URL, lifetime: AbortSignal): Promise<string>;
 export declare function rewriteWebRequest(header: Buffer, launch: URL, cookie: string): Buffer;
 /** One HTTP connection, or one upgraded WebSocket, to the current DSH instance. */
-export declare function connectWebRelay(launchURL: string, dataURL: URL, id: string, lifetime: AbortSignal): Promise<void>;
+export declare function connectWebRelay(launchURL: string, dataURL: URL, id: string, lifetime: AbortSignal, tunnels?: WebTunnels): Promise<void>;
 //# sourceMappingURL=web-relay.d.ts.map
