@@ -683,6 +683,7 @@ export async function apply(ctx: Context, config: Config) {
       else await pins.set('owner', pin);
       security.reset();
       bridge.dropAll();
+      // Re-advertise native Web and close its existing connections after a PIN change.
       relay.refresh();
     },
     async pairPhone() {
