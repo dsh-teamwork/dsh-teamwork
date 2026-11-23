@@ -311,6 +311,19 @@ describe('the phone bridge', () => {
     ]);
   });
 
+  it('finds a Windows workspace under its parent whatever the separator and case', async () => {
+    const sent: any[] = [];
+    const items = [{ sessionId: 'a' }];
+    const workspaces = [{ id: 'w1', title: 'repo', path: 'C:\\Code\\Repo\\', sessionIds: [] }, { id: 'w2', title: 'pkg', path: 'c:/code/repo/pkg', sessionIds: ['a'] }];
+    const request = (async (url: string) => url.includes('/connect?')
+      ? new Response(null, { status: 302, headers: { 'set-cookie': 'dsh=peer; Path=/' } })
+      : new Response(JSON.stringify({ type: 'client-response', result: { ok: true, value: { items } } }))) as typeof fetch;
+    const b = new Bridge({ launchUrl: () => 'http://127.0.0.1:3080/?token=t', send: (frame) => sent.push(frame), request, marks: () => ({ pinned: [], archived: [], workspaces }) });
+    b.handle({ t: 'call', pairingId: 'p', id: 'l', method: 'session/list', body: { args: { _request: {} } } });
+    for (let i = 0; i < 4; i++) await tick();
+    expect(sent[0].body.result.value.items[0].teamwork.workspace.ancestors).toEqual([{ id: 'w1', title: 'repo', index: 0 }]);
+  });
+
   it('starts a session in a folder that is a workspace as that workspace, so DSH lists it there', async () => {
     const { b, asked } = bridge({ workspaceAt: path => path === '/work/alpha' ? 'ws-alpha' : undefined });
     b.handle({ t: 'call', pairingId: 'p', id: 'c1', method: 'session/create', body: { args: { request: { cwd: '/work/alpha', agentPreset: 'team:t:p' } } } });

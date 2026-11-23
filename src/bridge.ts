@@ -77,12 +77,15 @@ export interface SessionMarks {
   workspaces: readonly { id: string; title: string; path?: string; sessionIds: readonly string[] }[];
 }
 
-/** Match DSH's nearest registered folder ancestor using the host's case and path separators. */
+/**
+ * Each workspace's registered parent folders, root first. A Windows path compares with either separator and in any
+ * case, as Windows itself compares it; any other path compares exactly. The paths never leave this computer.
+ */
 function workspaceAncestors(workspaces: SessionMarks['workspaces']) {
   const paths = workspaces.map(({ path }) => {
     if (!path) return undefined;
     const windows = /^[A-Za-z]:[/\\]/.test(path) || path.startsWith('\\\\');
-    return (windows ? path.replaceAll('\\', '/') : path).replace(/\/+$/, '');
+    return (windows ? path.replaceAll('\\', '/').toLowerCase() : path).replace(/\/+$/, '');
   });
   const byPath = new Map(paths.map((path, index) => [path, index]));
   return paths.map((path) => {
