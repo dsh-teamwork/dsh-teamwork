@@ -20,7 +20,6 @@
  */
 import { z } from 'zod';
 import { type PhoneSessionOps } from './phone-session.js';
-import type { OwnerFilter } from './shared-owner.js';
 import { type FetchRoute } from './panel.js';
 /** Unary methods a phone may call. A test holds this list. */
 export declare const ALLOWED_CALLS: ReadonlySet<string>;
@@ -69,8 +68,6 @@ export interface BridgeOptions {
     log?: (message: string, error?: unknown) => void;
     /** Only these session operations supplement DSH's native calls. */
     session?: PhoneSessionOps;
-    /** On a shared DSH, whose sessions each pairing's member may reach (src/shared-owner.ts); none on a personal computer. */
-    owners?: () => OwnerFilter | undefined;
     /** The pin and archive sets `session/list` marks each item with, under `teamwork`; none while DSH has no registry. */
     marks?: () => SessionMarks | undefined;
     /** The DSH workspace registered at exactly this folder, if any (see `session/create` in `call`). */
@@ -82,7 +79,7 @@ export declare class Bridge {
     private uploads;
     private promptCalls;
     constructor(options: BridgeOptions);
-    handle(frame: Forwarded): undefined;
+    handle(frame: Forwarded): void;
     /** The relay connection ended: every phone is gone with it. */
     dropAll(): void;
     private link;
@@ -104,7 +101,6 @@ export declare class Bridge {
      */
     private marked;
     private mux;
-    private muxNow;
     private openMux;
     /**
      * Passes one of DSH's mux frames to the phone, made to fit the channel. One

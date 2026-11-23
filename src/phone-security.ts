@@ -6,7 +6,7 @@ import { dirname } from 'node:path';
 import { z } from 'zod';
 import { SecureChannel, base64, deviceIdentity, type Identity, type SecurePacket } from './secure-channel.js';
 import { forwardedSchema, type Forwarded } from './bridge.js';
-import { IDLE_MS, PIN, type PinStore } from './pin-lock.js';
+import { IDLE_MS, type PinStore } from './pin-lock.js';
 
 /** What a paired device is, as it says when it pairs: the phone app on iOS or Android, or a web browser. */
 export const DEVICE_KINDS = ['ios', 'android', 'web'] as const;
@@ -105,9 +105,7 @@ interface Link {
   phoneConfirmed: boolean;
   authorized: boolean;
   pending: boolean;
-  /** A shared DSH's joining member (src/shared-roster.ts): the invite in the channel stands in for the safety code. */
-  joining?: string;
-  /** Whether the member gave their PIN on this channel (src/pin-lock.ts), and when it last carried their work. */
+  /** Whether the owner's PIN was given on this channel (src/pin-lock.ts), and when it last carried work. */
   unlocked?: boolean;
   lastActive?: number;
 }
@@ -126,19 +124,9 @@ export class PhoneSecurity {
       confirm(id: string): Promise<void>;
       changed(): void;
       error(error: Error): void;
-      /**
-       * On a shared DSH, the member a pending pairing belongs to, as the relay said when they joined; and whether their
-       * invite admits this device. Absent on a personal computer, which pairs by code alone.
-       */
-      joining?(pairingId: string): string | undefined;
-      admit?(input: { pairingId: string; userId: string; inviteId: string; secret: string; name: string }): Promise<boolean>;
-      /**
-       * The PIN lock: every member's PINs, and whose PIN a pairing answers to (its member on a shared DSH, `owner` on a
-       * personal computer). Without them no channel is locked.
-       */
+      /** The PIN lock: the owner's PIN, and whether it is on now. Without them no channel is locked. */
       pins?: PinStore;
       pinRequired?(): Promise<boolean>;
-      pinMember?(pairingId: string): Promise<string | undefined>;
       now?(): number;
     },
   ) {}
@@ -186,8 +174,7 @@ export class PhoneSecurity {
       const trusted = await this.options.keys.peer(scope, frame.pairingId);
       const identity = await this.options.keys.identity();
       if (epoch !== this.epoch) return;
-      const joining = trusted ? undefined : this.options.joining?.(frame.pairingId);
-      if (!trusted && !joining) {
+      if (!trusted) {
         if (
           !this.offer ||
           this.offer.expires < Date.now() ||
@@ -215,7 +202,7 @@ export class PhoneSecurity {
             channel.verified();
             channel.send({ t: 'secureReady' });
             void this.askPin(frame.pairingId, link);
-          } else if (!link.joining) channel.send({ t: 'verify', code });
+          } else channel.send({ t: 'verify', code });
           this.options.changed();
         },
         message: async (value) => {
@@ -228,26 +215,6 @@ export class PhoneSecurity {
           ) {
             link.name = body.name;
             link.kind = deviceKind(body.kind);
-            this.options.changed();
-            return;
-          }
-          if (body?.t === 'shareJoin' && link.joining && !link.authorized) {
-            const input = { inviteId: body.invite, secret: body.secret, name: body.name };
-            const valid = Object.values(input).every((v) => typeof v === 'string' && v.length > 0 && v.length <= 100);
-            const admitted = valid && link.remoteKey && await this.options.admit?.({ pairingId: frame.pairingId, userId: link.joining, ...(input as Record<string, string>) } as never);
-            if (!admitted) {
-              channel.send({ t: 'joinRefused' });
-              throw new Error('invite_refused');
-            }
-            link.kind = deviceKind(body.kind);
-            await this.options.keys.trust(link.scope, frame.pairingId, link.remoteKey!, input.name as string, link.kind);
-            await this.options.confirm(frame.pairingId);
-            link.name = input.name as string;
-            link.authorized = true;
-            link.pending = false;
-            channel.verified();
-            channel.send({ t: 'pairAccepted' });
-            void this.askPin(frame.pairingId, link);
             this.options.changed();
             return;
           }
@@ -294,7 +261,6 @@ export class PhoneSecurity {
         phoneConfirmed: false,
         authorized: false,
         pending: !trusted,
-        ...(joining ? { joining } : {}),
       };
       this.links.set(frame.pairingId, link);
       channel.start();
@@ -365,7 +331,7 @@ export class PhoneSecurity {
     return false;
   }
 
-  /** Tells the phone a PIN is needed: to set one, to enter it, or that the member is locked out. */
+  /** Tells the device a PIN is needed: to enter it, or that the lock holds until the owner sets one here. */
   private async askPin(pairingId: string, link: Link) {
     const { pins } = this.options;
     if (!pins) return;
@@ -374,31 +340,25 @@ export class PhoneSecurity {
         link.channel.send({ t: 'unlocked' });
         return;
       }
-      const member = await this.options.pinMember?.(pairingId);
-      if (!member) return;
-      const hasPin = await pins.has(member);
-      link.channel.send(await pins.locked(member) || (member === 'owner' && !hasPin)
-        ? { t: 'pinLocked' }
-        : { t: 'pinRequired', set: !hasPin });
+      link.channel.send(await pins.locked() || !await pins.has() ? { t: 'pinLocked' } : { t: 'pinRequired', set: false });
     } catch (error) { this.options.error(error as Error); }
   }
 
-  /** `unlock` with the PIN, or `setPin`: the first PIN, or a new one with the old. */
+  /**
+   * `unlock` with the PIN. A device never sets the PIN (`setPin` is answered as if asked again): the owner sets it in
+   * the panel on this computer.
+   */
   private async pinMessage(pairingId: string, link: Link, body: Record<string, unknown>) {
-    const pins = this.options.pins, member = await this.options.pinMember?.(pairingId);
-    if (!pins || !member) return;
+    const pins = this.options.pins;
+    if (!pins) return;
     if (this.options.pinRequired && !await this.options.pinRequired()) return link.channel.send({ t: 'unlocked' });
-    const pin = typeof body.pin === 'string' ? body.pin : '';
-    if (body.t === 'setPin' && member === 'owner') return this.askPin(pairingId, link);
-    if (body.t === 'setPin' && !PIN.test(pin)) return link.channel.send({ t: 'pinInvalid' });
-    const result = body.t === 'setPin'
-      ? await pins.replace(member, pin, typeof body.old === 'string' ? body.old : '', false)
-      : await pins.check(member, pin);
+    if (body.t === 'setPin') return this.askPin(pairingId, link);
+    const result = await pins.check(typeof body.pin === 'string' ? body.pin : '');
     if (this.links.get(pairingId) !== link) return;
     if (!result.ok) {
       if (link.unlocked) this.options.forward({ t: 'detach', pairingId });
       link.unlocked = false;
-      if (member === 'owner' && result.reason === 'locked') this.relockOtherChannels(pairingId);
+      if (result.reason === 'locked') this.relockOtherChannels(pairingId);
       if (result.reason === 'unset') return this.askPin(pairingId, link);
       return link.channel.send(result.reason === 'wrong' ? { t: 'pinWrong', left: result.left } : { t: 'pinLocked' });
     }

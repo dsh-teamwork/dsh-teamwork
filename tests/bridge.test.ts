@@ -52,11 +52,22 @@ function bridge(options: { web?: boolean; expire?: boolean; session?: PhoneSessi
 describe('the phone bridge', () => {
   it('holds the allow-list', () => {
     expect([...ALLOWED_CALLS].sort()).toEqual([
-      '$events/result', 'session/cancel', 'session/create', 'session/list', 'session/modelCatalog', 'session/page',
+      '$events/result', 'schedule/catalog', 'schedule/create', 'schedule/edit', 'schedule/history', 'schedule/run',
+      'session/cancel', 'session/create', 'session/list', 'session/modelCatalog', 'session/page',
       'session/prompt', 'session/rename', 'session/state', 'teamwork/configuration', 'teamwork/listFiles', 'teamwork/readDocument', 'teamwork/readFile', 'teamwork/searchFiles', 'teamwork/selectModel', 'teamwork/selectPermission', 'teamwork/uploadCancel', 'teamwork/uploadChunk', 'teamwork/uploadFinish', 'teamwork/uploadStart', 'userQuestions/answer',
       'workspace/archiveSession', 'workspace/pinSession', 'workspace/unarchiveSession', 'workspace/unpinSession',
     ]);
     expect([...ALLOWED_STREAMS].sort()).toEqual(['$events', 'session/follow']);
+  });
+
+  it('passes automation tasks on unchanged', async () => {
+    const request = { title: 'Deploy check', prompt: 'Check the deploy.', timing: { kind: 'cron', cron: { expression: '0 9 * * 1-5', time_zone: 'Asia/Shanghai' } }, target: { kind: 'new_once' } };
+    const own = bridge();
+    own.b.handle({ t: 'call', pairingId: 'p', id: 'create', method: 'schedule/create', body: { args: { request } } });
+    for (let i = 0; i < 6; i++) await tick();
+    const forwarded = own.asked.find(call => call.url.endsWith('/api/schedule/create'));
+    expect(JSON.parse(String(forwarded?.init?.body))).toEqual({ type: 'client-request', rpcId: 'create', method: 'schedule/create', payload: { args: { request } } });
+    expect(own.sent.at(-1)).toMatchObject({ id: 'create', status: 200, body: { result: { ok: true } } });
   });
 
   it('changes a model through the session-only handler, never the default-saving native endpoint', async () => {

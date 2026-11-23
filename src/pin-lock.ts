@@ -1,11 +1,10 @@
 /**
- * The PIN lock (the server's `docs/tech/shared-dsh.md`, "The PIN"): a second lock on a device that already proved its
- * key. Each member has one four-digit PIN, set from their own device and checked only here, inside the encrypted
- * channel; nothing is derived from it. Five wrong PINs lock that member on every device until whoever runs this DSH
- * clears it, and a forgotten PIN is cleared the same way. The file (`<cache>.pins.json`, mode 0600) keeps each PIN as
- * scrypt with its parameters and salt, and the failure count, so a restart neither forgets a lock nor resets the count.
- *
- * On a shared DSH a member is their account id; on a personal computer its one member is `owner`.
+ * The PIN lock: a second lock on a device that already proved its key. The owner of this computer sets one four-digit
+ * PIN in the Teamwork panel; a paired device gives it inside the encrypted channel, where it is checked only here, and
+ * nothing is derived from it. Five wrong PINs lock every device until the owner clears the lock here
+ * (`/teamwork pin reset`), and a forgotten PIN is cleared the same way. The file (`<cache>.pins.json`, mode
+ * 0600) keeps the PIN as scrypt with its parameters and salt, and the failure count, so a restart neither forgets a
+ * lock nor resets the count. It is keyed `owner`, the one entry it holds.
  */
 import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
@@ -24,6 +23,8 @@ const PARAMS = { N: 16384, r: 8, p: 1 };
 const entrySchema = z.object({ hash: z.string().optional(), salt: z.string().optional(), N: z.number().optional(), failures: z.number().int().min(0) });
 const fileSchema = z.record(z.string(), entrySchema);
 type Entry = z.infer<typeof entrySchema>;
+
+const OWNER = 'owner';
 
 export const pinsPath = (cachePath: string) => cachePath.replace(/(\.json)?$/, '.pins.json');
 
@@ -76,51 +77,28 @@ export class PinStore {
     return task;
   }
 
-  // Existing owner entries (including a locked owner) keep protection after an upgrade.
-  async ownerEnabled() { return Object.hasOwn(await this.load(), 'owner'); }
+  /** Whether the PIN lock is on: an entry exists, even one whose PIN was reset or that is locked. */
+  async enabled() { return Object.hasOwn(await this.load(), OWNER); }
 
-  resetOwnerPin() {
-    return this.change(state => { if (state.owner) state.owner = { failures: 0 }; });
+  /** Whether a PIN is set; a reset one is not until the owner sets it again. */
+  async has() { return !!(await this.load())[OWNER]?.hash; }
+  async locked() { return ((await this.load())[OWNER]?.failures ?? 0) >= MAX_FAILURES; }
+
+  /** Checks a PIN, counting a wrong one before answering; a locked PIN refuses even the right one. */
+  check(pin: string): Promise<PinCheck> {
+    return this.change(state => verify(state[OWNER], pin));
   }
 
-  /** Whether a member has set a PIN; one who has not is asked to set one. */
-  async has(member: string) { return !!(await this.load())[member]?.hash; }
-  async locked(member: string) { return ((await this.load())[member]?.failures ?? 0) >= MAX_FAILURES; }
-
-  /** Checks a PIN, counting a wrong one before answering; a locked member is refused even the right one. */
-  check(member: string, pin: string): Promise<PinCheck> {
-    return this.change(state => verify(state[member], pin));
+  /** Sets the PIN, from the panel on this computer. */
+  set(pin: string) {
+    return this.change(async state => { state[OWNER] = await pinEntry(pin); });
   }
 
-  /** A local setting change is authorized by the host. */
-  set(member: string, pin: string) {
-    return this.change(async state => { state[member] = await pinEntry(pin); });
+  /** Clears the PIN and its lock but keeps the lock on: no device works until the owner sets a new one. */
+  resetPin() {
+    return this.change(state => { if (state[OWNER]) state[OWNER] = { failures: 0 }; });
   }
 
-  /** A device can change an existing PIN only with its old PIN, in the same serialized write. */
-  replace(member: string, pin: string, old: string, requirePolicyEntry: boolean): Promise<PinCheck> {
-    return this.change(async state => {
-      const entry = state[member];
-      if (!entry && requirePolicyEntry) return { ok: false, reason: 'unset' };
-      if (entry?.hash) {
-        const result = await verify(entry, old);
-        if (!result.ok) return result;
-      }
-      state[member] = await pinEntry(pin);
-      return { ok: true };
-    });
-  }
-
-  /** Clears a member's PIN and lock: their next connection sets a new one. */
-  clear(member: string) { return this.change((state) => { delete state[member]; }); }
-
-  /** Clear PIN records when switching shared hosting modes. */
-  reset() {
-    const task = this.writes.catch(() => {}).then(async () => {
-      await rm(this.path, { force: true });
-      this.state = Promise.resolve({});
-    });
-    this.writes = task;
-    return task;
-  }
+  /** Turns the PIN lock off. */
+  clear() { return this.change((state) => { delete state[OWNER]; }); }
 }

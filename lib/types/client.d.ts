@@ -276,7 +276,6 @@ export declare class TeamworkClient {
         sessionId: string;
         computer: string;
         baseVersion?: number;
-        starter?: string;
     }, files: {
         path: string;
         bytes: Uint8Array;
@@ -287,10 +286,6 @@ export declare class TeamworkClient {
         title: string;
         kind: "html" | "markdown" | "svg";
     }>;
-    /**
-     * The files of a page's version, fetched through a view address minted for this member (or, on a Team DSH, for the
-     * session's starter), as the console's frame fetches them.
-     */
     /**
      * Whether the signed-in server searches the web for its members (the hosted service does, on its own key; a
      * self-hosted server has no such route): true, false, or undefined when the server could not be asked.
@@ -304,7 +299,8 @@ export declare class TeamworkClient {
         summary?: string | undefined;
         publishedAt?: string | undefined;
     }[]>;
-    readPage(teamId: string, pageId: string, version: number, starter: string | undefined, signal: AbortSignal): Promise<{
+    /** The files of a page's version, fetched through a view address minted for this member, as the console's frame fetches them. */
+    readPage(teamId: string, pageId: string, version: number, signal: AbortSignal): Promise<{
         path: string;
         bytes: Uint8Array;
     }[]>;

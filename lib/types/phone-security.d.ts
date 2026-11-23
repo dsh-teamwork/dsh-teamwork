@@ -39,25 +39,9 @@ export declare class PhoneSecurity {
         confirm(id: string): Promise<void>;
         changed(): void;
         error(error: Error): void;
-        /**
-         * On a shared DSH, the member a pending pairing belongs to, as the relay said when they joined; and whether their
-         * invite admits this device. Absent on a personal computer, which pairs by code alone.
-         */
-        joining?(pairingId: string): string | undefined;
-        admit?(input: {
-            pairingId: string;
-            userId: string;
-            inviteId: string;
-            secret: string;
-            name: string;
-        }): Promise<boolean>;
-        /**
-         * The PIN lock: every member's PINs, and whose PIN a pairing answers to (its member on a shared DSH, `owner` on a
-         * personal computer). Without them no channel is locked.
-         */
+        /** The PIN lock: the owner's PIN, and whether it is on now. Without them no channel is locked. */
         pins?: PinStore;
         pinRequired?(): Promise<boolean>;
-        pinMember?(pairingId: string): Promise<string | undefined>;
         now?(): number;
     });
     offerCode(expiresAt: string): void;
@@ -92,9 +76,12 @@ export declare class PhoneSecurity {
     private now;
     /** Whether a channel may carry the member's work now: unlocked, and not idle past the limit. */
     private open;
-    /** Tells the phone a PIN is needed: to set one, to enter it, or that the member is locked out. */
+    /** Tells the device a PIN is needed: to enter it, or that the lock holds until the owner sets one here. */
     private askPin;
-    /** `unlock` with the PIN, or `setPin`: the first PIN, or a new one with the old. */
+    /**
+     * `unlock` with the PIN. A device never sets the PIN (`setPin` is answered as if asked again): the owner sets it in
+     * the panel on this computer.
+     */
     private pinMessage;
     private relockOtherChannels;
     /** What a locked channel answers its member's work with: the call fails, the stream ends, and nothing reaches DSH. */
