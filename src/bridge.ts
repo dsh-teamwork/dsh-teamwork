@@ -27,6 +27,14 @@ import type { OwnerFilter } from './shared-owner.js';
 import { MAX_MESSAGE } from './secure-channel.js';
 import { ROUTE_PREFIX, type FetchRoute } from './panel.js';
 
+/**
+ * DSH's automation tasks, passed on unchanged for a personal computer and refused on a shared DSH, whose task catalog
+ * names no member (the server's ADR 0066).
+ */
+export const SCHEDULE_CALLS: ReadonlySet<string> = new Set([
+  'schedule/catalog', 'schedule/history', 'schedule/create', 'schedule/edit', 'schedule/run',
+]);
+
 /** Unary methods a phone may call. A test holds this list. */
 export const ALLOWED_CALLS: ReadonlySet<string> = new Set([
   'session/list', 'session/create', 'session/prompt', 'session/state', 'session/page', 'session/cancel',
@@ -36,6 +44,7 @@ export const ALLOWED_CALLS: ReadonlySet<string> = new Set([
   'userQuestions/answer',
   '$events/result',
   ...Object.keys(sessionActionSchemas()),
+  ...SCHEDULE_CALLS,
 ]);
 
 /** Streams a phone may open on the mux. A test holds this list. */
@@ -186,6 +195,7 @@ export class Bridge {
     };
     if (!ALLOWED_CALLS.has(frame.method)) return answer(403, { error: 'method_not_allowed' });
     const owners = this.options.owners?.();
+    if (owners && SCHEDULE_CALLS.has(frame.method)) return answer(200, { result: { ok: false, error: { code: 'teamwork/schedule_unavailable' } } });
     if (owners && !(await owners.admitCall(frame.pairingId, frame.method, frame.body)))
       return answer(200, { result: { ok: false, error: { code: 'teamwork/not_found' } } });
     const origin = this.origin();

@@ -335,6 +335,14 @@ call naming a session, reaches only the member's own sessions, though pins and
 archives land in the DSH's one registry, seen at its keyboard as well. Forking
 and opening a session in another app stay on the desktop.
 
+A computer's automation tasks, DSH's Schedule, are passed on unchanged
+(`SCHEDULE_CALLS` in `src/bridge.ts`): `schedule/catalog`, `history`,
+`create`, `edit` (update, pause, resume, delete) and `run`, with
+`schedule/changed` on `$events` after each committed change. A shared DSH
+answers every one `teamwork/schedule_unavailable` without asking DSH, and its
+`schedule/changed`, which names no session, reaches no member: the catalog is
+the whole DSH's and a task names no person (the server's ADR 0066).
+
 A session's permission preset (DSH's `@deepseek-ai/dsh-permission-presets`:
 read-only, workspace write, full access and whatever else DSH composes) is in
 `teamwork/configuration`'s `permissions` (`src/phone-permission.ts`): the

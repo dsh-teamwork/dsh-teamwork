@@ -87,6 +87,8 @@ describe('sessions belong to their starter', () => {
     expect(await filter.eventFor('pa', question)).toBe(question);
     expect(await filter.admitCall('pa', '$events/result', { args: { eventId: 'e1' } })).toBe(true);
     expect(await filter.eventFor('pb', { type: 'ready', clientId: 'c' })).toBeTruthy();
+    // DSH 0.2.2-rc.4's announcement of a changed automation task names no session, so it reaches no member.
+    expect(await filter.eventFor('pa', { type: 'emit', event: 'schedule/changed', args: [] })).toBeUndefined();
   });
 });
 

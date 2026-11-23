@@ -22,6 +22,11 @@ import { z } from 'zod';
 import { type PhoneSessionOps } from './phone-session.js';
 import type { OwnerFilter } from './shared-owner.js';
 import { type FetchRoute } from './panel.js';
+/**
+ * DSH's automation tasks, passed on unchanged for a personal computer and refused on a shared DSH, whose task catalog
+ * names no member (the server's ADR 0066).
+ */
+export declare const SCHEDULE_CALLS: ReadonlySet<string>;
 /** Unary methods a phone may call. A test holds this list. */
 export declare const ALLOWED_CALLS: ReadonlySet<string>;
 /** Streams a phone may open on the mux. A test holds this list. */
