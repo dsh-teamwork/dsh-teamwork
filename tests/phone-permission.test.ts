@@ -17,8 +17,8 @@ describe('a session\'s permission preset from a phone', () => {
   it('marks what leaves the workspace or skips approval as risky, and lets a device pick it', () => {
     const personal = phonePermissions(presets, {});
     expect(personal.current).toBe('read-only');
-    expect(personal.options.map((o) => [o.id, o.risky, o.allowed])).toEqual([
-      ['read-only', false, true], ['workspace-write', false, true], ['danger-full-access', true, true], ['auto', true, true],
+    expect(personal.options.map((o) => [o.id, o.risky])).toEqual([
+      ['read-only', false], ['workspace-write', false], ['danger-full-access', true], ['auto', true],
     ]);
     expect(phonePermissions(presets).current).toBeNull();
   });

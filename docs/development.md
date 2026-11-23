@@ -289,8 +289,7 @@ read-only, workspace write, full access and whatever else DSH composes) is in
 `teamwork/configuration`'s `permissions` (`src/phone-permission.ts`): the
 offered presets, the session's current one and the default. Each is `risky`
 when it leaves the workspace's sandbox or skips approval, which a client
-confirms once; `allowed` is always true, for the platform's relay client that
-still reads it. `teamwork/selectPermission` (`{ sessionId, preset }`, the
+confirms once. `teamwork/selectPermission` (`{ sessionId, preset }`, the
 preset one word) switches an idle session by running DSH's own `/permission`
 command in process (`commands.execute`), as DSH's picker does, so the switch is
 logged in the session; a preset DSH does not offer is `teamwork/invalid_request`.

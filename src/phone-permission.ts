@@ -17,8 +17,7 @@ export interface PhonePermissions {
   current: string | null;
   /** The preset a new session starts with. */
   defaultPreset: string;
-  /** `allowed` is always true: every preset may be picked remotely, and the platform's relay client still reads it. */
-  options: { id: string; name: string; description?: string; risky: boolean; allowed: true }[];
+  options: { id: string; name: string; description?: string; risky: boolean }[];
 }
 
 /** A preset name as `/permission` takes it: one word, so nothing more can ride on the command line. */
@@ -40,7 +39,7 @@ export function phonePermissions(presets: PermissionPresets, session?: unknown):
     defaultPreset: catalog.defaultPreset,
     options: catalog.options.map((option) => {
       const risky = riskyPreset(presets, option.value);
-      return { id: option.value, name: option.name, ...(option.description ? { description: option.description } : {}), risky, allowed: true };
+      return { id: option.value, name: option.name, ...(option.description ? { description: option.description } : {}), risky };
     }),
   };
 }

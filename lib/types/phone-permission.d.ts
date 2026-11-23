@@ -25,13 +25,11 @@ export interface PhonePermissions {
     current: string | null;
     /** The preset a new session starts with. */
     defaultPreset: string;
-    /** `allowed` is always true: every preset may be picked remotely, and the platform's relay client still reads it. */
     options: {
         id: string;
         name: string;
         description?: string;
         risky: boolean;
-        allowed: true;
     }[];
 }
 /** A preset name as `/permission` takes it: one word, so nothing more can ride on the command line. */
