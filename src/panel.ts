@@ -125,7 +125,9 @@ export interface PanelState {
   presets: PanelPreset[];
   /** `contextWindowMissing`: the model has no context window configured; `modelOffline`: its service took it out of service. Either way it cannot be selected. */
   models: Array<{
-    id: string; teamId: string; teamName: string; name: string; version: number; upstream: string;
+    id: string; teamId: string; teamName: string; name: string; version: number;
+    /** The model the configuration calls, shown under the name where it differs: the console's and the phone's rule (relay-client's modelDetail), with no provider. */
+    model: string;
     contextWindow?: number; maxTokens?: number; vision?: boolean;
     contextWindowMissing: boolean; modelOffline: boolean;
   }>;

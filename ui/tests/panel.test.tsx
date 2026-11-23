@@ -420,11 +420,12 @@ test('shows an admin the reviews waiting in the browsed team, and a member none'
 
 test('marks a team model without its context window, and a preset on it, as not ready with the reason', async () => {
   const session = { id: 's', model: null, preset: null, started: false };
-  const model = (id: string, name: string, contextWindowMissing: boolean) => ({ id, teamId: 'a', teamName: 'a', name, version: 1, upstream: `p/${id}`, contextWindowMissing, modelOffline: false });
+  const model = (id: string, name: string, contextWindowMissing: boolean) => ({ id, teamId: 'a', teamName: 'a', name, version: 1, model: id, contextWindowMissing, modelOffline: false });
   const preset = { ...state.presets[0], model: 'Flash', modelAvailable: false, contextWindowMissing: true };
   vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', session, presets: [preset], models: [
     { ...model('sized', 'Sized', false), contextWindow: 131072, maxTokens: 8192, vision: true },
     model('flash', 'Flash', true),
+    { ...model('glm-5.3', 'glm-5.3', false), contextWindow: 131072 },
   ] });
   await mount(); await click('Choose');
   const reason = 'The team model “Flash” has no context window (contextWindow) configured';
@@ -440,14 +441,16 @@ test('marks a team model without its context window, and a preset on it, as not 
   ]);
   expect(row('Sized').querySelectorAll('[aria-label="Input: text and images. Output: text."] svg')).toHaveLength(4);
   expect(row('Sized').querySelector('[title="8,192 tokens max output"]')).not.toBeNull();
-  expect(row('Sized').querySelector('.twui-item-title .twui-item-subtitle')?.textContent).toBe('p/sized');
+  // The model the configuration calls, with no provider (relay-client's modelDetail); none where it repeats the name.
+  expect(row('Sized').querySelector('.twui-item-title .twui-item-subtitle')?.textContent).toBe('sized');
+  expect(row('glm-5.3').querySelector('.twui-item-subtitle')).toBeNull();
   expect(row('Sized').querySelector('[title="131,072 tokens context window"]')).not.toBeNull();
   expect(row('Sized').querySelector('button:disabled')).toBeNull();
 });
 
 test('marks a hosted model taken offline, and a preset on it, as not ready with the reason', async () => {
   const session = { id: 's', model: null, preset: null, started: false };
-  const model = (id: string, name: string, modelOffline: boolean) => ({ id, teamId: 'a', teamName: 'a', name, version: 1, upstream: `p/${id}`, contextWindowMissing: false, modelOffline });
+  const model = (id: string, name: string, modelOffline: boolean) => ({ id, teamId: 'a', teamName: 'a', name, version: 1, model: id, contextWindowMissing: false, modelOffline });
   const preset = { ...state.presets[0], model: 'Opus', modelAvailable: false, modelOffline: true };
   vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', session, presets: [preset], models: [model('live', 'Live', false), model('opus', 'Opus', true)] });
   await mount(); await click('Choose');
@@ -464,7 +467,7 @@ test('marks a hosted model taken offline, and a preset on it, as not ready with 
 
 test('a team model always starts a session on it, even the one the open session runs on', async () => {
   const session = { id: 's', model: { provider: 'teamwork', model: 'live', team: true }, preset: null, started: true };
-  const model = { id: 'live', teamId: 'a', teamName: 'a', name: 'Live', version: 1, upstream: 'p/live', contextWindowMissing: false, modelOffline: false };
+  const model = { id: 'live', teamId: 'a', teamName: 'a', name: 'Live', version: 1, model: 'live', contextWindowMissing: false, modelOffline: false };
   vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en', session, models: [model] });
   vi.mocked(host.uiWorkspace.connectWorkspace).mockResolvedValue('blank');
   await mount(); await click('Choose');

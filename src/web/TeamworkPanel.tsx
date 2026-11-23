@@ -965,7 +965,7 @@ function ModelItem({ model, state, dsh, run }: { model: PanelState['models'][num
     <Item
       icon="cpu"
       title={model.name}
-      subtitle={<span className="twui-mono">{model.upstream}</span>}
+      subtitle={model.model !== model.name ? <span className="twui-mono">{model.model}</span> : undefined}
       description={t('model.body')}
       tags={<>
         <span className="twui-model-modalities" role="img" aria-label={modalities} title={modalities}>

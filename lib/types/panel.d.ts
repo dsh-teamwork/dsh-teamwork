@@ -149,7 +149,8 @@ export interface PanelState {
         teamName: string;
         name: string;
         version: number;
-        upstream: string;
+        /** The model the configuration calls, shown under the name where it differs: the console's and the phone's rule (relay-client's modelDetail), with no provider. */
+        model: string;
         contextWindow?: number;
         maxTokens?: number;
         vision?: boolean;
