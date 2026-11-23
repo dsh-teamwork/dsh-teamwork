@@ -29,19 +29,11 @@ const discoverySchema = z.object({ url: z.string().url() });
 const welcomeSchema = z.object({ t: z.literal('welcome'), hostId: z.string().min(1) });
 const replySchema = z.object({ t: z.literal('reply'), id: z.string(), value: z.unknown().optional(), error: z.string().optional() });
 
-/** A member the server lets reach this shared DSH (its `server/relay/access.go`). */
-export const sharedMemberSchema = z.object({ userId: z.string(), email: z.string().nullable(), name: z.string().nullable() });
-export type SharedMember = z.infer<typeof sharedMemberSchema>;
-
-/**
- * What the relay pushes unasked: a phone redeemed this computer's code or joined this shared DSH, a pairing ended, or,
- * to a shared DSH, who may reach it now.
- */
-export type RelayEvent = { t: 'paired' } | { t: 'revoked'; pairingId: string } | { t: 'members'; members: SharedMember[] };
+/** What the relay pushes unasked: a phone redeemed this computer's code, or a pairing ended. */
+export type RelayEvent = { t: 'paired' } | { t: 'revoked'; pairingId: string };
 const eventSchema = z.union([
   z.object({ t: z.literal('paired') }).loose(),
   z.object({ t: z.literal('revoked'), pairingId: z.string() }),
-  z.object({ t: z.literal('members'), members: z.array(sharedMemberSchema) }),
 ]);
 
 /** A request the relay answers once welcomed (its `src/protocol.ts`, `PluginRequestSchema`). */
@@ -55,7 +47,7 @@ export type RelayRequest =
 
 /** A pairing as the relay lists it (`src/pairing.ts`, `PairingView`). */
 export const pairingSchema = z.object({
-  id: z.string(), userId: z.string().optional(), deviceName: z.string(), status: z.enum(['pending', 'confirmed']), createdAt: z.string(), lastUsedAt: z.string().nullable(),
+  id: z.string(), deviceName: z.string(), status: z.enum(['pending', 'confirmed']), createdAt: z.string(), lastUsedAt: z.string().nullable(),
 });
 export const offerSchema = z.object({ code: z.string().min(1), expiresAt: z.string() });
 

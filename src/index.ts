@@ -21,7 +21,6 @@ import { registerAssistantTools } from './assistant-tools.js';
 import { registerPageTool } from './page-tool.js';
 import { registerBundledSkills } from './bundled-skills.js';
 import { teamworkSearch } from './web-search.js';
-import { hostname } from 'node:os';
 import { isTeamProvider, platformAdapter, teamProvider, teamRoutes } from './platform-models.js';
 import { Bridge, bridgeRoute } from './bridge.js';
 import type { PreviewOfficeKit } from './phone-files.js';
@@ -29,14 +28,10 @@ import { PhoneSessionError, phonePresets } from './phone-session.js';
 import { phonePermissions, type PermissionPresets } from './phone-permission.js';
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm';
 import { listenForCode, type LoginCallback } from './login-callback.js';
-import { offerSchema, pairingSchema, RelayError, RelayLink, relayClientIdPath, type SharedMember } from './relay.js';
+import { offerSchema, pairingSchema, RelayError, RelayLink, relayClientIdPath } from './relay.js';
 import { watchTokenFile } from './token-file.js';
-import { forgetSharedKey, SharedMode, sharedKeyPath } from './shared-mode.js';
-import { SharedRoster, sharedRosterPath } from './shared-roster.js';
-import { OwnerFilter, startDirectories } from './shared-owner.js';
 import { PinStore, pinsPath } from './pin-lock.js';
-import { TeamWorkspaces, teamWorkspacesPath } from './team-workspaces.js';
-import { AuditArchive, auditArchivePath } from './audit-archive.js';
+import { startDirectories, TeamWorkspaces, teamWorkspacesPath } from './team-workspaces.js';
 import type { PanelPhone } from './panel.js';
 import { panelLocale, say, setLocale, speaking } from './messages.js';
 import { controlSocketPath, serveControlSocket } from './control-socket.js';
@@ -231,36 +226,16 @@ export async function apply(ctx: Context, config: Config) {
   let phones: PanelPhone[] = [];
   // A paired phone's calls, replayed against this DSH's own web server through the allow-list; set where DSH serves web.
   let launchUrl: (() => string) | undefined;
-  // A shared DSH's own roster and who owns each session (src/shared-roster.ts, src/shared-owner.ts).
-  const roster = new SharedRoster(sharedRosterPath(config.cachePath));
-  // The PIN lock (src/pin-lock.ts): per member on a shared DSH, the one `owner` on a personal computer.
+  // The owner's PIN lock (src/pin-lock.ts).
   const pins = new PinStore(pinsPath(config.cachePath));
   // The owner's native Web switch (src/web-relay.ts), and what keeps it from working while on.
   const nativeWeb = NativeWebSwitch.beside(config.cachePath);
   const webTunnels = new WebTunnels();
   const nativeWebBlocked = async (): Promise<'pin' | 'web' | undefined> =>
-    await pins.ownerEnabled() ? 'pin' : launchUrl ? undefined : 'web';
-  // The audit archive (src/audit-archive.ts): every frame of a member's, sealed to the team admin's key.
-  const archive = new AuditArchive({
-    path: auditArchivePath(config.cachePath),
-    hostId: () => shared?.status().hostId,
-    identity: () => phoneKeys.identity(),
-    upload: async (body) => {
-      const response = await fetch(`${client.endpoint}/relay/shared/archive`, { method: 'POST', headers: { Authorization: `Bearer ${client.platformCredential()}`, 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(30000) });
-      return { status: response.status };
-    },
-    log: (message) => ctx.logger.warn('%s', message),
-  });
-  ctx.effect(() => () => archive.stop());
-  /** Records a frame between a member's device and this shared DSH, in either direction. */
-  const audit = (frame: unknown, dir: 'in' | 'out') => {
-    const pairingId = (frame as { pairingId?: unknown } | null)?.pairingId;
-    if (!shared?.enabled || typeof pairingId !== 'string') return;
-    void roster.memberOf(pairingId).then((member) => { if (member) archive.record({ member, device: pairingId, dir, frame }); });
-  };
+    await pins.enabled() ? 'pin' : launchUrl ? undefined : 'web';
   /**
    * Where a session may be started from a phone or the console: the directory DSH was started in, then DSH's own
-   * workspaces. A new device, or a member of a shared DSH with no session yet, has no other way to name one.
+   * workspaces. A new device with no session yet has no other way to name one.
    */
   let workspaces: WorkspaceRegistry | undefined;
   ctx.inject(['workspaceRegistry'], (scoped) => {
@@ -285,13 +260,8 @@ export async function apply(ctx: Context, config: Config) {
     return (list.find(workspace => workspace.title === 'default-workspace') ?? list[0])?.path ?? directories()[0];
   };
   const teamDirectories = () => teamWorkspaces.defaults((client.current()?.teams ?? []).map(team => team.teamId), directories(), fallbackDirectory());
-  const owners = new OwnerFilter(roster, (pairingId) => roster.memberOf(pairingId), directories);
-  /** Who the server lets reach this shared DSH, as the relay last said; and members whose handsets wait to join. */
-  let sharedMembers: SharedMember[] = [];
-  const joining = new Map<string, string>();
   const bridge = new Bridge({
     launchUrl: () => launchUrl?.(),
-    owners: () => shared?.enabled ? owners : undefined,
     // A registry that has not opened yet has no sets to read: the list goes unmarked, as from an older DSH.
     marks: () => {
       try {
@@ -303,7 +273,7 @@ export async function apply(ctx: Context, config: Config) {
       } catch { return undefined; }
     },
     workspaceAt: (path) => workspaces?.list().find(workspace => workspace.path === path)?.id,
-    send: (frame) => { audit(frame, 'out'); security.send(frame); },
+    send: (frame) => security.send(frame),
     log: (message, error) => ctx.logger.warn('%s: %s', message, (error as Error | undefined)?.message ?? ''),
     session: {
       async configuration(sessionId) {
@@ -319,7 +289,7 @@ export async function apply(ctx: Context, config: Config) {
         }))).flat();
         return { presets: phonePresets(state, [...roster.presets]), directories: directories(), teamDirectories: await teamDirectories(), imageModels,
           // A session's permission preset and those a remote device may pick; none where DSH composes no presets.
-          permissions: presets ? phonePermissions(presets, shared?.enabled === true, agent?.session) : null,
+          permissions: presets ? phonePermissions(presets, agent?.session) : null,
           // A session's files can be browsed, read only (src/phone-files.ts).
           files: true,
           current: agent ? {
@@ -348,10 +318,7 @@ export async function apply(ctx: Context, config: Config) {
         if (agent.status !== 'idle' || agent.inbox.nextTurn.length || agent.inbox.nextStep.length) throw new PhoneSessionError('busy');
         const presets = permissionPresets();
         if (!presets || !commandRegistry) throw new PhoneSessionError('unavailable');
-        const option = phonePermissions(presets, shared?.enabled === true).options.find(item => item.id === request.preset);
-        if (!option) throw new PhoneSessionError('invalid_request');
-        // A shared DSH is the team's machine: what reaches past the workspace or skips approval is set at its keyboard.
-        if (!option.allowed) throw new PhoneSessionError('permission_refused');
+        if (!phonePermissions(presets).options.some(item => item.id === request.preset)) throw new PhoneSessionError('invalid_request');
         // The way DSH's own picker switches it: its `/permission` command, logged in the session like any other.
         const run = await commandRegistry.execute(agent, `/permission ${request.preset}`, [], AbortSignal.timeout(10_000));
         if (!run || run.result.kind !== 'success') throw new PhoneSessionError('unavailable');
@@ -395,73 +362,38 @@ export async function apply(ctx: Context, config: Config) {
   });
   let keyScope: { revision: number; value: Promise<string> } | undefined;
   const phoneKeys = new PhoneKeys(config.cachePath.replace(/\.json$/, '') + '.phone-keys.json');
-  // Shared mode (src/shared-mode.ts): the team host key signs this DSH in for its team, as no person. A host-provided
-  // token (tokenFile) is a cloud computer's, which is never shared this way.
-  const shared = config.tokenFile ? undefined : new SharedMode({
-    path: sharedKeyPath(config.cachePath),
-    server: () => client.endpoint,
-    identity: () => phoneKeys.identity(),
-    onToken: async (token) => {
-      pendingInstalls.clear();
-      await client.useToken(token);
-      await overlay.apply(client.current());
-      // The relay started before this token was restored, and stopped for want of one: a DSH restarted in shared
-      // mode stayed off the relay, so no member could reach it. A renewal while connected changes nothing here.
-      if (token && relay.status === 'off') relay.refresh();
-      if (token && config.autoSync !== false) await configSync.sync().catch(() => { /* status retains the failure */ });
-    },
-    log: message => ctx.logger.warn('%s', message),
-  });
-  ctx.effect(() => () => shared?.stop());
-  // Pages an agent publishes (src/page-tool.ts): on a Team DSH, for the member whose session it is.
   ctx.inject(['skills'], registerBundledSkills);
   ctx.inject(['web'], child => search.attach(child));
-  ctx.inject(['tools'], child => registerPageTool(child, {
-    client, preset: activePreset,
-    starterOf: (sessionId) => shared?.enabled ? roster.ownerOf(sessionId) : undefined,
-    computer: () => (shared?.enabled && shared.status().name) || hostname(),
-  }));
+  // Pages an agent publishes (src/page-tool.ts), for the signed-in member.
+  ctx.inject(['tools'], child => registerPageTool(child, { client, preset: activePreset }));
   const security = new PhoneSecurity({
     keys: phoneKeys,
     scope: () => {
       const revision = client.sessionRevision();
       if (!keyScope || keyScope.revision !== revision) {
-        // A shared DSH has no profile: its phones are trusted under its shared host.
-        const hostId = shared?.enabled ? shared.status().hostId : undefined;
-        const value = hostId ? Promise.resolve(`${client.endpoint}|shared:${hostId}`) : client.profile().then(profile => `${client.endpoint}|${profile.id}`);
+        const value = client.profile().then(profile => `${client.endpoint}|${profile.id}`);
         keyScope = { revision, value };
         void value.catch(() => { if (keyScope?.value === value) keyScope = undefined; });
       }
       return keyScope.value;
     },
-    send: frame => relay.send(frame), forward: frame => { audit(frame, 'in'); bridge.handle(frame); },
+    send: frame => relay.send(frame), forward: frame => bridge.handle(frame),
     confirm: async id => { await relay.request({ t: 'decide', pairingId: id, accept: true }); },
     changed: () => {},
     error: error => ctx.logger.warn('phone security: %s', error.message),
-    joining: (pairingId) => shared?.enabled ? joining.get(pairingId) : undefined,
     pins,
-    pinRequired: async () => shared?.enabled || await pins.ownerEnabled(),
-    pinMember: async (pairingId) => shared?.enabled ? roster.memberOf(pairingId) : 'owner',
-    admit: async (input) => {
-      // No member joins before the admin's audit key is set: nothing they do would be archived.
-      if (!(await archive.ready())) { ctx.logger.warn('A member tried to join before the audit key was set (/teamwork share audit-key).'); return false; }
-      if (!sharedMembers.some((m) => m.userId === input.userId)) return false;
-      const admitted = await roster.accept({ inviteId: input.inviteId, secret: input.secret, userId: input.userId, pairingId: input.pairingId, deviceName: input.name });
-      if (admitted) joining.delete(input.pairingId);
-      return admitted;
-    },
+    pinRequired: () => pins.enabled(),
   });
   const relay: RelayLink = new RelayLink({
     endpoint: () => client.endpoint,
     // A token from tokenFile belongs to a cloud computer, which the server reaches directly; it never opens the relay.
-    // A shared DSH reaches it with its host token, as its team's host.
     token: () => !config.tokenFile && client.authenticated() ? client.platformCredential() : undefined,
     clientIdPath: relayClientIdPath(config.cachePath),
-    webAvailable: async () => !config.tokenFile && !shared?.enabled && await nativeWeb.on() && !await nativeWebBlocked(),
+    webAvailable: async () => !config.tokenFile && await nativeWeb.on() && !await nativeWebBlocked(),
     onWebDial: (url, id, signal) => {
       void (async () => {
         const launch = launchUrl?.();
-        if (launch && !shared?.enabled && await nativeWeb.on() && !await pins.ownerEnabled()) await connectWebRelay(launch, url, id, signal, webTunnels);
+        if (launch && await nativeWeb.on() && !await pins.enabled()) await connectWebRelay(launch, url, id, signal, webTunnels);
       })().catch(() => ctx.logger.debug('desktop web relay connection failed'));
     },
     onStatus: (status) => {
@@ -471,25 +403,12 @@ export async function apply(ctx: Context, config: Config) {
       // them), the list goes with the account it belonged to.
       else { if (status !== 'connecting') phones = []; security.reset(); bridge.dropAll(); }
     },
-    onEvent: (event) => {
-      if (event.t === 'members') void sharedList(event.members);
-      else void readPhones();
-    },
+    onEvent: () => void readPhones(),
     onForward: (frame) => void security.handle(frame),
   });
-  /** The server's list changed: whoever left loses their devices here too, whatever the relay already cut. */
-  const sharedList = async (members: SharedMember[]) => {
-    sharedMembers = members;
-    try {
-      for (const pairingId of await roster.prune(new Set(members.map((m) => m.userId)))) await security.revoke(pairingId);
-    } catch (error) { ctx.logger.warn('Could not update the shared roster: %s', (error as Error).message); }
-  };
   const readPhones = async () => {
     try {
-      const listed = pairingSchema.array().parse(await relay.request({ t: 'pairings' }));
-      joining.clear();
-      for (const phone of listed) if (phone.status === 'pending' && phone.userId) joining.set(phone.id, phone.userId);
-      phones = listed.map(({ userId: _userId, ...phone }) => phone);
+      phones = pairingSchema.array().parse(await relay.request({ t: 'pairings' }));
       await security.reconcile(phones.map((phone) => phone.id));
     } catch (error) { ctx.logger.warn('Could not read the paired phones: %s', (error as Error).message); }
   };
@@ -514,17 +433,6 @@ export async function apply(ctx: Context, config: Config) {
   ctx.effect(() => () => stopCallback());
   const hostManaged = () => {
     if (config.tokenFile) throw new Error(say('auth.hostManaged'));
-    if (shared?.enabled) throw new Error(say('auth.shared'));
-  };
-  /**
-   * Team DSH is offline on the server, so this plugin offers no way into shared mode and never resumes it: a DSH left
-   * in it drops its team host key (`forgetSharedKey`), roster and PINs at start, as `/teamwork share disable` did, and
-   * is a personal DSH again. Its audit archive is kept.
-   */
-  const leaveSharedMode = async () => {
-    if (!shared || !await forgetSharedKey(sharedKeyPath(config.cachePath))) return false;
-    await roster.clear(); await pins.reset(); await nativeWeb.set(false);
-    return true;
   };
   const authorize = async (code: string) => { hostManaged(); pendingInstalls.clear(); try { await client.completeLogin(code); } finally { await overlay.apply(client.current()); relay.refresh(); } stopCallback(); if (config.autoSync !== false) await configSync.sync(); };
   /** The sign-in page's address, and whether the code comes back by itself; without a listener it is pasted. */
@@ -650,8 +558,8 @@ export async function apply(ctx: Context, config: Config) {
         defaultServer: serverAddress(config.apiEndpoint),
         sync: { auto: status.autoSync, running: status.syncing, lastSuccess: status.lastSuccess, lastError: status.lastError },
         relay: relay.status,
-        ownerPinEnabled: shared?.enabled || config.tokenFile ? undefined : await pins.ownerEnabled(),
-        nativeWeb: shared?.enabled || config.tokenFile ? undefined : { enabled: await nativeWeb.on(), blocked: await nativeWebBlocked(), active: webTunnels.state },
+        ownerPinEnabled: config.tokenFile ? undefined : await pins.enabled(),
+        nativeWeb: config.tokenFile ? undefined : { enabled: await nativeWeb.on(), blocked: await nativeWebBlocked(), active: webTunnels.state },
         phones: await Promise.all(phones.map(async phone => ({ ...phone, ...await security.details(phone.id) }))),
         session: agent ? {
           id: String(agent.id),
@@ -692,7 +600,7 @@ export async function apply(ctx: Context, config: Config) {
       } finally { setLocale(null); await nativeWeb.set(false); await overlay.apply(client.current()); relay.refresh(); }
     },
     async setNativeWeb(on) {
-      if (shared?.enabled || config.tokenFile) throw new Error('Personal desktop DSH only.');
+      if (config.tokenFile) throw new Error('Personal desktop DSH only.');
       const blocked = on ? await nativeWebBlocked() : undefined;
       if (blocked) throw new Error(say(blocked === 'pin' ? 'nativeWeb.pin' : 'nativeWeb.noWeb'));
       await nativeWeb.set(on);
@@ -700,15 +608,15 @@ export async function apply(ctx: Context, config: Config) {
       relay.refresh();
     },
     async disconnectNativeWeb() {
-      if (shared?.enabled || config.tokenFile) throw new Error('Personal desktop DSH only.');
+      if (config.tokenFile) throw new Error('Personal desktop DSH only.');
       // Our side first, so nothing keeps moving whether or not the server hears it.
       webTunnels.endAll();
       await relay.request({ t: 'webRevoke' }).catch(phoneError);
     },
     async setOwnerPin(pin) {
-      if (shared?.enabled || config.tokenFile) throw new Error('Personal desktop DSH only.');
-      if (pin === null) await pins.clear('owner');
-      else await pins.set('owner', pin);
+      if (config.tokenFile) throw new Error('Personal desktop DSH only.');
+      if (pin === null) await pins.clear();
+      else await pins.set(pin);
       security.reset();
       bridge.dropAll();
       // Re-advertise native Web and close its existing connections after a PIN change.
@@ -808,9 +716,8 @@ export async function apply(ctx: Context, config: Config) {
             return { kind: 'success', text: ['Team configuration synced; your local configuration is unchanged.', ...problems].join('\n') };
           }
           if (action === 'pin' && requestedId === 'reset') {
-            if (shared?.enabled) throw new Error('On a Team DSH, clear a member\'s PIN with /teamwork share unlock <email>.');
-            if (!await pins.ownerEnabled()) return { kind: 'success', text: 'Personal desktop PIN is off.' };
-            await pins.resetOwnerPin();
+            if (!await pins.enabled()) return { kind: 'success', text: 'Personal desktop PIN is off.' };
+            await pins.resetPin();
             security.reset();
             bridge.dropAll();
             relay.refresh();
@@ -873,8 +780,6 @@ export async function apply(ctx: Context, config: Config) {
   try { await restore(); } catch { ctx.logger.warn('The team cache could not be restored; sign in and sync again.'); }
   // A sign-in kept from the last run syncs now rather than at the first interval; offline, the cache stands meanwhile.
   if (!config.tokenFile && client.authenticated() && config.autoSync !== false) void configSync.sync().catch(() => { /* status retains the failure */ });
-  try { if (await leaveSharedMode()) ctx.logger.warn('Team DSH is offline: this DSH left shared mode and signs in as a person again. Its audit archive is kept.'); }
-  catch (error) { ctx.logger.warn('Could not leave shared mode: %s', (error as Error).message); }
   // The same routes for `dsh-teamwork` on this machine, once restored state answers them (src/control-socket.ts).
   const closeSocket = await serveControlSocket(controlSocketPath(config.cachePath), routes, message => ctx.logger.warn('%s', message));
   ctx.effect(() => () => { void closeSocket(); });

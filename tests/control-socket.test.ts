@@ -67,7 +67,7 @@ async function serving() {
 }
 
 test.skipIf(process.platform === 'win32')('the command drives the panel routes through a socket only its user opens', async () => {
-  const { home, socket, calls, close, cli } = await serving();
+  const { home, socket, close, cli } = await serving();
   try {
     expect(socket).toBe(join(home, 'dsh-teamwork', 'cache.sock'));
     expect((await stat(socket)).mode & 0o777).toBe(0o600);
@@ -76,11 +76,6 @@ test.skipIf(process.platform === 'win32')('the command drives the panel routes t
     expect(await cli('server', 'https://teamwork.example.com')).toMatchObject({ code: 0, out: 'Teamwork server: https://teamwork.example.com' });
     // The plugin's own refusal reaches the command line unchanged.
     expect(await cli('authorize', 'WRONG')).toMatchObject({ code: 1, err: 'That code is not valid.' });
-    // Team DSH is offline: the command offers no way into shared mode, and asks the DSH nothing for one.
-    const before = calls.length;
-    expect(await cli('share', 'enable', 'dshh_good')).toMatchObject({ code: 2, err: expect.stringContaining('usage: dsh-teamwork') });
-    expect((await cli('share', 'enable', 'dshh_good')).err).not.toContain('share');
-    expect(calls.length).toBe(before);
   } finally { await close(); }
 });
 

@@ -16,25 +16,12 @@ export declare const RELAY_CLOSE: {
     readonly unauthorized: 4401;
     readonly replaced: 4409;
 };
-/** A member the server lets reach this shared DSH (its `server/relay/access.go`). */
-export declare const sharedMemberSchema: z.ZodObject<{
-    userId: z.ZodString;
-    email: z.ZodNullable<z.ZodString>;
-    name: z.ZodNullable<z.ZodString>;
-}, z.core.$strip>;
-export type SharedMember = z.infer<typeof sharedMemberSchema>;
-/**
- * What the relay pushes unasked: a phone redeemed this computer's code or joined this shared DSH, a pairing ended, or,
- * to a shared DSH, who may reach it now.
- */
+/** What the relay pushes unasked: a phone redeemed this computer's code, or a pairing ended. */
 export type RelayEvent = {
     t: 'paired';
 } | {
     t: 'revoked';
     pairingId: string;
-} | {
-    t: 'members';
-    members: SharedMember[];
 };
 /** A request the relay answers once welcomed (its `src/protocol.ts`, `PluginRequestSchema`). */
 export type RelayRequest = {
@@ -56,7 +43,6 @@ export type RelayRequest = {
 /** A pairing as the relay lists it (`src/pairing.ts`, `PairingView`). */
 export declare const pairingSchema: z.ZodObject<{
     id: z.ZodString;
-    userId: z.ZodOptional<z.ZodString>;
     deviceName: z.ZodString;
     status: z.ZodEnum<{
         pending: "pending";

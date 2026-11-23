@@ -522,19 +522,3 @@ test('a page has no back link: the brand mark and the team menu lead back to the
   await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="返回团队资源"]')!.click());
   expect(document.querySelector('[role="tab"]')).not.toBeNull();
 });
-
-// Team DSH is offline on the server: the panel offers no way into it, signed out or in.
-test('the sign-in screen offers no Team DSH', async () => {
-  vi.mocked(api.state).mockResolvedValue({ ...state, authenticated: false, teams: [], presets: [] });
-  await mount();
-  expect(document.body.textContent).toContain('在浏览器中登录');
-  expect(document.body.textContent).not.toContain('团队 DSH');
-});
-
-test('the account page offers no Team DSH', async () => {
-  vi.mocked(api.state).mockResolvedValue(state);
-  await mount();
-  await click('我的账号');
-  expect(document.querySelector('.twui-account')?.textContent).not.toContain('切换账号');
-  expect(document.body.textContent).not.toContain('团队 DSH');
-});

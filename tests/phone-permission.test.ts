@@ -14,15 +14,13 @@ const presets: PermissionPresets = {
 };
 
 describe('a session\'s permission preset from a phone', () => {
-  it('marks what leaves the workspace or skips approval as risky, and keeps it from a shared DSH\'s members', () => {
-    const personal = phonePermissions(presets, false, {});
+  it('marks what leaves the workspace or skips approval as risky, and lets a device pick it', () => {
+    const personal = phonePermissions(presets, {});
     expect(personal.current).toBe('read-only');
     expect(personal.options.map((o) => [o.id, o.risky, o.allowed])).toEqual([
       ['read-only', false, true], ['workspace-write', false, true], ['danger-full-access', true, true], ['auto', true, true],
     ]);
-    const shared = phonePermissions(presets, true);
-    expect(shared.current).toBeNull();
-    expect(shared.options.filter((o) => o.allowed).map((o) => o.id)).toEqual(['read-only', 'workspace-write']);
+    expect(phonePermissions(presets).current).toBeNull();
   });
 
   it('takes a preset name as one word', () => {

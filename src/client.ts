@@ -148,7 +148,7 @@ export class TeamworkClient {
    * Publishes a page (docs/tech/pages.md in the platform repository): a new one, or a version on top of `baseVersion`.
    * `files` are paths within the page and their bytes; the server holds every rule and limit, and says which broke.
    */
-  async publishPage(teamId:string,input:{pageId?:string;title?:string;kind:'html'|'markdown'|'svg';note:string;sessionId:string;computer:string;baseVersion?:number;starter?:string},files:{path:string;bytes:Uint8Array}[],signal:AbortSignal) {
+  async publishPage(teamId:string,input:{pageId?:string;title?:string;kind:'html'|'markdown'|'svg';note:string;sessionId:string;computer:string;baseVersion?:number},files:{path:string;bytes:Uint8Array}[],signal:AbortSignal) {
     if(!this.token)throw new Error('Sign in to Teamwork first');
     const epoch=this.epoch,form=new FormData();
     const {pageId,...meta}=input;
@@ -162,10 +162,6 @@ export class TeamworkClient {
     if(epoch!==this.epoch)throw new Error('Account changed during upload');
     return page;
   }
-  /**
-   * The files of a page's version, fetched through a view address minted for this member (or, on a Team DSH, for the
-   * session's starter), as the console's frame fetches them.
-   */
   /**
    * Whether the signed-in server searches the web for its members (the hosted service does, on its own key; a
    * self-hosted server has no such route): true, false, or undefined when the server could not be asked.
@@ -189,10 +185,11 @@ export class TeamworkClient {
       :`Teamwork search failed (${response.status}${body.error?` ${body.error}`:''}); try again shortly.`);
     return z.object({sources:z.array(z.object({url:z.string(),title:z.string().optional(),snippet:z.string().optional(),summary:z.string().optional(),publishedAt:z.string().optional()}))}).parse(body).sources;
   }
-  async readPage(teamId:string,pageId:string,version:number,starter:string|undefined,signal:AbortSignal) {
+  /** The files of a page's version, fetched through a view address minted for this member, as the console's frame fetches them. */
+  async readPage(teamId:string,pageId:string,version:number,signal:AbortSignal) {
     if(!this.token)throw new Error('Sign in to Teamwork first');
-    const epoch=this.epoch,query=starter?`?starter=${encodeURIComponent(starter)}`:'';
-    const response=await this.request(`${this.endpoint}/api/teams/${encodeURIComponent(teamId)}/pages/${encodeURIComponent(pageId)}/versions/${version}/view${query}`,{method:'POST',headers:{Authorization:`Bearer ${this.token}`,Origin:new URL(this.endpoint).origin},signal,redirect:'error'});
+    const epoch=this.epoch;
+    const response=await this.request(`${this.endpoint}/api/teams/${encodeURIComponent(teamId)}/pages/${encodeURIComponent(pageId)}/versions/${version}/view`,{method:'POST',headers:{Authorization:`Bearer ${this.token}`,Origin:new URL(this.endpoint).origin},signal,redirect:'error'});
     const body=await response.json().catch(()=>({})) as {error?:string};
     if(!response.ok)throw new PageError(response.status,String(body.error??''),'');
     const view=z.object({url:z.string().url(),files:z.array(z.object({path:z.string(),size:z.number()}))}).parse(body);

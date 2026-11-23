@@ -66,13 +66,6 @@ export declare function writePage(cwd: string, directory: string, files: {
 export interface PageToolOptions {
     client: TeamworkClient;
     preset: (agent: Agent) => PresetContext | undefined;
-    /**
-     * On a Team DSH, the member a session belongs to (its roster); `undefined`, returned at once, on a computer that
-     * is no Team DSH, where the signed-in member is the author.
-     */
-    starterOf?: (sessionId: string) => Promise<string | undefined> | undefined;
-    /** The name this DSH goes by, recorded with each version. */
-    computer?: () => string;
 }
 export declare function registerPageTool(ctx: Context, options: PageToolOptions): void;
 export {};

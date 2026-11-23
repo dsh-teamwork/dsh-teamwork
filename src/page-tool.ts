@@ -127,17 +127,10 @@ export async function writePage(cwd: string, directory: string, files: { path: s
 export interface PageToolOptions {
   client: TeamworkClient;
   preset: (agent: Agent) => PresetContext | undefined;
-  /**
-   * On a Team DSH, the member a session belongs to (its roster); `undefined`, returned at once, on a computer that
-   * is no Team DSH, where the signed-in member is the author.
-   */
-  starterOf?: (sessionId: string) => Promise<string | undefined> | undefined;
-  /** The name this DSH goes by, recorded with each version. */
-  computer?: () => string;
 }
 
 export function registerPageTool(ctx: Context, options: PageToolOptions) {
-  const { client, preset, starterOf, computer = () => hostname() } = options;
+  const { client, preset } = options;
   ctx.effect(() =>
     ctx.tools.register({
       name: 'teamwork_page',
@@ -191,12 +184,9 @@ export function registerPageTool(ctx: Context, options: PageToolOptions) {
         const cwd = agent?.session.header.cwd;
         if (!cwd && args.directory) throw new Error("This session has no workspace to publish a folder from");
         const teamId = pageTeam(client.current(), agent ? preset(agent)?.teamId : undefined, args.teamId);
-        const pending = starterOf?.(sessionId);
-        const starter = pending ? await pending : undefined;
-        if (pending && !starter) throw new Error('This session has no member to publish for');
         if (args.action === 'open') {
           if (!cwd) throw new Error('This session has no workspace to open a page into');
-          const opened = await client.readPage(teamId, args.pageId!, args.version!, starter, exec.signal).catch((error) => {
+          const opened = await client.readPage(teamId, args.pageId!, args.version!, exec.signal).catch((error) => {
             if (error instanceof PageError && error.status === 404) throw new Error(`Page ${args.pageId} version ${args.version} is not one this member may read`);
             throw error;
           });
@@ -205,8 +195,8 @@ export function registerPageTool(ctx: Context, options: PageToolOptions) {
         const files = await pageFiles(cwd ?? '', args.kind!, args.content, args.directory);
         try {
           const page = await client.publishPage(teamId, {
-            pageId: args.pageId, title: args.title, kind: args.kind!, note: args.note, sessionId, computer: computer(),
-            baseVersion: args.action === 'update' ? args.baseVersion : undefined, starter,
+            pageId: args.pageId, title: args.title, kind: args.kind!, note: args.note, sessionId, computer: hostname(),
+            baseVersion: args.action === 'update' ? args.baseVersion : undefined,
           }, files, exec.signal);
           return { teamId, pageId: page.id, version: page.version, title: page.title, kind: page.kind, url: pageUrl(client.endpoint, teamId, page.id) };
         } catch (error) {

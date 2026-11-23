@@ -21,20 +21,18 @@ export declare class PinStore {
     private load;
     /** One change at a time, saved before its result is known, so no guess goes uncounted. */
     private change;
-    ownerEnabled(): Promise<boolean>;
-    resetOwnerPin(): Promise<void>;
-    /** Whether a member has set a PIN; one who has not is asked to set one. */
-    has(member: string): Promise<boolean>;
-    locked(member: string): Promise<boolean>;
-    /** Checks a PIN, counting a wrong one before answering; a locked member is refused even the right one. */
-    check(member: string, pin: string): Promise<PinCheck>;
-    /** A local setting change is authorized by the host. */
-    set(member: string, pin: string): Promise<void>;
-    /** A device can change an existing PIN only with its old PIN, in the same serialized write. */
-    replace(member: string, pin: string, old: string, requirePolicyEntry: boolean): Promise<PinCheck>;
-    /** Clears a member's PIN and lock: their next connection sets a new one. */
-    clear(member: string): Promise<void>;
-    /** Clear PIN records when switching shared hosting modes. */
-    reset(): Promise<void>;
+    /** Whether the PIN lock is on: an entry exists, even one whose PIN was reset or that is locked. */
+    enabled(): Promise<boolean>;
+    /** Whether a PIN is set; a reset one is not until the owner sets it again. */
+    has(): Promise<boolean>;
+    locked(): Promise<boolean>;
+    /** Checks a PIN, counting a wrong one before answering; a locked PIN refuses even the right one. */
+    check(pin: string): Promise<PinCheck>;
+    /** Sets the PIN, from the panel on this computer. */
+    set(pin: string): Promise<void>;
+    /** Clears the PIN and its lock but keeps the lock on: no device works until the owner sets a new one. */
+    resetPin(): Promise<void>;
+    /** Turns the PIN lock off. */
+    clear(): Promise<void>;
 }
 //# sourceMappingURL=pin-lock.d.ts.map

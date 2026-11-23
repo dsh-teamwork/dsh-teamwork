@@ -1340,8 +1340,6 @@ function PairingCode({ offer, onCancel, onExpire }: { offer: PanelPairingOffer; 
 }
 
 /** A QR code drawn as one SVG path, dark on a light quiet zone so any camera reads it in either theme. */
-/* ── Shared DSH ──────────────────────────────────────────────────────────── */
-
 function QrCode({ value, size, label }: { value: string; size: number; label: string }) {
   const qr = qrcode(0, 'M');
   qr.addData(value);

@@ -1,3 +1,7 @@
+/** The directories a session may start in: where DSH was started, then its workspaces, each once and in that order. */
+export declare function startDirectories(started: string, workspaces: {
+    path: string;
+}[]): string[];
 export declare const teamWorkspacesPath: (cachePath: string) => string;
 export declare class TeamWorkspaces {
     private readonly path;

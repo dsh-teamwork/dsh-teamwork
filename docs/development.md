@@ -96,7 +96,7 @@ panel actions reuse operations. Session continuation/retry/cancellation are comm
 State polls wait for the previous request, failures preserve the displayed data,
 and dependency inventory is shared only within one state request.
 
-The server selection persists beside the cache as `<cache>.server.json`. The owner's native Web switch (`NativeWebSwitch`, `src/web-relay.ts`) is `<cache>.web.json`, mode 0600, whose presence means on; signing out, changing server or leaving shared mode removes it. `WebTunnels` in the same file counts the tunnels it serves for the panel and status, and `disconnectNativeWeb` ends them and sends the relay `webRevoke`.
+The server selection persists beside the cache as `<cache>.server.json`. The owner's native Web switch (`NativeWebSwitch`, `src/web-relay.ts`) is `<cache>.web.json`, mode 0600, whose presence means on; signing out or changing server removes it. `WebTunnels` in the same file counts the tunnels it serves for the panel and status, and `disconnectNativeWeb` ends them and sends the relay `webRevoke`.
 Changing it revokes the old token at its server and clears old identity/resources.
 The token persists as `<cache>.token.json` (`{ server, token }`, mode 0600,
 replaced atomically) and is restored only for the same server; it names a
@@ -209,77 +209,6 @@ MCP manager (`ctx.mcpManager.register`) for its own lifetime, so they never
 replace the servers the owner configured in Settings. A cloud computer names
 its desktop's browser this way, Playwright's MCP server over CDP.
 
-## Shared mode
-
-**Team DSH is offline on the server, so nothing reaches shared mode.** The panel,
-`/teamwork` and `dsh-teamwork` offer no `share` action, and the panel routes for
-it are gone. At start, a DSH that still has `<cache>.shared.json` deletes it
-(`forgetSharedKey`), clears its roster and PINs, and is a personal DSH again; its
-audit archive is kept. The modules below and their tests stay, unwired, for when
-Team DSH returns: the platform's `server/e2e` shared-mode test drives them
-directly. What follows describes them as they would run.
-
-`src/shared-mode.ts` makes a DSH its team's shared DSH (the server's
-`docs/tech/shared-dsh.md`, part of the community edition). `/teamwork share enable <key>` trades a team
-host key for a one-hour host token (platform ADR 0047): the server's nonce is
-signed with this DSH's identity key from `<cache>.phone-keys.json`, and the first
-exchange binds the key to that identity, so a copied key is refused elsewhere.
-The key is saved to `<cache>.shared.json` (mode 0600) only once accepted, the
-token reaches `TeamworkClient.useToken` like a host-provided one, and it is
-renewed ten minutes before it ends, or a minute after a failure that may pass;
-a key the server no longer accepts drops the token. Enabling signs a personal
-account out first, and while shared, sign-in and sign-out are refused and the
-relay connects with the host token. A host-provided token (`tokenFile`)
-excludes shared mode.
-
-`src/shared-roster.ts` is the DSH's own roster (`<cache>.shared-roster.json`,
-mode 0600): invites (a single-use secret per listed member, kept as a hash, a
-day long), each member's paired devices, and each session's starter. A member's
-handset joins through the relay, pins this DSH's key from the invite, and hands
-the secret over inside the channel; `PhoneSecurity` admits it through the
-roster instead of a safety code. The relay's `members` list prunes the roster.
-`src/shared-owner.ts` is what the bridge asks before any call or stream and
-after `session/create` and `session/list`: a member reaches only sessions they
-started, sees only their events, and answers only questions they were shown.
-Whatever the bridge sends back fits one 1 MiB message of the encrypted channel
-(`fitFrame`): long strings are cut short, a snapshot or a page keeps its newest
-records and says `hasMore`, and a stream frame that still cannot fit ends its
-stream with `too_large` rather than closing the channel.
-
-`src/pin-lock.ts` stores the per-member PIN lock (`<cache>.pins.json`, mode 0600): one optional four-digit PIN on a personal desktop, enabled from the local device panel. A saved owner entry preserves the policy across upgrades. The file stores one four-digit PIN per protected member (`owner`
-on a personal computer), kept as scrypt, and a failure count that survives a
-restart. Once a channel is authorized, `PhoneSecurity` tells the phone
-`pinRequired` (with `set` when the member has none yet), answers `unlock` and
-`setPin` with `unlocked`, `pinWrong`, `pinLocked` or `pinInvalid`, and refuses
-every call (`teamwork/locked`) and stream until unlocked, and again after
-fifteen minutes with nothing sent. Five wrong PINs lock the member on every
-device until `/teamwork share unlock <email>` or `/teamwork pin reset` clears
-it. The personal desktop retains its local PIN policy when the account signs out. Entering or leaving shared mode clears every PIN.
-
-`src/audit-archive.ts` is a shared DSH's audit archive (the server's ADR 0045):
-every frame between a member's device and this DSH, both ways, becomes a record
-(member, device, direction, time; a string over 64 KiB kept as its length and
-SHA-256). Each record is appended as it is made to `<cache>.audit.json.journal`
-(mode 0600), so a crash loses none: the next start seals what the journal holds
-before anything else, and a batch the state names as sealed is never sealed
-twice. Records collect for a minute or 1 MiB, are HPKE-sealed (`@hpke/core`,
-exact version) to the admin's audit public key under a header the AEAD binds
-(host, sequence, the previous segment's SHA-256, the key's fingerprint), signed
-with the identity key the host key is bound to, written to
-`<cache>.audit.json.queue/`, and uploaded in order to
-`POST /relay/shared/archive`; a segment leaves the queue only once the server
-holds it. `<cache>.audit.json` keeps the key and the chain's position. No
-member is admitted until `/teamwork share audit-key` sets a key; leaving
-shared mode flushes and forgets it. `src/audit-cli.ts` is the
-`dsh-teamwork-audit` bin the admin runs on their own machine: `keygen` writes
-a key pair (mode 0600, never overwriting), `read` opens an exported archive
-and reports a gap, an alteration or another key.
-
-The panel's **Team DSH** page (`Shared` in `src/web/TeamworkPanel.tsx`, the
-`share-*` routes in `src/panel.ts`) runs the same functions as
-`/teamwork share`; in shared mode `PanelState.shared` is set, no profile is
-read, and the header offers that page in place of Phone and Account.
-
 ## Phone transport
 
 The hosted relay is optional and discovered through `GET /api/relay`. The host
@@ -304,11 +233,27 @@ sizes but cannot read encrypted request content. Team gateway model traffic is
 outside this channel. Upgrade relay and both clients together.
 
 `src/secure-channel.ts` matches the mobile implementation, checked by integration
-tests. `src/phone-security.ts` gates every request on the local roster.
+tests. `src/phone-security.ts` gates every request on the devices trusted here.
 `<cache>.phone-keys.json` atomically stores the identity seed and account/server
 peers with restrictive permissions. Desktop revocation saves trust removal and
 closes the channel before notifying the relay; phone revocation needs an encrypted
 acknowledgement and can wait for an offline host.
+
+`src/pin-lock.ts` is the owner's optional PIN lock (`<cache>.pins.json`, mode
+0600): one four-digit PIN, set or turned off in the Teamwork panel or with
+`dsh-teamwork pin set | clear`, kept as scrypt under the key `owner`, with a
+failure count that survives a restart. Once a channel is authorized,
+`PhoneSecurity` tells the device `pinRequired`, answers `unlock` with
+`unlocked`, `pinWrong` or `pinLocked` (a device never sets the PIN: `setPin` is
+answered as if asked again), and refuses every call (`teamwork/locked`) and
+stream until unlocked, and again after fifteen minutes with nothing sent. Five
+wrong PINs lock every device until `/teamwork pin reset` clears the PIN, which
+keeps the lock on until a new one is set. The PIN outlives a sign-out.
+
+Whatever the bridge sends back fits one 1 MiB message of the encrypted channel
+(`fitFrame`): long strings are cut short, a snapshot or a page keeps its newest
+records and says `hasMore`, and a stream frame that still cannot fit ends its
+stream with `too_large` rather than closing the channel.
 
 File intake uses `teamwork/uploadStart`, `uploadChunk`, `uploadFinish` and
 `uploadCancel` after native admission. Receipt/transfer identity binds pairing and
@@ -330,31 +275,25 @@ is refused as `workspace/session-active`. `session/list` marks every item with
 `sessionIds`): `workspace` is `{ id, title, index, position }`, the workspace
 that lists the session and both places in DSH's own order, or null for
 Ungrouped, so a client groups the list as DSH's sidebar does. A client hides
-the actions where an item has no mark, an older plugin's list. On a shared DSH each action, like any
-call naming a session, reaches only the member's own sessions, though pins and
-archives land in the DSH's one registry, seen at its keyboard as well. Forking
+the actions where an item has no mark, an older plugin's list. Forking
 and opening a session in another app stay on the desktop.
 
 A computer's automation tasks, DSH's Schedule, are passed on unchanged
 (`SCHEDULE_CALLS` in `src/bridge.ts`): `schedule/catalog`, `history`,
 `create`, `edit` (update, pause, resume, delete) and `run`, with
-`schedule/changed` on `$events` after each committed change. A shared DSH
-answers every one `teamwork/schedule_unavailable` without asking DSH, and its
-`schedule/changed`, which names no session, reaches no member: the catalog is
-the whole DSH's and a task names no person (the server's ADR 0066).
+`schedule/changed` on `$events` after each committed change (the server's ADR
+0066).
 
 A session's permission preset (DSH's `@deepseek-ai/dsh-permission-presets`:
 read-only, workspace write, full access and whatever else DSH composes) is in
 `teamwork/configuration`'s `permissions` (`src/phone-permission.ts`): the
 offered presets, the session's current one and the default. Each is `risky`
 when it leaves the workspace's sandbox or skips approval, which a client
-confirms once, and `allowed` unless the DSH is shared and the preset risky:
-a Team DSH's members pick only read-only or workspace write, and the rest is
-set at its keyboard. `teamwork/selectPermission` (`{ sessionId, preset }`, the
+confirms once; `allowed` is always true, for the platform's relay client that
+still reads it. `teamwork/selectPermission` (`{ sessionId, preset }`, the
 preset one word) switches an idle session by running DSH's own `/permission`
 command in process (`commands.execute`), as DSH's picker does, so the switch is
-logged in the session; `teamwork/permission_refused` answers a preset that is
-not `allowed`.
+logged in the session; a preset DSH does not offer is `teamwork/invalid_request`.
 
 A session's files are read, never written, through `teamwork/listFiles`
 (`{ sessionId, path }`), `teamwork/searchFiles` (`{ sessionId, query }`, by
@@ -365,8 +304,7 @@ nor a symbolic link reaches past it, and what does is `not_found`. DSH's own
 `workspaceFiles` reads beyond the workspace, so it is not passed on. A folder
 lists at most 500 entries, a search walks no link, `.git` or `node_modules`
 and returns at most 200 names, and a file gives its first 256 KiB as text; one
-with a NUL byte is `teamwork/not_text`. On a shared DSH they reach only the
-member's own sessions, like every call naming one.
+with a NUL byte is `teamwork/not_text`.
 
 ## Publishing
 

@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { ALLOWED_CALLS, ALLOWED_STREAMS, Bridge, bridgeRoute, SCHEDULE_CALLS } from '../src/bridge';
+import { ALLOWED_CALLS, ALLOWED_STREAMS, Bridge, bridgeRoute } from '../src/bridge';
 import { readDocument } from '../src/phone-files';
 import { MAX_MESSAGE } from '../src/secure-channel';
 import { PhoneSessionError, type PhoneSessionOps } from '../src/phone-session';
-import { OwnerFilter } from '../src/shared-owner';
 
 /** A loopback mux the test drives by hand. */
 class FakeSocket {
@@ -21,7 +20,7 @@ class FakeSocket {
 
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
-function bridge(options: { web?: boolean; expire?: boolean; session?: PhoneSessionOps; denied?: boolean; waitPrompt?: Promise<void>; upload?: boolean; workspaceAt?: (path: string) => string | undefined; owners?: () => OwnerFilter | undefined } = {}) {
+function bridge(options: { web?: boolean; expire?: boolean; session?: PhoneSessionOps; denied?: boolean; waitPrompt?: Promise<void>; upload?: boolean; workspaceAt?: (path: string) => string | undefined } = {}) {
   FakeSocket.made = [];
   const sent: any[] = [];
   const asked: Array<{ url: string; init?: RequestInit }> = [];
@@ -46,7 +45,6 @@ function bridge(options: { web?: boolean; expire?: boolean; session?: PhoneSessi
     WebSocket: FakeSocket as unknown as typeof WebSocket,
     session: options.session,
     workspaceAt: options.workspaceAt,
-    owners: options.owners,
   });
   return { b, sent, asked };
 }
@@ -62,7 +60,7 @@ describe('the phone bridge', () => {
     expect([...ALLOWED_STREAMS].sort()).toEqual(['$events', 'session/follow']);
   });
 
-  it('passes automation tasks on unchanged for a personal computer, and refuses them on a shared DSH', async () => {
+  it('passes automation tasks on unchanged', async () => {
     const request = { title: 'Deploy check', prompt: 'Check the deploy.', timing: { kind: 'cron', cron: { expression: '0 9 * * 1-5', time_zone: 'Asia/Shanghai' } }, target: { kind: 'new_once' } };
     const own = bridge();
     own.b.handle({ t: 'call', pairingId: 'p', id: 'create', method: 'schedule/create', body: { args: { request } } });
@@ -70,14 +68,6 @@ describe('the phone bridge', () => {
     const forwarded = own.asked.find(call => call.url.endsWith('/api/schedule/create'));
     expect(JSON.parse(String(forwarded?.init?.body))).toEqual({ type: 'client-request', rpcId: 'create', method: 'schedule/create', payload: { args: { request } } });
     expect(own.sent.at(-1)).toMatchObject({ id: 'create', status: 200, body: { result: { ok: true } } });
-
-    const owners = new OwnerFilter({ ownerOf: async () => 'ada', claim: async () => {} }, async () => 'ada');
-    const shared = bridge({ owners: () => owners });
-    for (const method of SCHEDULE_CALLS) shared.b.handle({ t: 'call', pairingId: 'p', id: method, method, body: { args: { request: { id: 't' } } } });
-    for (let i = 0; i < 6; i++) await tick();
-    expect(shared.asked.filter(call => call.url.includes('/api/'))).toEqual([]);
-    expect(shared.sent).toHaveLength(SCHEDULE_CALLS.size);
-    for (const frame of shared.sent) expect(frame).toMatchObject({ status: 200, body: { result: { ok: false, error: { code: 'teamwork/schedule_unavailable' } } } });
   });
 
   it('changes a model through the session-only handler, never the default-saving native endpoint', async () => {

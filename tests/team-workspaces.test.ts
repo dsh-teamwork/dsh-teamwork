@@ -1,8 +1,8 @@
-import { mkdtemp, readFile, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { TeamWorkspaces, teamWorkspacesPath } from '../src/team-workspaces.js';
+import { startDirectories, TeamWorkspaces, teamWorkspacesPath } from '../src/team-workspaces.js';
 
 const store = async () => {
   const path = teamWorkspacesPath(join(await mkdtemp(join(tmpdir(), 'tw-workspaces-')), 'cache.json'));
@@ -32,5 +32,14 @@ describe('team workspaces', () => {
   it('names no default where no directory is offered', async () => {
     const { workspaces } = await store();
     expect(await workspaces.defaults(['a'], [], undefined)).toEqual({});
+  });
+});
+
+describe('where a session may start', () => {
+  it('lists where DSH was started first, then its workspaces, each once', async () => {
+    const started = await mkdtemp(join(tmpdir(), 'started-'));
+    const real = await realpath(started);
+    expect(startDirectories(started, [{ path: '/srv/a' }, { path: real }, { path: '/srv/b' }])).toEqual([real, '/srv/a', '/srv/b']);
+    expect(startDirectories('/no/such/dir', [])).toEqual(['/no/such/dir']);
   });
 });

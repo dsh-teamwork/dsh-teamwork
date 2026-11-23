@@ -28,7 +28,6 @@ declare const en: {
     'server.extra': string;
     'auth.signedOut': string;
     'auth.hostManaged': string;
-    'auth.shared': string;
     'nativeWeb.pin': string;
     'nativeWeb.noWeb': string;
     'auth.changed': string;
