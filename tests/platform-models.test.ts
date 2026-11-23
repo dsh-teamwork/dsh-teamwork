@@ -34,6 +34,8 @@ test('team model uses platform only, with session credential and opaque config I
     expect(client.current()?.teams[0]?.configs[0]?.data).toMatchObject({ vision: true });
     const provider = teamProvider('t');
     expect((await adapter.listModels(provider)).map(model => model.id)).toEqual(['config1']);
+    // Named by its configuration's id, and described by the model it calls: what DSH, the console and the phone show.
+    expect((await adapter.listModels(provider)).map(({ name, description }) => ({ name, description }))).toEqual([{ name: 'Team Kimi', description: 'kimi-for-coding' }]);
     for (const model of ['config1', 'preset1', 'legacy1']) {
       const call = await adapter.prepareCall(provider, model);
       expect(call.model).toMatchObject({ id: model, context: { contextWindow: 131072 }, defaultMaxTokens: 8192 });

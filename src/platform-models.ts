@@ -21,8 +21,10 @@ export function platformAdapter(client: TeamworkClient, ctx?: Context): PiAiAdap
     override async listModels(provider: string) {
       const models = await super.listModels(provider);
       const team = client.current()?.teams.find(team => teamProvider(team.teamId) === provider);
-      const modelIds = new Set(team?.configs.filter(config => config.kind === 'model').map(config => config.id));
-      return models.filter(model => modelIds.has(model.id));
+      const configs = new Map(team?.configs.flatMap(config => config.kind === 'model' ? [[config.id, config.data.model] as const] : []));
+      // A team model's id is its configuration's, which names nothing a person recognises; the model it calls does.
+      // DSH, the console and the phone show it under the name (relay-client's modelDetail).
+      return models.filter(model => configs.has(model.id)).map(model => ({ ...model, description: configs.get(model.id) }));
     }
   }
   return new TeamworkAdapter({
