@@ -121,7 +121,7 @@ dsh-teamwork web on               # 原生 DSH Web（见下文）；另有 off�
 
 由宿主自行为 DSH 登录的环境（例如 DSH Teamwork 云电脑）可以把 `tokenFile` 设为一个文件的绝对路径，文件内容是插件令牌。插件启动时读取它，并跟随之后的每次变化（包括原子替换）；文件为空或不存在即视为退出登录。此模式下不能在插件里登录、退出或切换服务器，服务器由 `apiEndpoint` 指定，也不会连接手机中转。
 
-要从网页版「我的 DSH」和手机 App 的电脑切换列表打开这台 DSH 的完整 Web 界面，请在 Teamwork 面板的设备安全设置中开启「原生 DSH Web」；在服务器上可运行 `dsh-teamwork web on`（`dsh-teamwork web off` 关闭，`dsh-teamwork status` 查看状态）。它默认关闭，开启后立即生效，无需重启。它需要这台电脑运行 DSH 自己的 Web 服务（`dsh web`）且未设置设备 PIN，仅适用于个人电脑。该入口的 HTTPS 由 Teamwork 服务器终止，服务器须已配置桌面 Web 域名。退出登录或切换服务器会自动关闭。开启期间，面板会显示是否正在被使用；点「断开所有访问」或运行 `dsh-teamwork web disconnect` 会结束当前所有会话，开关保持开启。会话在 30 分钟没有数据传输或打开满 8 小时后也会自动结束。
+要从网页版「我的 DSH」和手机 App 的「会话 → 右上角设置 → Web Relay」打开这台 DSH 的完整 Web 界面，请在 Teamwork 面板的设备安全设置中开启「原生 DSH Web」；在服务器上可运行 `dsh-teamwork web on`（`dsh-teamwork web off` 关闭，`dsh-teamwork status` 查看状态）。它默认关闭，开启后立即生效，无需重启。它需要这台电脑运行 DSH 自己的 Web 服务（`dsh web`）且未设置设备 PIN，仅适用于个人电脑。该入口的 HTTPS 由 Teamwork 服务器终止，服务器须已配置桌面 Web 域名。退出登录或切换服务器会自动关闭。开启期间，面板会显示是否正在被使用；点「断开所有访问」或运行 `dsh-teamwork web disconnect` 会结束当前所有会话，开关保持开启。会话在 30 分钟没有数据传输或打开满 8 小时后也会自动结束。
 
 ## 数据与设备连接
 
