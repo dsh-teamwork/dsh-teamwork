@@ -74,7 +74,29 @@ export interface SessionMarks {
   pinned: readonly string[];
   archived: readonly string[];
   /** DSH's workspaces in its own order, each with the sessions it lists in its own manual order. */
-  workspaces: readonly { id: string; title: string; sessionIds: readonly string[] }[];
+  workspaces: readonly { id: string; title: string; path?: string; sessionIds: readonly string[] }[];
+}
+
+/** Match DSH's nearest registered folder ancestor using the host's case and path separators. */
+function workspaceAncestors(workspaces: SessionMarks['workspaces']) {
+  const paths = workspaces.map(({ path }) => {
+    if (!path) return undefined;
+    const windows = /^[A-Za-z]:[/\\]/.test(path) || path.startsWith('\\\\');
+    return (windows ? path.replaceAll('\\', '/') : path).replace(/\/+$/, '');
+  });
+  const byPath = new Map(paths.map((path, index) => [path, index]));
+  return paths.map((path) => {
+    const ancestors: { id: string; title: string; index: number }[] = [];
+    while (path?.includes('/')) {
+      path = path.slice(0, path.lastIndexOf('/'));
+      const index = byPath.get(path);
+      if (index !== undefined) {
+        const { id, title } = workspaces[index]!;
+        ancestors.unshift({ id, title, index });
+      }
+    }
+    return ancestors;
+  });
 }
 
 const callSchema = z.object({ t: z.literal('call'), pairingId: z.string(), id: z.string(), method: z.string(), body: z.unknown() });
@@ -335,9 +357,10 @@ export class Bridge {
     if (!marks || !wire?.result?.ok || !Array.isArray(items)) return body;
     const pinned = new Set(marks.pinned), archived = new Set(marks.archived);
     // DSH lists a session under the first workspace that accounts it, as its sidebar does.
-    const workspaces = new Map<string, { id: string; title: string; index: number; position: number }>();
+    const ancestors = workspaceAncestors(marks.workspaces);
+    const workspaces = new Map<string, { id: string; title: string; index: number; position: number; ancestors?: typeof ancestors[number] }>();
     marks.workspaces.forEach(({ id, title, sessionIds }, index) => sessionIds.forEach((sessionId, position) => {
-      if (!workspaces.has(sessionId)) workspaces.set(sessionId, { id, title, index, position });
+      if (!workspaces.has(sessionId)) workspaces.set(sessionId, { id, title, index, position, ...(ancestors[index]?.length ? { ancestors: ancestors[index] } : {}) });
     }));
     const mark = (item: unknown) => {
       const id = (item as { sessionId?: unknown } | null)?.sessionId;

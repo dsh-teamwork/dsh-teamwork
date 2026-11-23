@@ -296,7 +296,7 @@ describe('the phone bridge', () => {
   it('marks each listed session with its place in the pin and archive sets and the workspace that lists it', async () => {
     const sent: any[] = [];
     const items = [{ sessionId: 'a', title: 'A' }, { sessionId: 'b' }, { sessionId: 'c' }, { sessionId: 'd' }];
-    const workspaces = [{ id: 'w1', title: 'alpha', sessionIds: ['c', 'b'] }, { id: 'w2', title: 'beta', sessionIds: ['d', 'b'] }];
+    const workspaces = [{ id: 'w1', title: 'alpha', path: '/repo', sessionIds: ['c', 'b'] }, { id: 'w2', title: 'beta', path: '/repo/sub/pkg', sessionIds: ['d', 'b'] }];
     const request = (async (url: string) => url.includes('/connect?')
       ? new Response(null, { status: 302, headers: { 'set-cookie': 'dsh=peer; Path=/' } })
       : new Response(JSON.stringify({ type: 'client-response', result: { ok: true, value: { items } } }))) as typeof fetch;
@@ -307,7 +307,7 @@ describe('the phone bridge', () => {
       { sessionId: 'a', title: 'A', teamwork: { pinned: false, archived: false, workspace: null } },
       { sessionId: 'b', teamwork: { pinned: true, archived: false, workspace: { id: 'w1', title: 'alpha', index: 0, position: 1 } } },
       { sessionId: 'c', teamwork: { pinned: false, archived: true, workspace: { id: 'w1', title: 'alpha', index: 0, position: 0 } } },
-      { sessionId: 'd', teamwork: { pinned: false, archived: false, workspace: { id: 'w2', title: 'beta', index: 1, position: 0 } } },
+      { sessionId: 'd', teamwork: { pinned: false, archived: false, workspace: { id: 'w2', title: 'beta', index: 1, position: 0, ancestors: [{ id: 'w1', title: 'alpha', index: 0 }] } } },
     ]);
   });
 

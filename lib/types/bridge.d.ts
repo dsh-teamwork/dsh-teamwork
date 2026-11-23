@@ -33,6 +33,7 @@ export interface SessionMarks {
     workspaces: readonly {
         id: string;
         title: string;
+        path?: string;
         sessionIds: readonly string[];
     }[];
 }
