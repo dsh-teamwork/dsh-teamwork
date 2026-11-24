@@ -231,6 +231,31 @@ export declare class ArtifactError extends Error {
     readonly detail: string;
     constructor(status: number, code: string, detail: string);
 }
+/** A knowledge request the server refused: its status and code (`knowledge_stale`, `knowledge_not_found`, …). */
+export declare class KnowledgeError extends Error {
+    readonly status: number;
+    readonly code: string;
+    readonly detail: string;
+    constructor(status: number, code: string, detail: string);
+}
+/** `GET /api/knowledge` (platform docs/tech/knowledge.md, "The sync manifest"): every document the member reads, per team and space. */
+export declare const knowledgeManifestSchema: z.ZodObject<{
+    teams: z.ZodArray<z.ZodObject<{
+        teamId: z.ZodString;
+        teamName: z.ZodString;
+        spaces: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            name: z.ZodString;
+            documents: z.ZodArray<z.ZodObject<{
+                id: z.ZodString;
+                folders: z.ZodArray<z.ZodString>;
+                title: z.ZodString;
+                version: z.ZodNumber;
+            }, z.core.$strip>>;
+        }, z.core.$strip>>;
+    }, z.core.$strip>>;
+}, z.core.$strip>;
+export type KnowledgeManifest = z.infer<typeof knowledgeManifestSchema>;
 export declare class TeamworkClient {
     readonly cachePath: string;
     private request;
@@ -299,6 +324,34 @@ export declare class TeamworkClient {
         summary?: string | undefined;
         publishedAt?: string | undefined;
     }[]>;
+    /** The knowledge copy beside the cache (src/knowledge-sync.ts), as `teamwork-packages` is beside it. */
+    get knowledgePath(): string;
+    /** Which version of each document the copy holds, and where. */
+    get knowledgeStatePath(): string;
+    private knowledgeRequest;
+    /** What the member reads of every team's knowledge; a server without knowledge (404) holds none. */
+    knowledgeManifest(signal?: AbortSignal): Promise<KnowledgeManifest>;
+    /** One document's text at `version`, or at its current version when none is named. */
+    readKnowledge(teamId: string, documentId: string, version: number | undefined, signal?: AbortSignal): Promise<{
+        id: string;
+        title: string;
+        version: number;
+        text: string;
+    }>;
+    /** Proposes `text` as a document's next version on `baseVersion`. A plugin's change is always a proposal: an editor accepts it. */
+    proposeKnowledge(teamId: string, documentId: string, input: {
+        baseVersion: number;
+        text: string;
+        note: string;
+        computer: string;
+        sessionId: string;
+    }, signal: AbortSignal): Promise<{
+        id: string;
+        documentId: string;
+        documentTitle: string;
+        baseVersion: number;
+        state: string;
+    }>;
     /** The files of an artifact's version, fetched through a view address minted for this member, as the console's frame fetches them. */
     readArtifact(teamId: string, artifactId: string, version: number, signal: AbortSignal): Promise<{
         path: string;
@@ -562,6 +615,7 @@ export declare class TeamworkClient {
      * same computer; signing in from none, or out to none, moves it and drops the cached configuration on the way out.
      */
     useToken(token: string | undefined): Promise<void>;
+    /** Drops the configuration and the knowledge copy, which belong to the account that synced them. */
     clear(): Promise<void>;
     logout(): Promise<void>;
     /** Forgets the token here and revokes it at the server that issued it, so a copy of it opens nothing either. */

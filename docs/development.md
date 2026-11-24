@@ -83,6 +83,46 @@ is registered there. DSH's default provider is unchanged: a member picks Teamwor
 and fetch** in DSH's settings. A refusal is worded for the model: a spent daily allowance (429), a
 lapsed sign-in (401), any other failure with its status.
 
+## Team knowledge
+
+`src/knowledge-sync.ts` (`KnowledgeSync`) keeps a read-only copy of what the member reads of
+each team's knowledge (the platform's `docs/tech/knowledge.md`). It runs at the end of
+`ConfigSync`'s flight, after a successful configuration sync, so it shares the interval and never
+overlaps itself; its failure is logged as `Teamwork knowledge sync failed: …` (a status and code,
+a file system error code, or "could not be reached", never a transport message) and never fails
+the configuration's sync. A server without `GET /api/knowledge` (404) holds no knowledge.
+
+- The copy is `teamwork-knowledge/{team}/{space}/{folder…}/{title}.md` beside the cache, as
+  `teamwork-packages` is. Each segment is made safe for any file system (`segment`: no separators,
+  control or reserved characters, no leading dot, so grep and ripgrep do not skip it as hidden, no
+  trailing dot or space, no Windows device name, at most 160 bytes); names that still collide,
+  compared without case, take ` ({id})`, and a folder never ends in `.md`.
+- A file is the document's text under `knowledge: {documentId}@{version}`, first in the text's own
+  front matter when it opens with some, else in a block of its own; `stripFrontMatter` is its exact
+  inverse. Files are written beside the tree, made 0444 and renamed into place.
+- `<cache>.knowledge.json` maps each document id to its team, version and path. A sync fetches
+  `GET /api/teams/{teamId}/knowledge/documents/{id}?version=n` only for a new or changed version or
+  a missing file, renames a document whose path changed, then deletes every file the state does not
+  name and every empty folder. A document that cannot be fetched keeps the version it had.
+- `TeamworkClient.clear` (sign-out, a new sign-in, a 401/403 on `configs`) removes the copy and its
+  state; a sync that finds the account changed under it removes them again when it finishes.
+
+While the copy holds a document, every session gets the `teamwork:knowledge` system prompt section
+(`knowledgeGuide` in `src/preset-context.ts`, order 95): the copy's absolute path, that it is
+read-only, to search it with grep rather than list it, to cite
+`knowledge:{documentId}@{version}#{heading}`, to name a conflict between documents and a gap in
+them, and to change a document only by proposing. It says "documents (pages)" (platform ADR 0069).
+
+`src/knowledge-tool.ts` registers `teamwork_knowledge` with one action, `propose`: `documentId`,
+`baseVersion`, `note`, and `content` or `path` (a file inside the session's folder, after following
+links, at most 1 MiB). The team is the synced document's. The copy's `knowledge:` line is removed,
+and one naming another document or version is refused. It posts
+`POST /api/teams/{teamId}/knowledge/documents/{id}/proposals` with `{ baseVersion, text, note,
+computer, sessionId }`; the server records a plugin's change as an agent's proposal, so the tool
+cannot write a version or change access. A sent proposal's card is
+`presentationMeta.teamworkKnowledgeProposal`; `knowledge_stale` is answered with the current version
+and text, for the agent to reapply its change.
+
 ## Host and browser boundary
 
 The package declares `dsh.bundle.patch` and `dsh.client`, exporting its browser

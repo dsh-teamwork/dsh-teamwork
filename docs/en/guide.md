@@ -160,6 +160,24 @@ your own session's workspace by your agent, changed, and published as a new
 version under your name. Artifacts run sandboxed: an artifact cannot act as
 the person viewing it.
 
+## Knowledge
+
+Your team's knowledge, the documents (pages) kept under **Knowledge** in the
+console, reaches your agents without being pointed at it. Each sync, the plugin
+keeps a read-only copy of every document you may read in `teamwork-knowledge`
+beside its cache (`~/.dsh/dsh-teamwork/teamwork-knowledge` by default), one
+folder per team and space, and tells every session where it is. The agent
+searches it, cites the document and heading an answer rests on as
+`knowledge:{documentId}@{version}#{heading}`, and says so when two documents
+disagree or when the knowledge does not hold the answer. Only new and changed
+documents are downloaded, and a document you may no longer read is deleted from
+the copy on the next sync.
+
+An agent never changes a document. Its `teamwork_knowledge` tool sends a
+proposal, and an editor of the document's space accepts or declines it in the
+console; until then the document is unchanged. Signing out removes the copy.
+Knowledge needs a Teamwork server that offers it.
+
 ## Commands
 
 Run these in DSH's command input, not your shell. IDs come from `/teamwork list`.
@@ -234,6 +252,8 @@ until sign-in. Provider keys remain on the service; team-model prompts and
 context travel through that service's gateway.
 Artifacts an agent publishes are stored on the Teamwork server, private until
 their owner shares them; the rest of a session stays on the computer.
+The knowledge copy holds only what you may read and is removed when you sign out;
+a proposal sends the text, its note, this computer's name and the session id.
 
 The hosted service may advertise a relay. A matching Teamwork App and an online
 DSH web/desktop host are required. Headless-only hosts return 503 for device

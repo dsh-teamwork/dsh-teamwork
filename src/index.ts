@@ -19,6 +19,9 @@ import { pluginState, stateText, type PluginState } from './plugin-status.js';
 import { panelRoutes, type FetchRoute, type PanelOps, type PanelPreset } from './panel.js';
 import { registerAssistantTools } from './assistant-tools.js';
 import { registerArtifactTool } from './artifact-tool.js';
+import { KnowledgeSync } from './knowledge-sync.js';
+import { registerKnowledgeTool } from './knowledge-tool.js';
+import { knowledgeGuide } from './preset-context.js';
 import { registerBundledSkills } from './bundled-skills.js';
 import { teamworkSearch } from './web-search.js';
 import { isTeamProvider, platformAdapter, teamProvider, teamRoutes } from './platform-models.js';
@@ -176,8 +179,11 @@ export async function apply(ctx: Context, config: Config) {
   // The relay admits an account in at least one team; one it refused for being in none rejoins once a sync finds one.
   // Teamwork search (src/web-search.ts) is offered while the signed-in server searches; each sync asks it again.
   const search = teamworkSearch(client);
+  // The team knowledge copy (src/knowledge-sync.ts) follows each configuration sync in its flight.
+  const knowledge = new KnowledgeSync(client);
   const configSync = new ConfigSync(client, overlay, config.autoSync ?? true, config.syncIntervalMs ?? 60000,
-    () => { if (client.current()?.teams.length) relay.rejoin(); void search.refresh(); });
+    () => { if (client.current()?.teams.length) relay.rejoin(); void search.refresh(); },
+    () => knowledge.sync().catch(error => { ctx.logger.warn('%s', (error as Error).message); }));
   /** Whether DSH offers a local model here, as its own catalogue decides: a provider with no key lists none. */
   const localCallable = async (selection: { provider: string; model: string }) => {
     if (!ctx.llm.listProviders().some(provider => provider.id === selection.provider)) return false;
@@ -366,6 +372,11 @@ export async function apply(ctx: Context, config: Config) {
   ctx.inject(['web'], child => search.attach(child));
   // Artifacts an agent publishes (src/artifact-tool.ts), for the signed-in member.
   ctx.inject(['tools'], child => registerArtifactTool(child, { client, preset: activePreset }));
+  // Team knowledge: every session is told where the copy is while it holds a document, and proposes changes with the tool.
+  ctx.inject(['tools'], child => registerKnowledgeTool(child, { client, knowledge }));
+  ctx.inject(['systemPrompt'], child => child.effect(() => child.systemPrompt.section({
+    name: 'teamwork:knowledge', order: 95, text: () => knowledge.count() ? knowledgeGuide(knowledge.root) : '', interpolate: false,
+  })));
   const security = new PhoneSecurity({
     keys: phoneKeys,
     scope: () => {
@@ -442,7 +453,7 @@ export async function apply(ctx: Context, config: Config) {
     if (!manual) callback = await listenForCode(authorize).catch((error: Error) => { ctx.logger.warn('Cannot receive the authorization code on this machine; it has to be pasted: %s', error.message); return undefined; });
     return { url: client.beginLogin(callback?.uri), automatic: callback !== undefined };
   };
-  const restore = async () => { await client.restore(); await overlay.apply(client.current()); relay.refresh(); };
+  const restore = async () => { await client.restore(); await knowledge.restore(); await overlay.apply(client.current()); relay.refresh(); };
   const logout = async () => { hostManaged(); pendingInstalls.clear(); stopCallback(); try { await client.logout(); } finally { setLocale(null); await nativeWeb.set(false); await overlay.apply(); relay.refresh(); } };
   ctx.provide('dshTeamwork', {
     beginLogin, completeLogin: authorize,

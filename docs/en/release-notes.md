@@ -2,6 +2,17 @@
 
 ## Next release
 
+- Teamwork knowledge, synced read-only for agents, and the `teamwork_knowledge`
+  tool to propose changes. Each sync keeps a read-only copy of every knowledge
+  document (page) the member may read in `teamwork-knowledge` beside the cache
+  (`{team}/{space}/{folder…}/{title}.md`, each opening with
+  `knowledge: {documentId}@{version}`), fetching only new and changed
+  documents and deleting what the member no longer reads; signing out removes
+  it. Every session is told where the copy is, to cite
+  `knowledge:{documentId}@{version}#{heading}`, and to change a document only
+  by proposing; an editor accepts or declines the proposal. It needs a
+  Teamwork server with the knowledge routes (`GET /api/knowledge`); against
+  an older one the copy stays empty.
 - Breaking: this release needs a Teamwork server with the renamed routes
   (platform ADR 0069); an older server refuses it, and an older plugin is
   refused by a new server. What an agent publishes is an artifact: the tool
