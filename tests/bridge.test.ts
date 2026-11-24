@@ -54,7 +54,7 @@ describe('the phone bridge', () => {
     expect([...ALLOWED_CALLS].sort()).toEqual([
       '$events/result', 'schedule/catalog', 'schedule/create', 'schedule/edit', 'schedule/history', 'schedule/run',
       'session/cancel', 'session/create', 'session/list', 'session/modelCatalog', 'session/page',
-      'session/prompt', 'session/rename', 'session/state', 'teamwork/configuration', 'teamwork/listFiles', 'teamwork/readDocument', 'teamwork/readFile', 'teamwork/searchFiles', 'teamwork/selectModel', 'teamwork/selectPermission', 'teamwork/uploadCancel', 'teamwork/uploadChunk', 'teamwork/uploadFinish', 'teamwork/uploadStart', 'userQuestions/answer',
+      'session/prompt', 'session/rename', 'session/state', 'teamwork/changeDiff', 'teamwork/changes', 'teamwork/configuration', 'teamwork/listFiles', 'teamwork/readDocument', 'teamwork/readFile', 'teamwork/searchFiles', 'teamwork/selectModel', 'teamwork/selectPermission', 'teamwork/statFile', 'teamwork/uploadCancel', 'teamwork/uploadChunk', 'teamwork/uploadFinish', 'teamwork/uploadStart', 'userQuestions/answer',
       'workspace/archiveSession', 'workspace/pinSession', 'workspace/unarchiveSession', 'workspace/unpinSession',
     ]);
     expect([...ALLOWED_STREAMS].sort()).toEqual(['$events', 'session/follow']);
@@ -110,7 +110,7 @@ describe('the phone bridge', () => {
     b.handle({ t: 'call', pairingId: 'p', id: 'out', method: 'teamwork/readFile', body: { args: { request: { sessionId: 's1', path: '/etc/hostname' } } } });
     for (let i = 0; i < 20; i++) await tick();
     expect(sent).toContainEqual(expect.objectContaining({ id: 'list', body: { result: { ok: true, value: { path: '', entries: [{ name: 'notes.md', kind: 'file', bytes: 2 }], truncated: false } } } }));
-    expect(sent).toContainEqual(expect.objectContaining({ id: 'read', body: { result: { ok: true, value: { path: 'notes.md', text: 'hi', bytes: 2, truncated: false } } } }));
+    expect(sent).toContainEqual(expect.objectContaining({ id: 'read', body: { result: { ok: true, value: expect.objectContaining({ path: 'notes.md', text: 'hi', bytes: 2, truncated: false }) } } }));
     expect(sent).toContainEqual(expect.objectContaining({ id: 'out', body: { result: { ok: false, error: { code: 'teamwork/not_found' } } } }));
   });
 

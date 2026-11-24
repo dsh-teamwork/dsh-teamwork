@@ -352,14 +352,33 @@ logged in the session; a preset DSH does not offer is `teamwork/invalid_request`
 
 A session's files are read, never written, through `teamwork/listFiles`
 (`{ sessionId, path }`), `teamwork/searchFiles` (`{ sessionId, query }`, by
-name) and `teamwork/readFile` (`{ sessionId, path }`), all in
-`src/phone-files.ts` and all under the session's working directory: a path is
-resolved to its real path first, so neither `..`, an absolute path elsewhere
-nor a symbolic link reaches past it, and what does is `not_found`. DSH's own
-`workspaceFiles` reads beyond the workspace, so it is not passed on. A folder
-lists at most 500 entries, a search walks no link, `.git` or `node_modules`
-and returns at most 200 names, and a file gives its first 256 KiB as text; one
-with a NUL byte is `teamwork/not_text`.
+name), `teamwork/readFile` (`{ sessionId, path, offset?, version? }`),
+`teamwork/readDocument` (`{ sessionId, path, offset, version? }`) and
+`teamwork/statFile` (`{ sessionId, path }`), all in `src/phone-files.ts` and
+all under the session's working directory: a path is resolved to its real path
+first, so neither `..`, an absolute path elsewhere nor a symbolic link reaches
+past it, and what does is `not_found`. DSH's own `workspaceFiles` reads beyond
+the workspace, so it is not passed on. A folder lists at most 500 entries, a
+search walks no link, `.git` or `node_modules` and returns at most 200 names.
+A text file is read 256 KiB a page, cut between UTF-8 characters: each page
+carries the file's `version` (device, inode, size and both times) and the
+`next` offset until the end, and a later page asked of another version is
+`invalid_request`; one with a NUL byte is `teamwork/not_text`. `statFile`
+answers the same `version` and the size, so a client notices a change without
+reading the file. `readDocument` sends a PDF, a workbook or an image (png, jpg,
+gif, webp, bmp, ico, svg, avif) as it is, and a Word or PowerPoint file as the
+PDF DSH's Office Kit renders, with the font families it lacked
+(`missingFonts`), in 128 KiB ranges of one version.
+
+What a turn changed is DSH's own record (its `workspaceChanges` service, which
+announces each summary with a `workspace/changes` event): `teamwork/changes`
+(`{ sessionId, seq }`, the event's sequence) answers the turn's files with
+their added and deleted lines, at most 200, and `teamwork/changeDiff`
+(`{ sessionId, seq, index }`) DSH's comparison of one of them, its hunks cut
+after a whole line at 192 KiB (`truncated`) and each line at 2,000
+characters. Only a file under the session's working directory, by its real
+path, is compared; one elsewhere is `not_found`. A DSH without the service
+answers `preview_unavailable`.
 
 ## Publishing
 

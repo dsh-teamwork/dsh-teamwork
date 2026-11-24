@@ -21,7 +21,7 @@
 import { z } from 'zod';
 import { PhoneSessionError, type PhoneSessionOps } from './phone-session.js';
 import { PRESET_NAME } from './phone-permission.js';
-import { listDirectory, readDocument, readText, searchFiles } from './phone-files.js';
+import { changeDiff, changeSummary, listDirectory, readDocument, readText, searchFiles, statFile } from './phone-files.js';
 import { PhoneUploads, uploadLimits, uploadSchemas } from './phone-uploads.js';
 import { MAX_MESSAGE } from './secure-channel.js';
 import { ROUTE_PREFIX, type FetchRoute } from './panel.js';
@@ -35,7 +35,8 @@ const SCHEDULE_CALLS: ReadonlySet<string> = new Set([
 export const ALLOWED_CALLS: ReadonlySet<string> = new Set([
   'session/list', 'session/create', 'session/prompt', 'session/state', 'session/page', 'session/cancel',
   'session/modelCatalog', 'teamwork/configuration', 'teamwork/selectModel', 'teamwork/selectPermission',
-  'teamwork/listFiles', 'teamwork/searchFiles', 'teamwork/readFile', 'teamwork/readDocument',
+  'teamwork/listFiles', 'teamwork/searchFiles', 'teamwork/readFile', 'teamwork/readDocument', 'teamwork/statFile',
+  'teamwork/changes', 'teamwork/changeDiff',
   'teamwork/uploadStart', 'teamwork/uploadChunk', 'teamwork/uploadFinish', 'teamwork/uploadCancel',
   'userQuestions/answer',
   '$events/result',
@@ -66,8 +67,11 @@ function sessionActionSchemas() {
 }
 const SESSION_ACTIONS = sessionActionSchemas();
 
-/** Reading a session's files, under its working directory (src/phone-files.ts). */
-const FILE_CALLS = new Set(['teamwork/listFiles', 'teamwork/searchFiles', 'teamwork/readFile', 'teamwork/readDocument']);
+/** Reading a session's files under its working directory, and what its turns changed (src/phone-files.ts). */
+const FILE_CALLS = new Set([
+  'teamwork/listFiles', 'teamwork/searchFiles', 'teamwork/readFile', 'teamwork/readDocument', 'teamwork/statFile',
+  'teamwork/changes', 'teamwork/changeDiff',
+]);
 
 /** Which of the member's sessions DSH's workspace registry pins and archives (its `pinnedSessionIds`, `archivedSessionIds`). */
 export interface SessionMarks {
@@ -270,11 +274,17 @@ export class Bridge {
             sessionId, path: z.string().min(1).max(4096), offset: z.number().int().nonnegative(),
             version: z.string().max(128).optional(),
           }).strict(),
-          'teamwork/readFile': z.object({ sessionId, path: z.string().min(1).max(4096) }).strict(),
+          'teamwork/readFile': z.object({
+            sessionId, path: z.string().min(1).max(4096), offset: z.number().int().nonnegative().optional(),
+            version: z.string().max(128).optional(),
+          }).strict(),
+          'teamwork/statFile': z.object({ sessionId, path: z.string().min(1).max(4096) }).strict(),
+          'teamwork/changes': z.object({ sessionId, seq: z.number().int().nonnegative() }).strict(),
+          'teamwork/changeDiff': z.object({ sessionId, seq: z.number().int().nonnegative(), index: z.number().int().nonnegative().max(10_000) }).strict(),
         };
         const schema = schemas[frame.method]
           ?? z.object({ sessionId, provider: z.string().min(1), model: z.string().min(1), reasoningEffort: z.string().optional() }).strict();
-        const input = schema.safeParse(request) as z.ZodSafeParseResult<{ sessionId?: string; path?: string; query?: string; offset?: number; version?: string }>;
+        const input = schema.safeParse(request) as z.ZodSafeParseResult<{ sessionId?: string; path?: string; query?: string; offset?: number; version?: string; seq?: number; index?: number }>;
         if (!input.success) throw new PhoneSessionError('invalid_request');
         await this.cookie(link, origin);
         if (input.data.sessionId) {
@@ -286,10 +296,14 @@ export class Bridge {
         // A session's files, read only and under its working directory (src/phone-files.ts).
         if (FILE_CALLS.has(frame.method)) {
           const root = await operations.fileRoot(input.data.sessionId!);
-          const read = frame.method === 'teamwork/listFiles' ? listDirectory(root, input.data.path!)
+          const { sessionId: id, path, offset, version, seq, index } = input.data;
+          const read: Promise<unknown> = frame.method === 'teamwork/listFiles' ? listDirectory(root, path!)
             : frame.method === 'teamwork/searchFiles' ? searchFiles(root, input.data.query!)
-              : frame.method === 'teamwork/readDocument' ? readDocument(root, input.data.path!, input.data.offset!, input.data.version, operations.officeKit?.())
-                : readText(root, input.data.path!);
+              : frame.method === 'teamwork/readDocument' ? readDocument(root, path!, offset!, version, operations.officeKit?.())
+                : frame.method === 'teamwork/statFile' ? statFile(root, path!)
+                  : frame.method === 'teamwork/changes' ? Promise.resolve().then(() => changeSummary(operations.workspaceChanges?.(), id!, seq!))
+                    : frame.method === 'teamwork/changeDiff' ? changeDiff(operations.workspaceChanges?.(), root, id!, seq!, index!)
+                      : readText(root, path!, offset ?? 0, version);
           // A file the system will not open (no permission, gone meanwhile) is one the member cannot reach.
           const value = await read.catch((error: unknown) => { throw error instanceof PhoneSessionError ? error : new PhoneSessionError('not_found'); });
           return answer(200, { result: { ok: true, value } });
