@@ -26,7 +26,7 @@ import { registerBundledSkills } from './bundled-skills.js';
 import { teamworkSearch } from './web-search.js';
 import { isTeamProvider, platformAdapter, teamProvider, teamRoutes } from './platform-models.js';
 import { Bridge, bridgeRoute } from './bridge.js';
-import type { PreviewOfficeKit } from './phone-files.js';
+import type { PreviewOfficeKit, WorkspaceChanges } from './phone-files.js';
 import { PhoneSessionError, phonePresets } from './phone-session.js';
 import { phonePermissions, type PermissionPresets } from './phone-permission.js';
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm';
@@ -329,6 +329,14 @@ export async function apply(ctx: Context, config: Config) {
         const run = await commandRegistry.execute(agent, `/permission ${request.preset}`, [], AbortSignal.timeout(10_000));
         if (!run || run.result.kind !== 'success') throw new PhoneSessionError('unavailable');
         return { current: presets.current(agent.session) };
+      },
+      workspaceChanges() {
+        const candidate: unknown = ctx.get('workspaceChanges');
+        if (candidate && typeof candidate === 'object' && 'summary' in candidate && typeof candidate.summary === 'function'
+          && 'diff' in candidate && typeof candidate.diff === 'function') {
+          return candidate as WorkspaceChanges;
+        }
+        return undefined;
       },
       officeKit() {
         const candidate: unknown = ctx.get('officeKit');
