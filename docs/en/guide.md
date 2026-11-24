@@ -171,10 +171,12 @@ searches it, cites the document and heading an answer rests on as
 `knowledge:{documentId}@{version}#{heading}`, and says so when two documents
 disagree or when the knowledge does not hold the answer. Only new and changed
 documents are downloaded, and a document you may no longer read is deleted from
-the copy on the next sync.
+the copy on the next sync. A document's images and files are beside it, in a
+`{title}.files` folder; its text names them as `![[name]]` or `[[name]]`.
 
 An agent never changes a document. Its `teamwork_knowledge` tool sends a
-proposal, and an editor of the document's space accepts or declines it in the
+proposal, with any new image or file it names attached (at most 20 MiB each),
+and an editor of the document's space accepts or declines it in the
 console; until then the document is unchanged. Signing out removes the copy.
 Knowledge needs a Teamwork server that offers it.
 

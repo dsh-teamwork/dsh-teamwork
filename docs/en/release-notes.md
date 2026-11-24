@@ -2,6 +2,15 @@
 
 ## Next release
 
+- Knowledge attachments. A document's images and files are synced read-only
+  beside it, in `{title}.files/{name}`, fetched only when new or changed and
+  moved with their document; the agent is told where they are and that the
+  text names them as `![[name]]` or `[[name]]`. `teamwork_knowledge`'s
+  `propose` takes `attachments`, files in the session's folder of at most
+  20 MiB each, and uploads them under their file names before the proposal;
+  a name the document already holds with other bytes stops it, for the agent
+  to rename its file. It needs a Teamwork server with knowledge attachments
+  (the manifest's `attachments`); against an older one the sync fails.
 - Teamwork knowledge, synced read-only for agents, and the `teamwork_knowledge`
   tool to propose changes. Each sync keeps a read-only copy of every knowledge
   document (page) the member may read in `teamwork-knowledge` beside the cache

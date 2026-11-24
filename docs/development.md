@@ -100,10 +100,20 @@ the configuration's sync. A server without `GET /api/knowledge` (404) holds no k
 - A file is the document's text under `knowledge: {documentId}@{version}`, first in the text's own
   front matter when it opens with some, else in a block of its own; `stripFrontMatter` is its exact
   inverse. Files are written beside the tree, made 0444 and renamed into place.
-- `<cache>.knowledge.json` maps each document id to its team, version and path. A sync fetches
-  `GET /api/teams/{teamId}/knowledge/documents/{id}?version=n` only for a new or changed version or
-  a missing file, renames a document whose path changed, then deletes every file the state does not
-  name and every empty folder. A document that cannot be fetched keeps the version it had.
+- A document's attachments (the manifest's `attachments: [{name, size, digest}]`) are beside it in
+  `{title}.files/{name}`, the folder named after the document's own path, so it takes the document's
+  ` ({id})` too. The name's part before its extension goes through `segment` and the extension is
+  kept; names that collide without case take ` ({digest's first 8})`, counted on if that is taken
+  too. A folder never ends in `.files`, and an attachment over 20 MiB is skipped. Each is fetched from
+  `GET …/knowledge/documents/{id}/attachments/{name}`, held to its digest (the first 24 bytes of its
+  SHA-256, base64url) and the 20 MiB bound, and placed read-only as a document is.
+- `<cache>.knowledge.json` is `{ documents: { [id]: { teamId, version, path, attachments: { [name]:
+  { digest, path } } } } }`. A sync fetches `GET /api/teams/{teamId}/knowledge/documents/{id}?version=n`
+  only for a new or changed version or a missing file, and an attachment only for a new or changed
+  digest or a missing file; it renames a document or attachment whose path changed (so a `.files`
+  folder moves with its document), then deletes every file the state does not name and every empty
+  folder. A document or attachment that cannot be fetched keeps what it had; the sync then fails
+  with how many of the changed ones failed, after doing everything else.
 - `TeamworkClient.clear` (sign-out, a new sign-in, a 401/403 on `configs`) removes the copy and its
   state; a sync that finds the account changed under it removes them again when it finishes.
 
@@ -111,12 +121,18 @@ While the copy holds a document, every session gets the `teamwork:knowledge` sys
 (`knowledgeGuide` in `src/preset-context.ts`, order 95): the copy's absolute path, that it is
 read-only, to search it with grep rather than list it, to cite
 `knowledge:{documentId}@{version}#{heading}`, to name a conflict between documents and a gap in
-them, and to change a document only by proposing. It says "documents (pages)" (platform ADR 0069).
+them, to find a document's attachments in `{title}.files/` and that its text names them as
+`![[name]]` or `[[name]]`, and to change a document only by proposing. It says "documents (pages)"
+(platform ADR 0069).
 
 `src/knowledge-tool.ts` registers `teamwork_knowledge` with one action, `propose`: `documentId`,
-`baseVersion`, `note`, and `content` or `path` (a file inside the session's folder, after following
-links, at most 1 MiB). The team is the synced document's. The copy's `knowledge:` line is removed,
-and one naming another document or version is refused. It posts
+`baseVersion`, `note`, `content` or `path` (a file inside the session's folder, after following
+links, at most 1 MiB), and optional `attachments` (files resolved the same way, at most 20 MiB each,
+named by their base names). The team is the synced document's. The copy's `knowledge:` line is
+removed, and one naming another document or version is refused. Each attachment is uploaded first,
+`POST …/knowledge/documents/{id}/attachments` as multipart part `file`; the same name and bytes are
+already held (200), and `knowledge_name_taken` stops the tool, telling the agent to rename its file
+and name it so in the text, which the tool never rewrites. The result lists what it attached. It posts
 `POST /api/teams/{teamId}/knowledge/documents/{id}/proposals` with `{ baseVersion, text, note,
 computer, sessionId }`; the server records a plugin's change as an agent's proposal, so the tool
 cannot write a version or change access. A sent proposal's card is

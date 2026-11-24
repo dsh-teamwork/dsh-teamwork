@@ -251,10 +251,19 @@ export declare const knowledgeManifestSchema: z.ZodObject<{
                 folders: z.ZodArray<z.ZodString>;
                 title: z.ZodString;
                 version: z.ZodNumber;
+                attachments: z.ZodArray<z.ZodObject<{
+                    name: z.ZodString;
+                    size: z.ZodNumber;
+                    digest: z.ZodString;
+                }, z.core.$strip>>;
             }, z.core.$strip>>;
         }, z.core.$strip>>;
     }, z.core.$strip>>;
 }, z.core.$strip>;
+/** The server's limit on one knowledge attachment, which the copy and the tool hold too. */
+export declare const MAX_ATTACHMENT: number;
+/** An attachment's digest as the manifest names it: the first 24 bytes of its SHA-256, base64url. */
+export declare const attachmentDigest: (bytes: Uint8Array) => string;
 export type KnowledgeManifest = z.infer<typeof knowledgeManifestSchema>;
 export declare class TeamworkClient {
     readonly cachePath: string;
@@ -337,6 +346,18 @@ export declare class TeamworkClient {
         title: string;
         version: number;
         text: string;
+    }>;
+    private attachmentPath;
+    /** One attachment's bytes, held to the manifest's `digest` and to the size limit, so a cut-off body never lands in the copy. */
+    readKnowledgeAttachment(teamId: string, documentId: string, name: string, digest: string, signal?: AbortSignal): Promise<Buffer<ArrayBuffer>>;
+    /**
+     * Uploads `bytes` as the attachment `name` of a document the member reads. The same name with the same bytes is
+     * the same attachment (200); other bytes are `knowledge_name_taken`, since a name keeps its bytes for the document's life.
+     */
+    attachKnowledge(teamId: string, documentId: string, name: string, bytes: Uint8Array, signal: AbortSignal): Promise<{
+        name: string;
+        contentType: string;
+        size: number;
     }>;
     /** Proposes `text` as a document's next version on `baseVersion`. A plugin's change is always a proposal: an editor accepts it. */
     proposeKnowledge(teamId: string, documentId: string, input: {

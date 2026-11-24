@@ -1,9 +1,15 @@
 import { type KnowledgeManifest, type TeamworkClient } from './client.js';
-/** One document on disk: its team, the version it holds, and its path in the copy (`/`-separated). */
+/** One attachment on disk: the digest of the bytes it holds, and its path in the copy (`/`-separated). */
+export interface KnowledgeFile {
+    digest: string;
+    path: string;
+}
+/** One document on disk: its team, the version it holds, its path in the copy, and its attachments by name. */
 export interface KnowledgeEntry {
     teamId: string;
     version: number;
     path: string;
+    attachments: Record<string, KnowledgeFile>;
 }
 export type KnowledgeState = Record<string, KnowledgeEntry>;
 /**
@@ -23,14 +29,32 @@ export declare function stripFrontMatter(text: string): {
  */
 export declare function segment(name: string): string;
 /**
- * Where each document of a manifest goes in the copy. Names that come out the same after `segment`, compared without
- * case as a case-insensitive file system would, are told apart by the id of the later one.
+ * An attachment's name as one path segment, split before its extension: `segment` on the part before it, so the
+ * length bound never cuts the extension off, and the extension as it is (letters and digits only).
+ */
+export declare function attachmentSegment(name: string): {
+    stem: string;
+    extension: string;
+};
+/**
+ * Where each document of a manifest goes in the copy, and its attachments in `{title}.files/` beside it. Names that
+ * come out the same after `segment`, compared without case as a case-insensitive file system would, are told apart by
+ * the id of the later document, or the start of the later attachment's digest. An attachment larger than the server's
+ * limit is left out, should a manifest ever list one.
  */
 export declare function knowledgeLayout(manifest: KnowledgeManifest): Map<string, KnowledgeEntry>;
+/** One attachment of a sync's plan: its document and name, and where its wanted bytes go. */
+export interface KnowledgeAttachmentItem {
+    id: string;
+    teamId: string;
+    name: string;
+    file: KnowledgeFile;
+}
 /**
  * What a sync does to bring the copy from `state` to `wanted`, given the files `present` on disk: keep what holds the
- * wanted version where it should be, move what holds it elsewhere, and fetch the rest. Whatever is not kept, moved or
- * fetched is left for the sweep to delete.
+ * wanted version or digest where it should be, move what holds it elsewhere, and fetch the rest. A document's text
+ * and its attachments are planned apart, so a renamed document's attachments move with it whether or not its text
+ * changed. Whatever is not kept, moved or fetched is left for the sweep to delete.
  */
 export declare function knowledgePlan(state: KnowledgeState, wanted: Map<string, KnowledgeEntry>, present: Set<string>): {
     keep: [string, KnowledgeEntry][];
@@ -40,6 +64,14 @@ export declare function knowledgePlan(state: KnowledgeState, wanted: Map<string,
         to: KnowledgeEntry;
     }[];
     fetch: [string, KnowledgeEntry][];
+    files: {
+        keep: KnowledgeAttachmentItem[];
+        move: {
+            item: KnowledgeAttachmentItem;
+            from: string;
+        }[];
+        fetch: KnowledgeAttachmentItem[];
+    };
 };
 export declare class KnowledgeSync {
     private client;

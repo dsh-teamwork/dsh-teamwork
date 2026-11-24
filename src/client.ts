@@ -53,8 +53,13 @@ export class KnowledgeError extends Error {
 /** `GET /api/knowledge` (platform docs/tech/knowledge.md, "The sync manifest"): every document the member reads, per team and space. */
 export const knowledgeManifestSchema = z.object({ teams: z.array(z.object({ teamId: z.string().min(1), teamName: z.string(), spaces: z.array(z.object({
   id: z.string().min(1), name: z.string(),
-  documents: z.array(z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,32}$/), folders: z.array(z.string()), title: z.string(), version: z.number().int().positive() })),
+  documents: z.array(z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,32}$/), folders: z.array(z.string()), title: z.string(), version: z.number().int().positive(),
+    attachments: z.array(z.object({ name: z.string().min(1), size: z.number().int().nonnegative(), digest: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/) })) })),
 })) })) });
+/** The server's limit on one knowledge attachment, which the copy and the tool hold too. */
+export const MAX_ATTACHMENT = 20 << 20;
+/** An attachment's digest as the manifest names it: the first 24 bytes of its SHA-256, base64url. */
+export const attachmentDigest = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest().subarray(0, 24).toString('base64url');
 export type KnowledgeManifest = z.infer<typeof knowledgeManifestSchema>;
 const pointsSchema = z.string().regex(/^\d+(?:\.\d{1,9})?$/);
 const budgetSchema = z.object({
@@ -201,7 +206,7 @@ export class TeamworkClient {
   get knowledgeStatePath() { return this.cachePath.replace(/\.json$/, '') + '.knowledge.json'; }
   private async knowledgeRequest(path:string,init:RequestInit,signal?:AbortSignal):Promise<unknown> {
     if(!this.token)throw new Error('Sign in to Teamwork first');
-    const response=await this.request(`${this.endpoint}/api/${path}`,{...init,headers:{Authorization:`Bearer ${this.token}`,Origin:new URL(this.endpoint).origin,...(init.body?{'Content-Type':'application/json'}:{})},signal:signal??AbortSignal.timeout(15000),redirect:'error'});
+    const response=await this.request(`${this.endpoint}/api/${path}`,{...init,headers:{Authorization:`Bearer ${this.token}`,Origin:new URL(this.endpoint).origin,...(typeof init.body==='string'?{'Content-Type':'application/json'}:{})},signal:signal??AbortSignal.timeout(15000),redirect:'error'});
     const body=await response.json().catch(()=>({})) as {error?:string;issues?:{message:string}[]};
     if(!response.ok)throw new KnowledgeError(response.status,String(body.error??''),(body.issues??[]).map(i=>i.message).join('; '));
     return body;
@@ -216,6 +221,33 @@ export class TeamworkClient {
     const query=version?`?version=${version}`:'';
     return z.object({id:z.string(),title:z.string(),version:z.number().int().positive(),text:z.string()})
       .parse(await this.knowledgeRequest(`teams/${encodeURIComponent(teamId)}/knowledge/documents/${encodeURIComponent(documentId)}${query}`,{},signal));
+  }
+  private attachmentPath(teamId:string,documentId:string) { return `teams/${encodeURIComponent(teamId)}/knowledge/documents/${encodeURIComponent(documentId)}/attachments`; }
+  /** One attachment's bytes, held to the manifest's `digest` and to the size limit, so a cut-off body never lands in the copy. */
+  async readKnowledgeAttachment(teamId:string,documentId:string,name:string,digest:string,signal?:AbortSignal) {
+    if(!this.token)throw new Error('Sign in to Teamwork first');
+    const epoch=this.epoch;
+    const response=await this.request(`${this.endpoint}/api/${this.attachmentPath(teamId,documentId)}/${encodeURIComponent(name)}`,{headers:{Authorization:`Bearer ${this.token}`},signal:signal??AbortSignal.timeout(60000),redirect:'error'});
+    if(!response.ok){const body=await response.json().catch(()=>({})) as {error?:string};throw new KnowledgeError(response.status,String(body.error??''),'');}
+    const reader=response.body?.getReader();if(!reader)throw new KnowledgeError(response.status,'','no body');
+    const chunks:Uint8Array[]=[];let size=0;
+    try{for(;;){const part=await reader.read();if(part.done)break;size+=part.value.length;if(size>MAX_ATTACHMENT)throw new KnowledgeError(response.status,'','attachment exceeds 20 MiB');chunks.push(part.value);}}finally{await reader.cancel();}
+    const bytes=Buffer.concat(chunks);
+    if(attachmentDigest(bytes)!==digest)throw new KnowledgeError(response.status,'','attachment digest mismatch');
+    if(epoch!==this.epoch)throw new Error('Account changed during download');
+    return bytes;
+  }
+  /**
+   * Uploads `bytes` as the attachment `name` of a document the member reads. The same name with the same bytes is
+   * the same attachment (200); other bytes are `knowledge_name_taken`, since a name keeps its bytes for the document's life.
+   */
+  async attachKnowledge(teamId:string,documentId:string,name:string,bytes:Uint8Array,signal:AbortSignal) {
+    const epoch=this.epoch,form=new FormData();
+    form.append('file',new Blob([new Uint8Array(bytes)]),name);
+    const attached=z.object({name:z.string(),contentType:z.string(),size:z.number().int()})
+      .parse(await this.knowledgeRequest(this.attachmentPath(teamId,documentId),{method:'POST',body:form},signal));
+    if(epoch!==this.epoch)throw new Error('Account changed during upload');
+    return attached;
   }
   /** Proposes `text` as a document's next version on `baseVersion`. A plugin's change is always a proposal: an editor accepts it. */
   async proposeKnowledge(teamId:string,documentId:string,input:{baseVersion:number;text:string;note:string;computer:string;sessionId:string},signal:AbortSignal) {
