@@ -142,22 +142,22 @@ Provider secrets and new account passwords belong in the console's forms.
 retained versions. Exported resources can include retained private plugin bytes.
 A restoration prepares a new publication for review; it does not erase history
 or replace a running conversation's preset. A resource export is distinct from
-a full database-and-artifact backup managed by the server operator.
+a full database-and-file-storage backup managed by the server operator.
 
 ![Publication history of a demonstration team](../../assets/readme/versions-and-backups.png)
 
-## Pages
+## Artifacts
 
 Ask the agent for a report, a deck, a dashboard or a diagram and to publish it:
-its `teamwork_page` tool uploads the page to your team, private to you, and the
+its `teamwork_artifact` tool uploads the artifact to your team, private to you, and the
 agent gives you its link in the console; the conversation also shows a card
-that opens it beside the conversation in the web console. Asking for a change adds a version; earlier versions stay. A page is
-an `index.html` with the files it loads, one `index.md`, or one `index.svg`,
+that opens it beside the conversation in the web console. Asking for a change adds a version; earlier versions stay. An artifact is
+an `index.html` with the files it loads, or one `index.svg`,
 from a folder in the session's workspace; at most 255 files and 16 MiB a
-version. Only you share a page, from **Pages** in the console, with chosen
-members or the whole team; the agent cannot. A page shared with you can be opened into
+version. Only you share an artifact, from **Artifacts** in the console, with chosen
+members or the whole team; the agent cannot. An artifact shared with you can be opened into
 your own session's workspace by your agent, changed, and published as a new
-version under your name. Pages run sandboxed: a page cannot act as
+version under your name. Artifacts run sandboxed: an artifact cannot act as
 the person viewing it.
 
 ## Commands
@@ -232,7 +232,7 @@ cached with private file permissions. A stale cache is not authorization.
 Network failures preserve it; 401/403 clear team registrations and suspend sync
 until sign-in. Provider keys remain on the service; team-model prompts and
 context travel through that service's gateway.
-Pages an agent publishes are stored on the Teamwork server, private until
+Artifacts an agent publishes are stored on the Teamwork server, private until
 their owner shares them; the rest of a session stays on the computer.
 
 The hosted service may advertise a relay. A matching Teamwork App and an online

@@ -2,6 +2,18 @@
 
 ## Next release
 
+- Breaking: this release needs a Teamwork server with the renamed routes
+  (platform ADR 0069); an older server refuses it, and an older plugin is
+  refused by a new server. What an agent publishes is an artifact: the tool
+  `teamwork_page` is now `teamwork_artifact`, its `pageId` argument and result
+  field are `artifactId`, its card is `presentationMeta.teamworkArtifact`, its
+  link is `/teams/{teamId}/artifacts/{id}`, and it calls
+  `/api/teams/{teamId}/artifacts/*`. The `markdown` kind is gone; an artifact
+  is `html` or `svg`. Private plugin archives are packages: a plugin pin's
+  `artifactId` is `packageId`, downloads come from
+  `/api/teams/{teamId}/packages/{id}/download`, and the cache beside the
+  configuration is `teamwork-packages` (an old `teamwork-artifacts` folder is
+  no longer read and can be deleted).
 - A paired phone or browser manages this computer's automation tasks (DSH's
   Schedule): the bridge passes on `schedule/catalog`, `history`, `create`,
   `edit` and `run` unchanged, and the server's console and app draw them.

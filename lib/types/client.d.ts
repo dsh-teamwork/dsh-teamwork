@@ -14,7 +14,7 @@ export declare const snapshotSchema: z.ZodObject<{
             configId: z.ZodString;
             name: z.ZodString;
             data: z.ZodObject<{
-                artifactId: z.ZodOptional<z.ZodString>;
+                packageId: z.ZodOptional<z.ZodString>;
                 sha256: z.ZodOptional<z.ZodString>;
                 package: z.ZodString;
                 version: z.ZodString;
@@ -72,7 +72,7 @@ export declare const snapshotSchema: z.ZodObject<{
         }, z.core.$strip>, z.ZodObject<{
             kind: z.ZodLiteral<"plugin">;
             data: z.ZodObject<{
-                artifactId: z.ZodOptional<z.ZodString>;
+                packageId: z.ZodOptional<z.ZodString>;
                 sha256: z.ZodOptional<z.ZodString>;
                 package: z.ZodString;
                 version: z.ZodString;
@@ -137,7 +137,7 @@ export declare const findConfig: (snapshot: Snapshot | undefined, id: string) =>
         package: string;
         version: string;
         description: string;
-        artifactId?: string | undefined;
+        packageId?: string | undefined;
         sha256?: string | undefined;
         providesTools?: string[] | undefined;
     };
@@ -197,7 +197,7 @@ export declare const teamOf: (snapshot: Snapshot | undefined, configId: string) 
             package: string;
             version: string;
             description: string;
-            artifactId?: string | undefined;
+            packageId?: string | undefined;
             sha256?: string | undefined;
             providesTools?: string[] | undefined;
         };
@@ -213,7 +213,7 @@ export declare const teamOf: (snapshot: Snapshot | undefined, configId: string) 
             package: string;
             version: string;
             description: string;
-            artifactId?: string | undefined;
+            packageId?: string | undefined;
             sha256?: string | undefined;
             providesTools?: string[] | undefined;
         };
@@ -224,8 +224,8 @@ export declare const teamOf: (snapshot: Snapshot | undefined, configId: string) 
  * this machine, no query or fragment, no trailing slash. Throws a message for the member.
  */
 export declare function serverAddress(input: string): string;
-/** A page the server refused: its status, code (`page_stale`, `page_too_large`, …) and what it said was wrong. */
-export declare class PageError extends Error {
+/** An artifact the server refused: its status, code (`artifact_stale`, `artifact_too_large`, …) and what it said was wrong. */
+export declare class ArtifactError extends Error {
     readonly status: number;
     readonly code: string;
     readonly detail: string;
@@ -263,15 +263,15 @@ export declare class TeamworkClient {
     /** Takes the code alone or the whole `/teamwork authorize <code>` line the sign-in page shows, so the panel accepts what was copied. */
     completeLogin(pasted: string): Promise<void>;
     private api;
-    downloadArtifact(teamId: string, id: string, digest: string): Promise<string>;
+    downloadPackage(teamId: string, id: string, digest: string): Promise<string>;
     /**
-     * Publishes a page (docs/tech/pages.md in the platform repository): a new one, or a version on top of `baseVersion`.
-     * `files` are paths within the page and their bytes; the server holds every rule and limit, and says which broke.
+     * Publishes an artifact (docs/tech/artifacts.md in the platform repository): a new one, or a version on top of
+     * `baseVersion`. `files` are paths within the artifact and their bytes; the server holds every rule and limit, and says which broke.
      */
-    publishPage(teamId: string, input: {
-        pageId?: string;
+    publishArtifact(teamId: string, input: {
+        artifactId?: string;
         title?: string;
-        kind: 'html' | 'markdown' | 'svg';
+        kind: 'html' | 'svg';
         note: string;
         sessionId: string;
         computer: string;
@@ -284,7 +284,7 @@ export declare class TeamworkClient {
         teamId: string;
         version: number;
         title: string;
-        kind: "html" | "markdown" | "svg";
+        kind: "html" | "svg";
     }>;
     /**
      * Whether the signed-in server searches the web for its members (the hosted service does, on its own key; a
@@ -299,8 +299,8 @@ export declare class TeamworkClient {
         summary?: string | undefined;
         publishedAt?: string | undefined;
     }[]>;
-    /** The files of a page's version, fetched through a view address minted for this member, as the console's frame fetches them. */
-    readPage(teamId: string, pageId: string, version: number, signal: AbortSignal): Promise<{
+    /** The files of an artifact's version, fetched through a view address minted for this member, as the console's frame fetches them. */
+    readArtifact(teamId: string, artifactId: string, version: number, signal: AbortSignal): Promise<{
         path: string;
         bytes: Uint8Array;
     }[]>;
@@ -371,7 +371,7 @@ export declare class TeamworkClient {
                     package: string;
                     version: string;
                     description: string;
-                    artifactId?: string | undefined;
+                    packageId?: string | undefined;
                     sha256?: string | undefined;
                     providesTools?: string[] | undefined;
                 };
@@ -387,7 +387,7 @@ export declare class TeamworkClient {
                     package: string;
                     version: string;
                     description: string;
-                    artifactId?: string | undefined;
+                    packageId?: string | undefined;
                     sha256?: string | undefined;
                     providesTools?: string[] | undefined;
                 };
@@ -447,7 +447,7 @@ export declare class TeamworkClient {
                     package: string;
                     version: string;
                     description: string;
-                    artifactId?: string | undefined;
+                    packageId?: string | undefined;
                     sha256?: string | undefined;
                     providesTools?: string[] | undefined;
                 };
@@ -463,7 +463,7 @@ export declare class TeamworkClient {
                     package: string;
                     version: string;
                     description: string;
-                    artifactId?: string | undefined;
+                    packageId?: string | undefined;
                     sha256?: string | undefined;
                     providesTools?: string[] | undefined;
                 };
@@ -533,7 +533,7 @@ export declare class TeamworkClient {
                     package: string;
                     version: string;
                     description: string;
-                    artifactId?: string | undefined;
+                    packageId?: string | undefined;
                     sha256?: string | undefined;
                     providesTools?: string[] | undefined;
                 };
@@ -549,7 +549,7 @@ export declare class TeamworkClient {
                     package: string;
                     version: string;
                     description: string;
-                    artifactId?: string | undefined;
+                    packageId?: string | undefined;
                     sha256?: string | undefined;
                     providesTools?: string[] | undefined;
                 };

@@ -3,8 +3,8 @@
  * host has one, so a preset a team makes from one of the console's templates finds its method with no install, and
  * any session can use it:
  *
- * - `teamwork-slides`: plan a talk, write it as an HTML deck with speaker notes, publish it with `teamwork_page`;
- * - `teamwork-research`: research a question from sources, write a cited report, publish it with `teamwork_page`.
+ * - `teamwork-slides`: plan a talk, write it as an HTML deck with speaker notes, publish it with `teamwork_artifact`;
+ * - `teamwork-research`: research a question from sources, write a cited report, publish it with `teamwork_artifact`.
  *
  * Each folder holds its `SKILL.md`, the `template/` runtime the skill tells the agent to copy, and a `check.mjs` that
  * runs the runtime's own checks without a browser.

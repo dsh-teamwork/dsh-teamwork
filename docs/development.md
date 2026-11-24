@@ -68,8 +68,8 @@ agent's shell proved too unreliable to rely on). The agent never writes HTML or 
   citations together: every `[n]` names a source, every source is cited, has a URL, an access date
   and a quote from the page, and a figure outside the summary carries a citation.
 
-Saving a file from a published page needs the pages sandbox's `allow-downloads` (platform
-`docs/tech/pages.md`).
+Saving a file from a published artifact needs the artifacts sandbox's `allow-downloads` (platform
+`docs/tech/artifacts.md`).
 
 ## Teamwork search
 

@@ -18,7 +18,7 @@ import { taskProjection, stepProjection, TaskActions, recoveryHint, retryInstruc
 import { pluginState, stateText, type PluginState } from './plugin-status.js';
 import { panelRoutes, type FetchRoute, type PanelOps, type PanelPreset } from './panel.js';
 import { registerAssistantTools } from './assistant-tools.js';
-import { registerPageTool } from './page-tool.js';
+import { registerArtifactTool } from './artifact-tool.js';
 import { registerBundledSkills } from './bundled-skills.js';
 import { teamworkSearch } from './web-search.js';
 import { isTeamProvider, platformAdapter, teamProvider, teamRoutes } from './platform-models.js';
@@ -364,8 +364,8 @@ export async function apply(ctx: Context, config: Config) {
   const phoneKeys = new PhoneKeys(config.cachePath.replace(/\.json$/, '') + '.phone-keys.json');
   ctx.inject(['skills'], registerBundledSkills);
   ctx.inject(['web'], child => search.attach(child));
-  // Pages an agent publishes (src/page-tool.ts), for the signed-in member.
-  ctx.inject(['tools'], child => registerPageTool(child, { client, preset: activePreset }));
+  // Artifacts an agent publishes (src/artifact-tool.ts), for the signed-in member.
+  ctx.inject(['tools'], child => registerArtifactTool(child, { client, preset: activePreset }));
   const security = new PhoneSecurity({
     keys: phoneKeys,
     scope: () => {
@@ -502,7 +502,7 @@ export async function apply(ctx: Context, config: Config) {
     const existing = (await manager.listBundles()).find(bundle => bundle.name === item.data.package);
     if (existing && (existing.installed || existing.enabled || existing.availability === 'installation')) throw new Error(say('install.exists'));
     const teamId=teamOf(client.current(),item.id)?.teamId;
-    const target=item.data.artifactId ? await client.downloadArtifact(teamId!,item.data.artifactId,item.data.sha256!) : spec;
+    const target=item.data.packageId ? await client.downloadPackage(teamId!,item.data.packageId,item.data.sha256!) : spec;
     if(epoch!==client.sessionRevision() || JSON.stringify(pinnedPlugin(client.current(),item.id,item.data.version))!==signature)throw new Error(say('install.changed'));
     const installed = await manager.installBundle(target, { saveExact: true, enabled: false });
     if (installed.error || ['failed', 'cancelled', 'overridden'].includes(installed.application)) throw new Error(say('install.incomplete', { reason: installed.error?.code ?? installed.application }));

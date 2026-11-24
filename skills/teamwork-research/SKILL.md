@@ -1,6 +1,6 @@
 ---
 name: teamwork-research
-description: Research a question from sources the reader can check, and write a decision-ready report with numbered citations, published as a Teamwork page that prints to PDF and saves as Markdown. Use for any competitor or market analysis, vendor or technology selection, industry or policy research, fact-finding or literature review.
+description: Research a question from sources the reader can check, and write a decision-ready report with numbered citations, published as a Teamwork artifact that prints to PDF and saves as Markdown. Use for any competitor or market analysis, vendor or technology selection, industry or policy research, fact-finding or literature review.
 ---
 
 # Teamwork research
@@ -78,16 +78,16 @@ you need is in this file and that example; do not read `index.html` to learn how
    once it prints `[]`**, and run it again after every change: a `report.js` that does not run shows
    the person an empty report. Do not open the
    report in a browser yourself.
-7. **Publish** the folder with `teamwork_page` (`action: "create"`, `kind: "html"`, the report's
+7. **Publish** the folder with `teamwork_artifact` (`action: "create"`, `kind: "html"`, the report's
    title, `directory` the report folder). Give the person the link. For a change, edit `report.js`
-   and publish again with `action: "update"`, the page id, the version you published last as
+   and publish again with `action: "update"`, the artifact id, the version you published last as
    `baseVersion`, and a one-line `note`.
 8. **Hand over.** Give the answer in two or three sentences in the chat, then the link. Say that
-   **PDF** prints the report and **Markdown** saves it for a document or a chat, that the page is
+   **PDF** prints the report and **Markdown** saves it for a document or a chat, that the artifact is
    private until they share it from the console, and which gaps matter most. The page makes the
    files; do not make them yourself.
 
-Without `teamwork_page` (no team, or not signed in), the folder still works: the person opens
+Without `teamwork_artifact` (no team, or not signed in), the folder still works: the person opens
 `index.html` in a browser.
 
 ## report.js
