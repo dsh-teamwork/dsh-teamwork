@@ -296,7 +296,7 @@ describe('the phone bridge', () => {
   it('marks each listed session with its place in the pin and archive sets and the workspace that lists it', async () => {
     const sent: any[] = [];
     const items = [{ sessionId: 'a', title: 'A' }, { sessionId: 'b' }, { sessionId: 'c' }, { sessionId: 'd' }];
-    const workspaces = [{ id: 'w1', title: 'alpha', sessionIds: ['c', 'b'] }, { id: 'w2', title: 'beta', sessionIds: ['d', 'b'] }];
+    const workspaces = [{ id: 'w1', title: 'alpha', path: '/repo', sessionIds: ['c', 'b'] }, { id: 'w2', title: 'beta', path: '/repo/sub/pkg', sessionIds: ['d', 'b'] }];
     const request = (async (url: string) => url.includes('/connect?')
       ? new Response(null, { status: 302, headers: { 'set-cookie': 'dsh=peer; Path=/' } })
       : new Response(JSON.stringify({ type: 'client-response', result: { ok: true, value: { items } } }))) as typeof fetch;
@@ -307,8 +307,21 @@ describe('the phone bridge', () => {
       { sessionId: 'a', title: 'A', teamwork: { pinned: false, archived: false, workspace: null } },
       { sessionId: 'b', teamwork: { pinned: true, archived: false, workspace: { id: 'w1', title: 'alpha', index: 0, position: 1 } } },
       { sessionId: 'c', teamwork: { pinned: false, archived: true, workspace: { id: 'w1', title: 'alpha', index: 0, position: 0 } } },
-      { sessionId: 'd', teamwork: { pinned: false, archived: false, workspace: { id: 'w2', title: 'beta', index: 1, position: 0 } } },
+      { sessionId: 'd', teamwork: { pinned: false, archived: false, workspace: { id: 'w2', title: 'beta', index: 1, position: 0, ancestors: [{ id: 'w1', title: 'alpha', index: 0 }] } } },
     ]);
+  });
+
+  it('finds a Windows workspace under its parent whatever the separator and case', async () => {
+    const sent: any[] = [];
+    const items = [{ sessionId: 'a' }];
+    const workspaces = [{ id: 'w1', title: 'repo', path: 'C:\\Code\\Repo\\', sessionIds: [] }, { id: 'w2', title: 'pkg', path: 'c:/code/repo/pkg', sessionIds: ['a'] }];
+    const request = (async (url: string) => url.includes('/connect?')
+      ? new Response(null, { status: 302, headers: { 'set-cookie': 'dsh=peer; Path=/' } })
+      : new Response(JSON.stringify({ type: 'client-response', result: { ok: true, value: { items } } }))) as typeof fetch;
+    const b = new Bridge({ launchUrl: () => 'http://127.0.0.1:3080/?token=t', send: (frame) => sent.push(frame), request, marks: () => ({ pinned: [], archived: [], workspaces }) });
+    b.handle({ t: 'call', pairingId: 'p', id: 'l', method: 'session/list', body: { args: { _request: {} } } });
+    for (let i = 0; i < 4; i++) await tick();
+    expect(sent[0].body.result.value.items[0].teamwork.workspace.ancestors).toEqual([{ id: 'w1', title: 'repo', index: 0 }]);
   });
 
   it('starts a session in a folder that is a workspace as that workspace, so DSH lists it there', async () => {

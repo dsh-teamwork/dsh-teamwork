@@ -268,7 +268,7 @@ export async function apply(ctx: Context, config: Config) {
         return workspaces && {
           pinned: workspaces.pinnedSessionIds,
           archived: workspaces.archivedSessionIds,
-          workspaces: workspaces.list().map(({ id, title, sessionIds }) => ({ id, title, sessionIds })),
+          workspaces: workspaces.list(),
         };
       } catch { return undefined; }
     },

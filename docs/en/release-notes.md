@@ -14,6 +14,11 @@
   `/api/teams/{teamId}/packages/{id}/download`, and the cache beside the
   configuration is `teamwork-packages` (an old `teamwork-artifacts` folder is
   no longer read and can be deleted).
+- A session list names each workspace's registered parent folders
+  (`teamwork.workspace.ancestors`: id, title and place, root first), so the
+  console and the app can show workspaces as a tree. Folder paths stay on this
+  computer; a Windows path matches its parent in any case and with either
+  separator.
 - A paired phone or browser manages this computer's automation tasks (DSH's
   Schedule): the bridge passes on `schedule/catalog`, `history`, `create`,
   `edit` and `run` unchanged, and the server's console and app draw them.
