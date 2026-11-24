@@ -2,6 +2,11 @@
 
 ## Next release
 
+- The knowledge guide in every session now says what the richer format
+  means: a document's front matter may give its owner, status, tags and
+  summary, and a draft or outdated status is named beside its citation;
+  `[[Title]]` links a document, a `> [!kind]` quote is a callout and a
+  `mermaid` block is a diagram, written the same way in a proposal.
 - Knowledge attachments. A document's images and files are synced read-only
   beside it, in `{title}.files/{name}`, fetched only when new or changed and
   moved with their document; the agent is told where they are and that the
