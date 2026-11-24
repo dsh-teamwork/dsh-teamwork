@@ -2,6 +2,8 @@
 
 ## Next release
 
+- The knowledge guide says that `@[Name](member-id)` mentions a member and
+  `![[artifact:{id}]]` embeds an artifact, both to be kept as written.
 - The knowledge guide in every session now says what the richer format
   means: a document's front matter may give its owner, status, tags and
   summary, and a draft or outdated status is named beside its citation;
