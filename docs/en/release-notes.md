@@ -2,6 +2,11 @@
 
 ## Next release
 
+- A session list names each workspace's registered parent folders
+  (`teamwork.workspace.ancestors`: id, title and place, root first), so the
+  console and the app can show workspaces as a tree. Folder paths stay on this
+  computer; a Windows path matches its parent in any case and with either
+  separator.
 - A paired phone or browser manages this computer's automation tasks (DSH's
   Schedule): the bridge passes on `schedule/catalog`, `history`, `create`,
   `edit` and `run` unchanged, and the server's console and app draw them.
