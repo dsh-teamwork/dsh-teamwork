@@ -230,7 +230,7 @@ export function apply(ctx) {
         res.end(archive);
       });
       await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-      const url = `http://127.0.0.1:${server.address().port}/artifact`;
+      const url = `http://127.0.0.1:${server.address().port}/package`;
       assert.equal((await fetch(url)).status, 401);
       const bytes = Buffer.from(
         await (await fetch(url, { headers: { Authorization: `Bearer ${token}` } })).arrayBuffer(),

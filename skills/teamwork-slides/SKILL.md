@@ -1,6 +1,6 @@
 ---
 name: teamwork-slides
-description: Plan and write a presentation with its speaker notes, as an HTML deck the team can open, present and share as a Teamwork page, and export to PDF or an editable PowerPoint file. Use for any slide deck, presentation, pitch, report-out or talk.
+description: Plan and write a presentation with its speaker notes, as an HTML deck the team can open, present and share as a Teamwork artifact, and export to PDF or an editable PowerPoint file. Use for any slide deck, presentation, pitch, report-out or talk.
 ---
 
 # Teamwork slides
@@ -39,18 +39,18 @@ A deck is two files in a folder of its own:
    the person an empty deck. Do not
    open the deck in a browser yourself: the page shrinks text that is a little long and shows what
    still does not fit in its toolbar.
-6. **Publish** the folder with `teamwork_page` (`action: "create"`, `kind: "html"`, the deck's title,
+6. **Publish** the folder with `teamwork_artifact` (`action: "create"`, `kind: "html"`, the deck's title,
    `directory` the deck folder). Give the person the link it returns. For a change, edit `deck.js`
-   and publish again with `action: "update"`, the page id and the version you published last as
+   and publish again with `action: "update"`, the artifact id and the version you published last as
    `baseVersion`, and a one-line `note` saying what changed.
 7. **Hand over.** The page makes the PDFs and the PowerPoint file for the person; do not make them
    yourself, and do not render or screenshot the deck. Say how to use it: open the link; `F` presents full screen, `N` shows the notes;
    the toolbar's **PDF** and **Notes PDF** save PDFs, and **PPTX** saves an editable PowerPoint
    file. A **⚠** in the toolbar lists problems the deck found in itself (a slide too full, missing
-   notes); ask the person to tell you what it says if they see one. The page is private until they
-   share it from the page's **Share** in the console.
+   notes); ask the person to tell you what it says if they see one. The artifact is private until they
+   share it from its **Share** in the console.
 
-Without `teamwork_page` (no team, or not signed in), the folder still works: the person opens
+Without `teamwork_artifact` (no team, or not signed in), the folder still works: the person opens
 `index.html` in a browser.
 
 ## deck.js

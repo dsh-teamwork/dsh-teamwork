@@ -14,7 +14,7 @@ export declare const snapshotSchema: z.ZodObject<{
             configId: z.ZodString;
             name: z.ZodString;
             data: z.ZodObject<{
-                artifactId: z.ZodOptional<z.ZodString>;
+                packageId: z.ZodOptional<z.ZodString>;
                 sha256: z.ZodOptional<z.ZodString>;
                 package: z.ZodString;
                 version: z.ZodString;
@@ -72,7 +72,7 @@ export declare const snapshotSchema: z.ZodObject<{
         }, z.core.$strip>, z.ZodObject<{
             kind: z.ZodLiteral<"plugin">;
             data: z.ZodObject<{
-                artifactId: z.ZodOptional<z.ZodString>;
+                packageId: z.ZodOptional<z.ZodString>;
                 sha256: z.ZodOptional<z.ZodString>;
                 package: z.ZodString;
                 version: z.ZodString;
@@ -137,7 +137,7 @@ export declare const findConfig: (snapshot: Snapshot | undefined, id: string) =>
         package: string;
         version: string;
         description: string;
-        artifactId?: string | undefined;
+        packageId?: string | undefined;
         sha256?: string | undefined;
         providesTools?: string[] | undefined;
     };
@@ -197,7 +197,7 @@ export declare const teamOf: (snapshot: Snapshot | undefined, configId: string) 
             package: string;
             version: string;
             description: string;
-            artifactId?: string | undefined;
+            packageId?: string | undefined;
             sha256?: string | undefined;
             providesTools?: string[] | undefined;
         };
@@ -213,7 +213,7 @@ export declare const teamOf: (snapshot: Snapshot | undefined, configId: string) 
             package: string;
             version: string;
             description: string;
-            artifactId?: string | undefined;
+            packageId?: string | undefined;
             sha256?: string | undefined;
             providesTools?: string[] | undefined;
         };
@@ -224,13 +224,47 @@ export declare const teamOf: (snapshot: Snapshot | undefined, configId: string) 
  * this machine, no query or fragment, no trailing slash. Throws a message for the member.
  */
 export declare function serverAddress(input: string): string;
-/** A page the server refused: its status, code (`page_stale`, `page_too_large`, …) and what it said was wrong. */
-export declare class PageError extends Error {
+/** An artifact the server refused: its status, code (`artifact_stale`, `artifact_too_large`, …) and what it said was wrong. */
+export declare class ArtifactError extends Error {
     readonly status: number;
     readonly code: string;
     readonly detail: string;
     constructor(status: number, code: string, detail: string);
 }
+/** A knowledge request the server refused: its status and code (`knowledge_stale`, `knowledge_not_found`, …). */
+export declare class KnowledgeError extends Error {
+    readonly status: number;
+    readonly code: string;
+    readonly detail: string;
+    constructor(status: number, code: string, detail: string);
+}
+/** `GET /api/knowledge` (platform docs/tech/knowledge.md, "The sync manifest"): every document the member reads, per team and space. */
+export declare const knowledgeManifestSchema: z.ZodObject<{
+    teams: z.ZodArray<z.ZodObject<{
+        teamId: z.ZodString;
+        teamName: z.ZodString;
+        spaces: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            name: z.ZodString;
+            documents: z.ZodArray<z.ZodObject<{
+                id: z.ZodString;
+                folders: z.ZodArray<z.ZodString>;
+                title: z.ZodString;
+                version: z.ZodNumber;
+                attachments: z.ZodArray<z.ZodObject<{
+                    name: z.ZodString;
+                    size: z.ZodNumber;
+                    digest: z.ZodString;
+                }, z.core.$strip>>;
+            }, z.core.$strip>>;
+        }, z.core.$strip>>;
+    }, z.core.$strip>>;
+}, z.core.$strip>;
+/** The server's limit on one knowledge attachment, which the copy and the tool hold too. */
+export declare const MAX_ATTACHMENT: number;
+/** An attachment's digest as the manifest names it: the first 24 bytes of its SHA-256, base64url. */
+export declare const attachmentDigest: (bytes: Uint8Array) => string;
+export type KnowledgeManifest = z.infer<typeof knowledgeManifestSchema>;
 export declare class TeamworkClient {
     readonly cachePath: string;
     private request;
@@ -263,15 +297,15 @@ export declare class TeamworkClient {
     /** Takes the code alone or the whole `/teamwork authorize <code>` line the sign-in page shows, so the panel accepts what was copied. */
     completeLogin(pasted: string): Promise<void>;
     private api;
-    downloadArtifact(teamId: string, id: string, digest: string): Promise<string>;
+    downloadPackage(teamId: string, id: string, digest: string): Promise<string>;
     /**
-     * Publishes a page (docs/tech/pages.md in the platform repository): a new one, or a version on top of `baseVersion`.
-     * `files` are paths within the page and their bytes; the server holds every rule and limit, and says which broke.
+     * Publishes an artifact (docs/tech/artifacts.md in the platform repository): a new one, or a version on top of
+     * `baseVersion`. `files` are paths within the artifact and their bytes; the server holds every rule and limit, and says which broke.
      */
-    publishPage(teamId: string, input: {
-        pageId?: string;
+    publishArtifact(teamId: string, input: {
+        artifactId?: string;
         title?: string;
-        kind: 'html' | 'markdown' | 'svg';
+        kind: 'html' | 'svg';
         note: string;
         sessionId: string;
         computer: string;
@@ -284,7 +318,7 @@ export declare class TeamworkClient {
         teamId: string;
         version: number;
         title: string;
-        kind: "html" | "markdown" | "svg";
+        kind: "html" | "svg";
     }>;
     /**
      * Whether the signed-in server searches the web for its members (the hosted service does, on its own key; a
@@ -299,8 +333,48 @@ export declare class TeamworkClient {
         summary?: string | undefined;
         publishedAt?: string | undefined;
     }[]>;
-    /** The files of a page's version, fetched through a view address minted for this member, as the console's frame fetches them. */
-    readPage(teamId: string, pageId: string, version: number, signal: AbortSignal): Promise<{
+    /** The knowledge copy beside the cache (src/knowledge-sync.ts), as `teamwork-packages` is beside it. */
+    get knowledgePath(): string;
+    /** Which version of each document the copy holds, and where. */
+    get knowledgeStatePath(): string;
+    private knowledgeRequest;
+    /** What the member reads of every team's knowledge; a server without knowledge (404) holds none. */
+    knowledgeManifest(signal?: AbortSignal): Promise<KnowledgeManifest>;
+    /** One document's text at `version`, or at its current version when none is named. */
+    readKnowledge(teamId: string, documentId: string, version: number | undefined, signal?: AbortSignal): Promise<{
+        id: string;
+        title: string;
+        version: number;
+        text: string;
+    }>;
+    private attachmentPath;
+    /** One attachment's bytes, held to the manifest's `digest` and to the size limit, so a cut-off body never lands in the copy. */
+    readKnowledgeAttachment(teamId: string, documentId: string, name: string, digest: string, signal?: AbortSignal): Promise<Buffer<ArrayBuffer>>;
+    /**
+     * Uploads `bytes` as the attachment `name` of a document the member reads. The same name with the same bytes is
+     * the same attachment (200); other bytes are `knowledge_name_taken`, since a name keeps its bytes for the document's life.
+     */
+    attachKnowledge(teamId: string, documentId: string, name: string, bytes: Uint8Array, signal: AbortSignal): Promise<{
+        name: string;
+        contentType: string;
+        size: number;
+    }>;
+    /** Proposes `text` as a document's next version on `baseVersion`. A plugin's change is always a proposal: an editor accepts it. */
+    proposeKnowledge(teamId: string, documentId: string, input: {
+        baseVersion: number;
+        text: string;
+        note: string;
+        computer: string;
+        sessionId: string;
+    }, signal: AbortSignal): Promise<{
+        id: string;
+        documentId: string;
+        documentTitle: string;
+        baseVersion: number;
+        state: string;
+    }>;
+    /** The files of an artifact's version, fetched through a view address minted for this member, as the console's frame fetches them. */
+    readArtifact(teamId: string, artifactId: string, version: number, signal: AbortSignal): Promise<{
         path: string;
         bytes: Uint8Array;
     }[]>;
@@ -371,7 +445,7 @@ export declare class TeamworkClient {
                     package: string;
                     version: string;
                     description: string;
-                    artifactId?: string | undefined;
+                    packageId?: string | undefined;
                     sha256?: string | undefined;
                     providesTools?: string[] | undefined;
                 };
@@ -387,7 +461,7 @@ export declare class TeamworkClient {
                     package: string;
                     version: string;
                     description: string;
-                    artifactId?: string | undefined;
+                    packageId?: string | undefined;
                     sha256?: string | undefined;
                     providesTools?: string[] | undefined;
                 };
@@ -447,7 +521,7 @@ export declare class TeamworkClient {
                     package: string;
                     version: string;
                     description: string;
-                    artifactId?: string | undefined;
+                    packageId?: string | undefined;
                     sha256?: string | undefined;
                     providesTools?: string[] | undefined;
                 };
@@ -463,7 +537,7 @@ export declare class TeamworkClient {
                     package: string;
                     version: string;
                     description: string;
-                    artifactId?: string | undefined;
+                    packageId?: string | undefined;
                     sha256?: string | undefined;
                     providesTools?: string[] | undefined;
                 };
@@ -533,7 +607,7 @@ export declare class TeamworkClient {
                     package: string;
                     version: string;
                     description: string;
-                    artifactId?: string | undefined;
+                    packageId?: string | undefined;
                     sha256?: string | undefined;
                     providesTools?: string[] | undefined;
                 };
@@ -549,7 +623,7 @@ export declare class TeamworkClient {
                     package: string;
                     version: string;
                     description: string;
-                    artifactId?: string | undefined;
+                    packageId?: string | undefined;
                     sha256?: string | undefined;
                     providesTools?: string[] | undefined;
                 };
@@ -562,6 +636,7 @@ export declare class TeamworkClient {
      * same computer; signing in from none, or out to none, moves it and drops the cached configuration on the way out.
      */
     useToken(token: string | undefined): Promise<void>;
+    /** Drops the configuration and the knowledge copy, which belong to the account that synced them. */
     clear(): Promise<void>;
     logout(): Promise<void>;
     /** Forgets the token here and revokes it at the server that issued it, so a copy of it opens nothing either. */
