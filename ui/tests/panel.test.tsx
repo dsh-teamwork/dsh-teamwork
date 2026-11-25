@@ -8,7 +8,7 @@ import { presetAvatar } from '../../src/web/avatars.js';
 import type { PanelState } from '../../src/panel.js';
 import type { Host, RenderFactorySlot } from '../../src/web/host.js';
 
-vi.mock('../../src/web/api.js', async (original) => ({ HostUnreachable: (await original<typeof import('../../src/web/api.js')>()).HostUnreachable, api: { summary: vi.fn().mockRejectedValue(new Error("Unavailable")), state: vi.fn(), profile: vi.fn(), updateProfile: vi.fn(), logout: vi.fn(), sync: vi.fn(), use: vi.fn(), login: vi.fn(), authorize: vi.fn(), pairPhone: vi.fn(), decidePhone: vi.fn(), revokePhone: vi.fn(), setWorkspace: vi.fn(), teamUsage: vi.fn() } }));
+vi.mock('../../src/web/api.js', async (original) => ({ HostUnreachable: (await original<typeof import('../../src/web/api.js')>()).HostUnreachable, api: { summary: vi.fn().mockRejectedValue(new Error("Unavailable")), state: vi.fn(), profile: vi.fn(), updateProfile: vi.fn(), logout: vi.fn(), sync: vi.fn(), use: vi.fn(), login: vi.fn(), authorize: vi.fn(), pairPhone: vi.fn(), decidePhone: vi.fn(), revokePhone: vi.fn(), setWorkspace: vi.fn(), teamUsage: vi.fn(), catalog: vi.fn().mockResolvedValue([]), here: vi.fn() } }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const profile = { id: 'user', name: 'Ada', email: 'ada@example.com', image: null, locale: 'zh-CN' as const };
 const state: PanelState = {
@@ -34,7 +34,7 @@ const renderFactorySlot: RenderFactorySlot = (_name, props) => props.open ? <div
 </div> : null;
 let root: ReturnType<typeof createRoot>;
 let scenario = 0;
-beforeEach(() => { vi.resetAllMocks(); profile.id = `user-${++scenario}`; vi.mocked(api.state).mockResolvedValue(state); vi.mocked(api.profile).mockResolvedValue(profile); vi.mocked(api.teamUsage).mockRejectedValue(new Error('Unavailable')); });
+beforeEach(() => { vi.resetAllMocks(); profile.id = `user-${++scenario}`; vi.mocked(api.state).mockResolvedValue(state); vi.mocked(api.profile).mockResolvedValue(profile); vi.mocked(api.teamUsage).mockRejectedValue(new Error('Unavailable')); vi.mocked(api.catalog).mockResolvedValue([]); });
 afterEach(() => { act(() => root?.unmount()); document.body.innerHTML = ''; localStorage.clear(); vi.clearAllMocks(); vi.useRealTimers(); });
 async function mount() {
   const container = document.createElement('div'); document.body.append(container); root = createRoot(container);
@@ -401,6 +401,17 @@ test('draws each preset with the avatar its admin chose, or the one its name pic
   await act(async () => document.querySelector<HTMLButtonElement>('.twui-select-trigger')!.click());
   await act(async () => document.querySelector<HTMLElement>('[role="option"][data-index="1"]')!.click());
   expect(plate()).toBe(presetAvatar(undefined, 'Preset b').plate);
+});
+
+test('offers the team’s presets that do not sync here and installs one on this DSH alone', async () => {
+  vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en' });
+  vi.mocked(api.catalog).mockResolvedValue([{ id: 'x', kind: 'preset', name: 'Daily notes', description: 'Standup notes', author: 'Alice', users: 3, recommended: false }]);
+  vi.mocked(api.here).mockResolvedValue(undefined);
+  await mount(); await click('Choose');
+  expect(document.body.textContent).toContain('More presets from the team');
+  expect(document.body.textContent).toContain('Alice · 3 using');
+  await click('Install here');
+  expect(api.here).toHaveBeenCalledWith('a', 'x', true);
 });
 
 test('marks a team model without its context window, and a preset on it, as not ready with the reason', async () => {

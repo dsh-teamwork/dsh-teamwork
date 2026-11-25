@@ -28,6 +28,21 @@ export interface PanelPlugin {
   state: PluginState;
 }
 
+/** A team preset or plugin that does not sync to this computer, for the panel to offer installing here. */
+export interface PanelCatalogItem {
+  id: string;
+  kind: 'preset' | 'plugin';
+  name: string;
+  description: string;
+  avatar?: string;
+  /** Who shares it; empty for the team's own. */
+  author: string;
+  /** Members it reaches. */
+  users: number;
+  /** The team's own, or recommended by its admin. */
+  recommended: boolean;
+}
+
 export interface PanelPreset {
   id: string;
   /** The team that publishes it; a member in several teams sees each team's presets. */
@@ -194,6 +209,10 @@ export interface PanelOps {
   use(sessionId: string, id: string): Promise<string>;
   /** Installs a pinned plugin at exactly the version the member confirmed. */
   install(id: string, version: string): Promise<string>;
+  /** The team's presets and plugins that do not sync to this computer. */
+  catalog(teamId: string): Promise<PanelCatalogItem[]>;
+  /** Puts a team preset or plugin on this computer alone, or takes it off this computer, then syncs. */
+  here(teamId: string, id: string, on: boolean): Promise<void>;
   /** A fresh pairing code from the relay; earlier unused codes stop working. */
   setOwnerPin(pin: string | null): Promise<void>;
   /** Turns native Web on or off for the account signed in here; on is refused while it is blocked. */
@@ -284,6 +303,11 @@ export function panelRoutes(ops: PanelOps, voice: RouteVoice): FetchRoute[] {
     post('server', (body) => ops.setServer(body.server === null ? null : text(body.server, 'field.server'))),
     post('use', async (body) => ({ message: await ops.use(text(body.sessionId, 'field.session'), text(body.id, 'field.config')) })),
     post('install', async (body) => ({ message: await ops.install(text(body.id, 'field.plugin'), text(body.version, 'field.version')) })),
+    post('catalog', (body) => ops.catalog(text(body.teamId, 'field.team'))),
+    post('here', (body) => {
+      if (typeof body.on !== 'boolean') throw new Error(say('request.invalid'));
+      return ops.here(text(body.teamId, 'field.team'), text(body.id, 'field.config'), body.on);
+    }),
     post('owner-pin', body => {
       if (body.pin !== null && typeof body.pin !== 'string') throw new Error(say('request.invalid'));
       return ops.setOwnerPin(body.pin);

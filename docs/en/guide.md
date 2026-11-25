@@ -130,8 +130,10 @@ Choose **Add** beside an item in **Presets and plugins** to sync it to DSH; it
 follows the latest version unless you pin one. The team's recommendations are
 already on your DSH, and you can remove them. Everything you have syncs to every
 DSH you sign in on, a new one included, unless you uncheck that DSH under **On
-which DSHs** in the item's details. On your computer, preview and confirm
-plugin installation in DSH.
+which DSHs** in the item's details. The Teamwork panel in DSH lists the team's
+other presets and plugins below the ones on this DSH: **Install here** puts one
+on this DSH alone, and **Remove from this DSH** takes one off it. On your
+computer, preview and confirm plugin installation in DSH.
 
 **Version history**, opened from the top of Presets and plugins, keeps previous
 versions and lets admins restore a team configuration. A member's item keeps

@@ -5,7 +5,7 @@ import {
 } from '@dsh-teamwork/ui';
 import qrcode from 'qrcode-generator';
 import type { Locale } from '../locale.js';
-import type { PanelPairingOffer, PanelPhone, PanelPlugin, PanelPreset, PanelState, PanelProfile, PanelSummary, PanelTeamUsage, PluginState, ToolState } from '../panel.js';
+import type { PanelCatalogItem, PanelPairingOffer, PanelPhone, PanelPlugin, PanelPreset, PanelState, PanelProfile, PanelSummary, PanelTeamUsage, PluginState, ToolState } from '../panel.js';
 import { api, HostUnreachable } from './api.js';
 import { PresetAvatar } from './PresetAvatar.js';
 import { currentSessionTracker, workspaceAt, type Host, type RenderFactorySlot } from './host.js';
@@ -276,11 +276,15 @@ export function TeamworkPanel({ host: dsh, renderFactorySlot }: { host: Host; re
             </div>
             {tab === 'presets' && assistants.map(p => <AssistantItem key={p.id} preset={p} state={state} dsh={dsh} />)}
             <div className="twui-resource-list" key={`${team}:${tab}`}>
-              {tab === 'presets' && (listed as PanelPreset[]).map(p => <PresetItem key={p.id} preset={p} state={state} dsh={dsh} onInstall={() => setTab('plugins')} />)}
+              {tab === 'presets' && (listed as PanelPreset[]).map(p => <PresetItem key={p.id} preset={p} state={state} dsh={dsh} run={run} onInstall={() => setTab('plugins')} />)}
               {tab === 'models' && (listed as PanelState['models']).map(m => <ModelItem key={m.id} model={m} state={state} dsh={dsh} run={run} />)}
               {tab === 'plugins' && (listed as PanelPlugin[]).map(p => <PluginItem key={p.id} plugin={p} run={run} />)}
               {!listed.length && !(tab === 'presets' && assistants.length) && <EmptyState icon="layers" title={query ? t('empty.noMatch') : t('empty.none')}>{query ? t('empty.noMatchBody') : t('empty.noneBody')}</EmptyState>}
             </div>
+            {tab !== 'models' && (
+              <MoreFromTeam key={`more:${team}:${tab}`} team={team} kind={tab === 'presets' ? 'preset' : 'plugin'} query={query} run={run}
+                synced={[...presets, ...plugins].map(p => p.id).sort().join(',')} />
+            )}
           </>}
         </>}
         {page === 'devices' && <Phones state={state} run={run} />}
@@ -886,7 +890,7 @@ function AssistantItem({ preset, state, dsh }: { preset: PanelPreset; state: Pan
   );
 }
 
-function PresetItem({ preset, state, dsh, onInstall }: { preset: PanelPreset; state: PanelState; dsh: Host; onInstall(): void }) {
+function PresetItem({ preset, state, dsh, run, onInstall }: { preset: PanelPreset; state: PanelState; dsh: Host; run: Run; onInstall(): void }) {
   const t = useT();
   const [expanded, setExpanded] = useState(false);
   const { missing, plugins, blocked } = presetState(t, preset, state);
@@ -932,6 +936,11 @@ function PresetItem({ preset, state, dsh, onInstall }: { preset: PanelPreset; st
             [t('preset.version'), t('preset.versionValue', { version: preset.version })],
           ]} />
           <p className="twui-subtle">{t('preset.toolsNote')}</p>
+          {!preset.assistant && (
+            <div>
+              <Button variant="ghost" size="sm" onClick={() => run(() => api.here(preset.teamId, preset.id, false), t('here.removed'))}>{t('here.remove')}</Button>
+            </div>
+          )}
         </ItemBody>
       )}
     </Item>
@@ -1003,9 +1012,12 @@ function PluginItem({ plugin, run }: { plugin: PanelPlugin; run: Run }) {
         <Badge tone={tone} dot>{t(label)}</Badge>
         {plugin.localVersion && plugin.localVersion !== plugin.version && <Badge>{t('plugin.local', { version: plugin.localVersion })}</Badge>}
       </>}
-      actions={plugin.state === 'missing'
-        ? !confirming && <Button size="sm" onClick={() => setConfirming(true)}>{t('plugin.install')}</Button>
-        : <span className="twui-subtle">{t('plugin.managed')}</span>}
+      actions={<>
+        {plugin.state === 'missing'
+          ? !confirming && <Button size="sm" onClick={() => setConfirming(true)}>{t('plugin.install')}</Button>
+          : <span className="twui-subtle">{t('plugin.managed')}</span>}
+        {plugin.teamId && !confirming && <Button variant="ghost" size="sm" onClick={() => run(() => api.here(plugin.teamId!, plugin.id, false), t('here.removed'))}>{t('here.remove')}</Button>}
+      </>}
     >
       {confirming && (
         <Confirm
@@ -1024,6 +1036,44 @@ function PluginItem({ plugin, run }: { plugin: PanelPlugin; run: Run }) {
         />
       )}
     </Item>
+  );
+}
+
+/**
+ * The team's presets or plugins that do not sync to this DSH, read from the server whenever what syncs here changes.
+ * Installing one puts it on this DSH alone (`PUT …/asset-choices/{id}/here`) and syncs; a plugin then waits above for
+ * its member to confirm running its code, as every plugin does.
+ */
+function MoreFromTeam({ team, kind, query, synced, run }: { team: string; kind: PanelCatalogItem['kind']; query: string; synced: string; run: Run }) {
+  const t = useT();
+  const [items, setItems] = useState<PanelCatalogItem[] | null>();
+  useEffect(() => {
+    let active = true;
+    setItems(undefined);
+    api.catalog(team).then(next => { if (active) setItems(next); }, () => { if (active) setItems(null); });
+    return () => { active = false; };
+  }, [team, synced]);
+  if (items === undefined) return null;
+  if (items === null) return <Notice tone="warning">{t('more.failed')}</Notice>;
+  const shown = items.filter(i => i.kind === kind && `${i.name} ${i.description} ${i.author}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+  if (!shown.length) return null;
+  return (
+    <section className="twui-resource-list">
+      <PageTitle title={t(kind === 'preset' ? 'more.presets' : 'more.plugins')}>{t('more.hint')}</PageTitle>
+      {shown.map(item => (
+        <Item
+          key={item.id}
+          {...(item.kind === 'preset' ? { media: <PresetAvatar avatar={item.avatar} name={item.name} /> } : { icon: 'puzzle' as const })}
+          title={item.name}
+          description={item.description || undefined}
+          tags={<>
+            <span className="twui-subtle">{item.author || t('more.team')} · {t('more.users', { count: item.users })}</span>
+            {item.recommended && <Badge tone="brand">{t('more.recommended')}</Badge>}
+          </>}
+          actions={<Button size="sm" icon="plus" onClick={() => run(() => api.here(team, item.id, true), t(item.kind === 'plugin' ? 'more.pluginAdded' : 'more.installed'))}>{t('more.install')}</Button>}
+        />
+      ))}
+    </section>
   );
 }
 

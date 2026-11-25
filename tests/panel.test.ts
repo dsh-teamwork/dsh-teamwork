@@ -16,6 +16,8 @@ const ops: PanelOps = {
   setServer: async (server) => { calls.push(['server', [server]]); },
   use: async (sessionId, id) => `used ${id} in ${sessionId}`,
   install: async (id, version) => { calls.push(['install', [id, version]]); return 'installed'; },
+  catalog: async teamId => { calls.push(['catalog', [teamId]]); return []; },
+  here: async (teamId, id, on) => { calls.push(['here', [teamId, id, on]]); },
 };
 let locale: 'en' | 'zh-CN' = 'en';
 const routes = new Map(panelRoutes(ops, { say, speak: answer => speaking(locale, answer) }).map((r) => [r.path, r]));
@@ -45,8 +47,18 @@ describe('panel routes', () => {
     }
   });
   it('registers POST-only routes under /api/teamwork', () => {
-    expect([...routes.keys()].sort()).toEqual(['authorize', 'decide-phone', 'install', 'login', 'logout', 'native-web', 'native-web-disconnect', 'owner-pin', 'pair-phone', 'profile', 'revoke-phone', 'server', 'state', 'summary', 'sync', 'team-usage', 'update-profile', 'use', 'workspace'].map((n) => `${ROUTE_PREFIX}/${n}`));
+    expect([...routes.keys()].sort()).toEqual(['authorize', 'catalog', 'decide-phone', 'here', 'install', 'login', 'logout', 'native-web', 'native-web-disconnect', 'owner-pin', 'pair-phone', 'profile', 'revoke-phone', 'server', 'state', 'summary', 'sync', 'team-usage', 'update-profile', 'use', 'workspace'].map((n) => `${ROUTE_PREFIX}/${n}`));
     for (const route of routes.values()) expect(route.methods).toEqual(['POST']);
+  });
+
+  it('puts an item on this DSH or takes it off only with an explicit on', async () => {
+    calls.length = 0;
+    await post('here', { teamId: 't', id: 'x', on: true });
+    await post('here', { teamId: 't', id: 'x', on: false });
+    expect(calls).toEqual([['here', ['t', 'x', true]], ['here', ['t', 'x', false]]]);
+    calls.length = 0;
+    expect((await post('here', { teamId: 't', id: 'x' })).status).toBe(400);
+    expect(calls).toEqual([]);
   });
 
   it('passes the session through, and none when it is missing', async () => {

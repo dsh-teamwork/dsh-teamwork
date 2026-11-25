@@ -16,7 +16,7 @@ import { PresetStamps, presetStampPath, sameRevision, toolReport, assertBlank } 
 import { modelData, modelLimitProblem, offlineModel, unsizedModel, inheritsModel, pinnedPlugin, type TeamConfig } from './client.js';
 import { taskProjection, stepProjection, TaskActions, recoveryHint, retryInstruction, outcomeText } from './task-session.js';
 import { pluginState, stateText, type PluginState } from './plugin-status.js';
-import { panelRoutes, type FetchRoute, type PanelOps, type PanelPreset } from './panel.js';
+import { panelRoutes, type FetchRoute, type PanelCatalogItem, type PanelOps, type PanelPreset } from './panel.js';
 import { registerAssistantTools } from './assistant-tools.js';
 import { registerArtifactTool } from './artifact-tool.js';
 import { KnowledgeSync } from './knowledge-sync.js';
@@ -542,6 +542,29 @@ export async function apply(ctx: Context, config: Config) {
   const panel: PanelOps = {
     summary: teamId => client.summary(teamId),
     teamUsage: teamId => client.teamUsage(teamId),
+    async catalog(teamId) {
+      const synced = new Set(client.current()?.teams.find(t => t.teamId === teamId)?.configs.map(c => c.id) ?? []);
+      const { configs, choices, members } = await client.catalog(teamId);
+      const text = (value: unknown) => (typeof value === 'string' ? value : '');
+      return configs
+        .filter(c => (c.kind === 'preset' || c.kind === 'plugin') && !c.builtin && !synced.has(c.id))
+        .map((c): PanelCatalogItem => {
+          const member = c.assetOwnerId ? members.find(m => m.userId === c.assetOwnerId) : undefined;
+          return {
+            id: c.id, kind: c.kind as PanelCatalogItem['kind'], name: c.name,
+            description: text(c.data.description) || (c.kind === 'plugin' ? `${text(c.data.package)}@${text(c.data.version)}` : ''),
+            ...(text(c.data.avatar) ? { avatar: text(c.data.avatar) } : {}),
+            author: c.assetOwnerId ? member?.name || member?.email || '' : '',
+            users: choices.users[c.id] ?? 0,
+            recommended: !c.assetOwnerId || (choices.defaults[c.id]?.version ?? 0) > 0,
+          };
+        })
+        .sort((a, b) => b.users - a.users || a.name.localeCompare(b.name));
+    },
+    async here(teamId, id, on) {
+      await client.setHere(teamId, id, on);
+      await configSync.sync();
+    },
     // The panel reads the profile as it opens, so the host speaks the account's language from then on.
     profile: async () => { const profile = await client.profile(); setLocale(profile.locale); return profile; },
     updateProfile: async (input) => { const profile = await client.updateProfile(input); setLocale(profile.locale); return profile; },

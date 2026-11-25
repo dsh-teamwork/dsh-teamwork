@@ -24,6 +24,20 @@ export interface PanelPlugin {
     localVersion?: string;
     state: PluginState;
 }
+/** A team preset or plugin that does not sync to this computer, for the panel to offer installing here. */
+export interface PanelCatalogItem {
+    id: string;
+    kind: 'preset' | 'plugin';
+    name: string;
+    description: string;
+    avatar?: string;
+    /** Who shares it; empty for the team's own. */
+    author: string;
+    /** Members it reaches. */
+    users: number;
+    /** The team's own, or recommended by its admin. */
+    recommended: boolean;
+}
 export interface PanelPreset {
     id: string;
     /** The team that publishes it; a member in several teams sees each team's presets. */
@@ -243,6 +257,10 @@ export interface PanelOps {
     use(sessionId: string, id: string): Promise<string>;
     /** Installs a pinned plugin at exactly the version the member confirmed. */
     install(id: string, version: string): Promise<string>;
+    /** The team's presets and plugins that do not sync to this computer. */
+    catalog(teamId: string): Promise<PanelCatalogItem[]>;
+    /** Puts a team preset or plugin on this computer alone, or takes it off this computer, then syncs. */
+    here(teamId: string, id: string, on: boolean): Promise<void>;
     /** A fresh pairing code from the relay; earlier unused codes stop working. */
     setOwnerPin(pin: string | null): Promise<void>;
     /** Turns native Web on or off for the account signed in here; on is refused while it is blocked. */
