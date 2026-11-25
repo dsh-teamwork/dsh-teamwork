@@ -116,7 +116,6 @@ export function registerAssistantTools(
     'teamwork_prepare_plugin',
     'teamwork_share_plugin',
     'teamwork_share_preset',
-    'teamwork_review',
     'teamwork_manage',
     'teamwork_export_usage',
     'teamwork_new_session',
@@ -152,19 +151,6 @@ export function registerAssistantTools(
         size: saved.plugin.size,
         files: saved.plugin.files,
       });
-    }
-    if (exec.name === 'teamwork_review') {
-      const args = z
-        .object({ id: z.string(), revision: z.number() })
-        .passthrough()
-        .parse(exec.arguments);
-      const current = await client.reviewPreview(bound.teamId, args.id, exec.signal);
-      if (current.revision !== args.revision)
-        return {
-          kind: 'deny' as const,
-          reason: 'Submission revision changed. Read the current proposal.',
-        };
-      preview = JSON.stringify(current);
     }
     return {
       kind: 'ask' as const,
@@ -267,7 +253,7 @@ export function registerAssistantTools(
   );
   add(
     'teamwork_share_plugin',
-    'Upload a previously prepared plugin and submit it for administrator review. Show its exact preview to the user first. A configId/baseVersion updates an existing team plugin. This does not publish or install.',
+    'Publish a prepared plugin to the bound team after showing the exact archive preview. A configId and baseVersion update your own existing plugin. Team members can then choose to install it.',
     {
       type: 'object',
       properties: {
@@ -300,7 +286,7 @@ export function registerAssistantTools(
       )
         throw Error('Prepared archive is unavailable for this session');
       const bytes = await readFile(saved.plugin.path);
-      const result = await client.submitPlugin(
+      const result = await client.publishPlugin(
         teamId,
         bytes,
         saved.plugin.sha256,
@@ -314,21 +300,20 @@ export function registerAssistantTools(
       );
       previews.delete(data.previewId);
       await rm(saved.plugin.directory, { recursive: true, force: true });
-      return { teamId, result, published: false };
+      return { teamId, result, published: true };
     },
   );
   add(
     'teamwork_share_preset',
-    'Submit a complete preset for administrator review: a new one with baseVersion 0, or a change to a team preset with its configId and current version as baseVersion. This does not publish; an administrator approves it. Remove local paths and secrets and map dependencies to this team first.',
+    'Publish a complete preset to the bound team. A configId and baseVersion update your own existing preset. Remove local paths and secrets and map dependencies to the team first.',
     {
       type: 'object',
       properties: {
         config: presetConfig,
         configId: { type: 'string', description: 'The team preset this changes; omit for a new one' },
         baseVersion: { type: 'integer', minimum: 0, description: '0 for a new preset, else the version read from configs' },
-        note: { type: 'string', description: 'One or two lines for the reviewer: what it is for and what changed' },
       },
-      required: ['config', 'baseVersion', 'note'],
+      required: ['config', 'baseVersion'],
       additionalProperties: false,
     },
     async (input, _agent, signal, teamId) => {
@@ -343,7 +328,6 @@ export function registerAssistantTools(
             .strict(),
           configId: z.string().max(32).optional(),
           baseVersion: z.number().int().min(0),
-          note: z.string().max(2000),
         })
         .strict()
         .parse(input);
@@ -353,44 +337,15 @@ export function registerAssistantTools(
         )
       )
         throw Error('Remove potential credentials before sharing');
-      const draft = z
-        .object({ id: z.string(), revision: z.number() })
-        .parse(await client.assistantChange(teamId, 'saveDraft', data, signal));
-      const result = await client.assistantChange(teamId, 'submit', draft, signal);
-      return { teamId, result, published: false };
-    },
-  );
-  add(
-    'teamwork_review',
-    'Submit or withdraw your proposal, or explicitly approve/reject as a team administrator. Inspect current submission contents and revision first. Host confirmation is always required; a model flag cannot approve.',
-    {
-      type: 'object',
-      properties: {
-        action: { type: 'string', enum: ['submit', 'withdraw', 'approve', 'reject'] },
-        id: { type: 'string' },
-        revision: { type: 'integer', minimum: 1 },
-        reason: { type: 'string' },
-      },
-      required: ['action', 'id', 'revision'],
-      additionalProperties: false,
-    },
-    async (input, _agent, signal, teamId) => {
-      const data = z
-        .object({
-          action: z.enum(['submit', 'withdraw', 'approve', 'reject']),
-          id: z.string().min(1).max(32),
-          revision: z.number().int().positive(),
-          reason: z.string().max(2000).optional(),
-        })
-        .strict()
-        .parse(input);
-      const { action, ...body } = data;
-      return { teamId, result: await client.assistantChange(teamId, action, body, signal) };
+      const config = { ...data.config, memberAsset: true };
+      const result = await client.assistantChange(teamId, data.configId ? 'updateConfig' : 'createConfig',
+        data.configId ? { ...config, id: data.configId, version: data.baseVersion } : config, signal);
+      return { teamId, result, published: true };
     },
   );
   add(
     'teamwork_manage',
-    'Administrator operations on the bound team. createConfig: input {kind, name, data}. updateConfig: input {id, version, kind, name, data}, the whole configuration as configs returned it with the change made, and the version read. deleteConfig and removeMember: input {id}. setBudget: input {scope, subjectId, period, timezone, revision, enabled, notify, points}, with the revision read from budgets (0 for a new budget); its token limits stay unset unless the person asks for one. An enabled budget with any limit refuses every call to a model whose largest possible cost the server cannot bound, today any team model other than the official DeepSeek API: say so, naming the team models it would stop, before asking to set one. restore: input {id} of a history entry. editDraft: input {id, revision, config, baseVersion, note} for a draft of your own. Provider key entry and account creation with passwords use secure console forms.',
+    'Administrator operations on the bound team. createConfig: input {kind, name, data}. updateConfig: input {id, version, kind, name, data}, the whole configuration as configs returned it with the change made, and the version read. deleteConfig and removeMember: input {id}. setBudget: input {scope, subjectId, period, timezone, revision, enabled, notify, points}, with the revision read from budgets (0 for a new budget); its token limits stay unset unless the person asks for one. An enabled budget with any limit refuses every call to a model whose largest possible cost the server cannot bound, today any team model other than the official DeepSeek API: say so, naming the team models it would stop, before asking to set one. restore: input {id, baseVersion, note}, with a history entry id and the current version or 0 for a deleted configuration. Provider key entry and account creation with passwords use secure console forms.',
     {
       type: 'object',
       properties: {
@@ -398,12 +353,12 @@ export function registerAssistantTools(
           type: 'object',
           additionalProperties: true,
           properties: {
-            id: { type: 'string', description: 'The configuration, member, history entry or draft acted on' },
+            id: { type: 'string', description: 'The configuration, member or history entry acted on' },
             version: { type: 'integer', minimum: 1, description: 'updateConfig: the version read from configs' },
             kind: { type: 'string', enum: ['model', 'preset', 'plugin'] },
             name: { type: 'string', maxLength: 120 },
             data: { ...presetData, additionalProperties: true, description: `${presetData.description} A model's data is {provider, model, contextWindow, maxTokens}.` },
-            revision: { type: 'integer', minimum: 0, description: "setBudget: the policy's revision from budgets, 0 for a new one; editDraft: the draft's" },
+            revision: { type: 'integer', minimum: 0, description: "setBudget: the policy's revision from budgets, 0 for a new one" },
             scope: { type: 'string', enum: ['team', 'member', 'default_member', 'provider'], description: 'setBudget: whose spend it limits' },
             subjectId: { type: 'string', description: "setBudget: a member's user id for member, a provider's name for provider, empty for team and default_member" },
             period: { type: 'string', enum: ['day', 'month'], description: 'setBudget' },
@@ -422,7 +377,6 @@ export function registerAssistantTools(
             'setBudget',
             'removeMember',
             'restore',
-            'editDraft',
           ],
         },
       },
@@ -439,14 +393,13 @@ export function registerAssistantTools(
             'setBudget',
             'removeMember',
             'restore',
-            'editDraft',
           ]),
           input: z.record(z.string(), z.unknown()),
         })
         .strict()
         .parse(input);
       if (
-        ['updateConfig', 'deleteConfig', 'removeMember', 'restore', 'editDraft'].includes(
+        ['updateConfig', 'deleteConfig', 'removeMember', 'restore'].includes(
           data.action,
         ) &&
         !z
@@ -550,7 +503,7 @@ export function registerAssistantTools(
       {
         name: 'teamwork_query',
         description:
-          "Read the team bound to this preset. status: sign-in and team. sync: refresh this computer's copy of the team configuration. configs: the team's models, presets and plugins with ids and versions. members: the team, the caller's role and the members. usage: a member's own calls, an administrator's whole team; filter a period with since and until. budgets: the budgets that apply. submissions: proposals; an administrator sees the team's, filter state pending for what awaits review. history: published versions. providers: administrators only. Unknown usage is not zero.",
+          "Read the team bound to this preset. status: sign-in and team. sync: refresh this computer's copy of the team configuration. configs: the team's models, presets and plugins with ids and versions. members: the team, the caller's role and the members. usage: a member's own calls, an administrator's whole team; filter a period with since and until. budgets: the budgets that apply. submissions: archived review history; administrators can read the team history. history: published versions. providers: administrators only. Unknown usage is not zero.",
         parameters: {
           type: 'object',
           properties: {

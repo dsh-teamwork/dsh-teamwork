@@ -68,9 +68,7 @@ Create or join teams in the web console. New teams receive a built-in assistant;
 existing teams are unchanged. Team renaming does not automatically rename the
 assistant. It leads the panel's presets: **Ask the assistant** starts a session
 with it, and clicking one of its example questions starts one with that question
-already typed in, ready to edit and send. Give it a working model and ask it to inspect real state. While an
-administrator browses a team, the panel's header shows how many submissions wait
-for review and opens them in the console.
+already typed in, ready to edit and send. Give it a working model and ask it to inspect real state.
 
 ### Without a browser
 
@@ -121,30 +119,20 @@ missing tools are warnings. A registered tool still follows DSH's authorization
 and runtime conditions. Team model routes go through your service; a preset
 that inherits a local model keeps that model instead.
 
-## Share, review and restore
+## Publish and install team assets
 
-1. Ask the team assistant to prepare a plugin inside the session workspace,
-   or submit a preset/plugin through **Sharing and review** in the web console.
-2. Review the prepared package identity, version, file list and SHA-256 before
-   upload. Preparation does not run package lifecycle scripts.
-3. Submit the new resource or update for administrator review. An update names
-   the existing configuration and its base version.
-4. An administrator inspects the frozen contents and approves or rejects them.
-   A conflicting newer publication requires a fresh submission.
-5. Members sync the published resource. A plugin still needs a separate local
-   installation confirmation; existing local packages are not silently upgraded.
+Open **Team toolbox** to upload a preset or plugin. After validation, the
+asset is visible to your team. For locally prepared content, the assistant
+previews the preset or the plugin archive before asking for your confirmation
+to publish.
 
-Members see their own submissions. Administrators see the team's submissions.
-Assistant writes also need host approval, including for administrators.
-Provider secrets and new account passwords belong in the console's forms.
+Choose a version in **Team toolbox** to sync it to DSH. A team admin can pin a
+default version and give it a team display name. Personal selections take
+precedence. On your computer, preview and confirm plugin installation in DSH.
 
-**Versions and backups** shows publication time, author/approver, changes and
-retained versions. Exported resources can include retained private plugin bytes.
-A restoration prepares a new publication for review; it does not erase history
-or replace a running conversation's preset. A resource export is distinct from
-a full database-and-file-storage backup managed by the server operator.
-
-![Publication history of a demonstration team](../../assets/readme/versions-and-backups.png)
+**Version history and backups** keeps previous versions and lets admins
+restore a team configuration. Member-owned assets keep their own history.
+Team defaults can be rolled back to earlier versions without editing the asset.
 
 ## Artifacts
 

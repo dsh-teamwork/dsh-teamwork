@@ -378,19 +378,13 @@ export declare class TeamworkClient {
         path: string;
         bytes: Uint8Array;
     }[]>;
-    submitPlugin(teamId: string, bytes: Buffer, sha256: string, input: {
+    publishPlugin(teamId: string, bytes: Buffer, sha256: string, input: {
         name: string;
         note: string;
         configId?: string;
         baseVersion: number;
     }, signal: AbortSignal): Promise<unknown>;
     assistantChange(teamId: string, action: string, input: Record<string, unknown>, signal: AbortSignal): Promise<unknown>;
-    reviewPreview(teamId: string, id: string, signal: AbortSignal): Promise<{
-        revision: number;
-        proposal: unknown;
-        configId: string;
-        baseVersion: number;
-    }>;
     exportUsage(teamId: string, filters: Record<string, string>, signal: AbortSignal): Promise<string>;
     /** Narrow team operations; credentials never enter model-visible results. */
     assistantRead(teamId: string, action: 'configs' | 'usage' | 'budgets' | 'members' | 'submissions' | 'history' | 'providers', signal: AbortSignal, filters?: Record<string, string>): Promise<any>;
