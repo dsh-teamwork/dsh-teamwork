@@ -126,7 +126,7 @@ test('a sign-in outlives a restart for its own server only, and signing out revo
   } finally { await rm(dir, { recursive: true }); }
 });
 
-test('summary reads keep only the own budget and review count, fail closed and discard an old account response', async () => {
+test('summary reads keep only the caller’s budget, fail closed and discard an old account response', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'teamwork-summary-'));
   const budget = { remaining: '9.85', state: 'known', resetAt: null, tokenLimited: true, exhausted: false };
   let reply = Response.json({ since: '2026-10-18T00:00:00Z', calls: 4, points: '12', unpriced: 0, unresolved: 1, failedNotices: 0, nearLimit: [{ scope: 'member', subjectId: 'other', period: 'month', threshold: 80 }], budget });
