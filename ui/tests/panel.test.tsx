@@ -403,19 +403,12 @@ test('draws each preset with the avatar its admin chose, or the one its name pic
   expect(plate()).toBe(presetAvatar(undefined, 'Preset b').plate);
 });
 
-test('shows an admin the reviews waiting in the browsed team, and a member none', async () => {
+test('ignores pending approval counts from older servers', async () => {
   vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en' });
   vi.mocked(api.summary).mockResolvedValue({ budget: { remaining: null, state: 'unlimited', resetAt: null, tokenLimited: false, exhausted: false }, pendingReviews: 2 });
-  const open = vi.spyOn(window, 'open').mockReturnValue(null);
-  try {
-    await mount();
-    await act(async () => document.querySelector('article button')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
-    await click('2 to review');
-    expect(open).toHaveBeenCalledWith('https://example.com/teams/a/sharing', '_blank', 'noopener');
-    await act(async () => document.querySelector<HTMLButtonElement>('.twui-select-trigger')!.click());
-    await act(async () => document.querySelector('[role="option"][data-index="1"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
-    expect(document.body.textContent).not.toContain('to review');
-  } finally { open.mockRestore(); }
+  await mount();
+  await act(async () => document.querySelector('article button')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  expect(document.body.textContent).not.toContain('to review');
 });
 
 test('marks a team model without its context window, and a preset on it, as not ready with the reason', async () => {
