@@ -119,20 +119,22 @@ missing tools are warnings. A registered tool still follows DSH's authorization
 and runtime conditions. Team model routes go through your service; a preset
 that inherits a local model keeps that model instead.
 
-## Publish and install team assets
+## Share and add presets and plugins
 
-Open **Team toolbox** to upload a preset or plugin. After validation, the
-asset is visible to your team. For locally prepared content, the assistant
-previews the preset or the plugin archive before asking for your confirmation
-to publish.
+Open **Presets and plugins** in the web console to share a preset or plugin.
+After validation, everyone on the team can see it, and it is on your own DSH.
+For locally prepared content, the assistant previews the preset or the plugin
+archive before asking for your confirmation to publish.
 
-Choose a version in **Team toolbox** to sync it to DSH. A team admin can pin a
-default version and give it a team display name. Personal selections take
-precedence. On your computer, preview and confirm plugin installation in DSH.
+Choose **Add** beside an item in **Presets and plugins** to sync it to DSH; it
+follows the latest version unless you pin one. The team's recommendations are
+already on your DSH, and you can remove them. On your computer, preview and
+confirm plugin installation in DSH.
 
-**Version history and backups** keeps previous versions and lets admins
-restore a team configuration. Member-owned assets keep their own history.
-Team defaults can be rolled back to earlier versions without editing the asset.
+**Version history**, opened from the top of Presets and plugins, keeps previous
+versions and lets admins restore a team configuration. A member's item keeps
+its own history, and an admin can move a recommendation to an earlier version
+without editing the item.
 
 ## Artifacts
 

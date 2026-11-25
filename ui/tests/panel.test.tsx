@@ -193,7 +193,7 @@ test('a team’s settings show the member’s own usage as the console does, in 
   expect(text).not.toMatch(/\d\.\d+ ?积分|1234\.9|96\.5/);
   // A meter shows by its name in the panel's language, never by its key.
   expect(text).not.toContain('cloud.computer');
-  await click('打开工具箱');
+  await click('打开预设和插件');
   expect(document.querySelector('.twui-select-primary')!.textContent).toContain('Alpha');
 });
 
@@ -285,7 +285,7 @@ test('chooses a team, filters its resources without changing sessions, and shows
   expect(document.body.textContent).toContain('Preset b');
   expect(document.body.textContent).not.toContain('Preset a');
   await click('设备连接'); expect(document.body.textContent).toContain('用手机 App 或网页「我的 DSH」操作');
-  await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="返回团队工具箱"]')!.click());
+  await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="返回预设和插件"]')!.click());
   await act(async () => document.querySelectorAll<HTMLButtonElement>('[role="tab"]')[1].click());
   act(() => root.unmount());
   await mount();
@@ -501,9 +501,9 @@ test('a paired device shows a badge only when it must pair again, and its kind o
   expect(row('旧 Pixel').textContent).toContain('Android 手机 ·');
 });
 
-test('a page has no back link: the brand mark and the team menu lead back to the team toolbox', async () => {
+test('a page has no back link: the brand mark and the team menu lead back to presets and plugins', async () => {
   await mount(); await click('设备连接');
-  expect([...document.querySelectorAll('button')].some(b => b.textContent === '返回团队工具箱')).toBe(false);
-  await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="返回团队工具箱"]')!.click());
+  expect([...document.querySelectorAll('button')].some(b => b.textContent === '返回预设和插件')).toBe(false);
+  await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="返回预设和插件"]')!.click());
   expect(document.querySelector('[role="tab"]')).not.toBeNull();
 });
