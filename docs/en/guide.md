@@ -128,8 +128,10 @@ archive before asking for your confirmation to publish.
 
 Choose **Add** beside an item in **Presets and plugins** to sync it to DSH; it
 follows the latest version unless you pin one. The team's recommendations are
-already on your DSH, and you can remove them. On your computer, preview and
-confirm plugin installation in DSH.
+already on your DSH, and you can remove them. Everything you have syncs to every
+DSH you sign in on, a new one included, unless you uncheck that DSH under **On
+which DSHs** in the item's details. On your computer, preview and confirm
+plugin installation in DSH.
 
 **Version history**, opened from the top of Presets and plugins, keeps previous
 versions and lets admins restore a team configuration. A member's item keeps
