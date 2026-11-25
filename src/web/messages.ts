@@ -102,11 +102,11 @@ const en = {
 
   // Team assistant
   'assistant.label': 'Team assistant',
-  'assistant.body': 'Ask it in a session about your team’s presets, models and plugins, your usage and budget, and what is waiting for review. Admins can also manage the team through it, with your approval for every change.',
+  'assistant.body': 'Ask it in a session about your team’s presets, models and plugins, your usage and budget. It can share a preset or plugin of yours with the team. Admins can also manage the team through it, with your approval for every change.',
   'assistant.examples': 'Try asking',
   'assistant.example1': 'What did I spend this month?',
   'assistant.example2': 'Which presets does our team share?',
-  'assistant.example3': 'Submit my local preset for review',
+  'assistant.example3': 'Share my local preset with the team',
   'assistant.ask': 'Ask the assistant',
 
   // Presets
@@ -421,11 +421,11 @@ const zhCN: Record<PanelMessage, string> = {
   'empty.noneBody': '管理员在网页发布后，资源会同步到这里。',
 
   'assistant.label': '团队助理',
-  'assistant.body': '在会话里问它团队的预设、模型和插件，你的用量和预算，以及有哪些内容在等待审核。管理员还可以通过它管理团队，每一项改动都需要你批准。',
+  'assistant.body': '在会话里问它团队的预设、模型和插件，你的用量和预算；它也能把你的预设或插件分享给团队。管理员还可以通过它管理团队，每一项改动都需要你批准。',
   'assistant.examples': '可以这样问',
   'assistant.example1': '我这个月用了多少？',
   'assistant.example2': '我们团队共享了哪些预设？',
-  'assistant.example3': '把我本地的预设提交审核',
+  'assistant.example3': '把我本地的预设分享给团队',
   'assistant.ask': '问问助理',
 
   'preset.sessionModel': '沿用会话模型',

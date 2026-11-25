@@ -1059,7 +1059,11 @@ function MoreFromTeam({ team, kind, query, synced, run }: { team: string; kind: 
   if (!shown.length) return null;
   return (
     <section className="twui-resource-list">
-      <PageTitle title={t(kind === 'preset' ? 'more.presets' : 'more.plugins')}>{t('more.hint')}</PageTitle>
+      {/* A section of the list, not a page: its heading sits at the size of the rows' own titles. */}
+      <div className="twui-stack" style={{ gap: 2, marginTop: 8 }}>
+        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{t(kind === 'preset' ? 'more.presets' : 'more.plugins')}</h3>
+        <p className="twui-subtle" style={{ margin: 0 }}>{t('more.hint')}</p>
+      </div>
       {shown.map(item => (
         <Item
           key={item.id}
