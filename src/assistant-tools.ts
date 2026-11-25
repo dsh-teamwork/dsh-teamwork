@@ -253,17 +253,17 @@ export function registerAssistantTools(
   );
   add(
     'teamwork_share_plugin',
-    'Publish a prepared plugin to the bound team after showing the exact archive preview. A configId and baseVersion update your own existing plugin. Team members can then choose to install it.',
+    'Publish a prepared plugin to the bound team after showing the exact archive preview. A configId and baseVersion update your own existing plugin. New assets are selected for the author. Updates keep existing version selections.',
     {
       type: 'object',
       properties: {
         previewId: { type: 'string' },
         name: { type: 'string' },
-        note: { type: 'string' },
+        description: { type: 'string', maxLength: 1000 },
         configId: { type: 'string' },
         baseVersion: { type: 'integer', minimum: 0 },
       },
-      required: ['previewId', 'name', 'note', 'baseVersion'],
+      required: ['previewId', 'name', 'description', 'baseVersion'],
       additionalProperties: false,
     },
     async (input, agent, signal, teamId) => {
@@ -271,7 +271,7 @@ export function registerAssistantTools(
         .object({
           previewId: z.string(),
           name: z.string().min(1).max(120),
-          note: z.string().max(2000),
+          description: z.string().refine((value) => [...value].length <= 1000),
           configId: z.string().max(32).optional(),
           baseVersion: z.number().int().min(0),
         })
@@ -292,7 +292,7 @@ export function registerAssistantTools(
         saved.plugin.sha256,
         {
           name: data.name,
-          note: data.note,
+          description: data.description,
           configId: data.configId,
           baseVersion: data.baseVersion,
         },
@@ -300,12 +300,12 @@ export function registerAssistantTools(
       );
       previews.delete(data.previewId);
       await rm(saved.plugin.directory, { recursive: true, force: true });
-      return { teamId, result, published: true };
+      return { teamId, result, published: true, ...(!data.configId ? { selected: true } : {}) };
     },
   );
   add(
     'teamwork_share_preset',
-    'Publish a complete preset to the bound team. A configId and baseVersion update your own existing preset. Remove local paths and secrets and map dependencies to the team first.',
+    'Publish a complete preset to the bound team. A configId and baseVersion update your own existing preset. Use a team model or inherit the session model. New assets are selected for the author. Updates keep existing version selections. Remove local paths and secrets before publishing.',
     {
       type: 'object',
       properties: {
@@ -331,6 +331,8 @@ export function registerAssistantTools(
         })
         .strict()
         .parse(input);
+      if ('provider' in data.config.data || 'model' in data.config.data)
+        throw Error('Select a team model or inherit the session model');
       if (
         /-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----|sk-[A-Za-z0-9_-]{20,}/.test(
           JSON.stringify(data.config),
@@ -340,7 +342,7 @@ export function registerAssistantTools(
       const config = { ...data.config, memberAsset: true };
       const result = await client.assistantChange(teamId, data.configId ? 'updateConfig' : 'createConfig',
         data.configId ? { ...config, id: data.configId, version: data.baseVersion } : config, signal);
-      return { teamId, result, published: true };
+      return { teamId, result, published: true, ...(!data.configId ? { selected: true } : {}) };
     },
   );
   add(

@@ -167,11 +167,9 @@ export interface PanelQuota {
     tokenLimited: boolean;
     exhausted: boolean;
 }
-/** One team's `GET /api/teams/{teamId}/summary`, reduced to what the panel shows: the member's budget and the reviews waiting. */
+/** One team's `GET /api/teams/{teamId}/summary`, reduced to what the panel shows: the member's budget. */
 export interface PanelSummary {
     budget: PanelQuota;
-    /** Submissions awaiting review: the team's for an admin, the member's own otherwise. */
-    pendingReviews: number;
 }
 /**
  * The member's own last 30 days in one team, for its settings page, laid out as the web console's My usage: what

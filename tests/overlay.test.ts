@@ -129,7 +129,7 @@ test('a sign-in outlives a restart for its own server only, and signing out revo
 test('summary reads keep only the own budget and review count, fail closed and discard an old account response', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'teamwork-summary-'));
   const budget = { remaining: '9.85', state: 'known', resetAt: null, tokenLimited: true, exhausted: false };
-  let reply = Response.json({ since: '2026-10-18T00:00:00Z', calls: 4, points: '12', unpriced: 0, unresolved: 1, failedNotices: 0, nearLimit: [{ scope: 'member', subjectId: 'other', period: 'month', threshold: 80 }], budget, pendingReviews: 2 });
+  let reply = Response.json({ since: '2026-10-18T00:00:00Z', calls: 4, points: '12', unpriced: 0, unresolved: 1, failedNotices: 0, nearLimit: [{ scope: 'member', subjectId: 'other', period: 'month', threshold: 80 }], budget });
   let finish: ((response: Response) => void) | undefined;
   const calls: Array<[string, RequestInit | undefined]> = [];
   const request: typeof fetch = async (input, init) => {
@@ -143,16 +143,16 @@ test('summary reads keep only the own budget and review count, fail closed and d
     client.beginLogin(); await client.completeLogin('code'); await client.sync();
     await expect(client.summary('other')).rejects.toThrow();
     const own = await client.summary('team1');
-    expect(own).toEqual({ budget, pendingReviews: 2 });
+    expect(own).toEqual({ budget });
     expect(JSON.stringify(own)).not.toContain('secret'); expect(JSON.stringify(own)).not.toContain('subjectId');
     expect(calls.at(-1)?.[0]).toBe('https://example.com/api/teams/team1/summary');
     expect(calls.at(-1)?.[1]?.headers).toEqual({ Authorization: 'Bearer secret' });
     reply = new Response('', { status: 404 }); await expect(client.summary('team1')).rejects.toThrow();
-    reply = Response.json({ budget: {}, pendingReviews: 0 }); await expect(client.summary('team1')).rejects.toThrow();
+    reply = Response.json({ budget: {} }); await expect(client.summary('team1')).rejects.toThrow();
     finish = () => {};
     const pending = client.summary('team1');
     await client.setEndpoint('https://other.example.com');
-    finish(Response.json({ budget, pendingReviews: 0 })); await expect(pending).rejects.toThrow();
+    finish(Response.json({ budget })); await expect(pending).rejects.toThrow();
     expect(client.current()).toBeUndefined();
   } finally { await rm(dir, { recursive: true }); }
 });
@@ -160,7 +160,7 @@ test('summary reads keep only the own budget and review count, fail closed and d
 test('a team’s usage for its settings page reads the member’s own summary and stats, names a failure, keeps no other member’s id, and drops an old account’s answer', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'teamwork-usage-'));
   const budget = { remaining: '96.5', state: 'known', resetAt: '2026-12-01T00:00:00Z', tokenLimited: false, exhausted: false };
-  const summary = { since: '2026-10-21T00:00:00Z', calls: 12, points: '3.5', unpriced: 1, unresolved: 0, overruns: 0, failedNotices: 0, nearLimit: [{ scope: 'member', subjectId: 'u-other', period: 'month', threshold: 80 }], unpricedModels: [], budget, pendingReviews: 0 };
+  const summary = { since: '2026-10-21T00:00:00Z', calls: 12, points: '3.5', unpriced: 1, unresolved: 0, overruns: 0, failedNotices: 0, nearLimit: [{ scope: 'member', subjectId: 'u-other', period: 'month', threshold: 80 }], unpricedModels: [], budget };
   const stats = { since: '2026-10-21T00:00:00Z', until: '2026-11-20T00:00:00Z', timezone: 'UTC', totals: { calls: 13, points: '3.5', unpriced: 1, input: 2400, cacheRead: 800, cacheWrite: 0, output: 600, reasoning: 200 }, days: [{ day: '2026-11-19', calls: 0, points: '0' }, { day: '2026-11-20', calls: 13, points: '3.5' }], sources: [{ kind: 'model', key: 'm1', name: 'Claude Opus', labels: {}, calls: 12, points: '3.5', input: 1, output: 1 }, { kind: 'meter', key: 'cloud.computer', name: 'cloud.computer', labels: null, calls: 1, points: '0', input: 0, output: 0 }] };
   let summaryStatus = 200;
   let hold: Promise<void> | undefined;

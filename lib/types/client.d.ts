@@ -380,7 +380,7 @@ export declare class TeamworkClient {
     }[]>;
     publishPlugin(teamId: string, bytes: Buffer, sha256: string, input: {
         name: string;
-        note: string;
+        description: string;
         configId?: string;
         baseVersion: number;
     }, signal: AbortSignal): Promise<unknown>;
@@ -541,7 +541,7 @@ export declare class TeamworkClient {
     platformCredential(): string;
     sessionRevision(): number;
     authenticated(): boolean;
-    /** Independent of configuration sync: only the member's own budget and a count of reviews leave the host. */
+    /** Independent of configuration sync: only the member's own budget leaves the host. */
     summary(teamId: string): Promise<PanelSummary>;
     /** The member's own last 30 days in one team, for its settings page; dropped if the account changed meanwhile. */
     teamUsage(teamId: string): Promise<PanelTeamUsage>;

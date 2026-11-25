@@ -274,7 +274,7 @@ export class TeamworkClient {
     if(epoch!==this.epoch)throw new Error('Account changed during download');
     return files;
   }
-  async publishPlugin(teamId:string,bytes:Buffer,sha256:string,input:{name:string;note:string;configId?:string;baseVersion:number},signal:AbortSignal) {
+  async publishPlugin(teamId:string,bytes:Buffer,sha256:string,input:{name:string;description:string;configId?:string;baseVersion:number},signal:AbortSignal) {
     if(!this.token || createHash('sha256').update(bytes).digest('hex')!==sha256)throw new Error('Prepared archive changed');
     const epoch=this.epoch;
     const response=await this.request(`${this.endpoint}/api/teams/${encodeURIComponent(teamId)}/packages`,{method:'POST',headers:{Authorization:`Bearer ${this.token}`,Origin:new URL(this.endpoint).origin,'Content-Type':'application/octet-stream'},body:new Uint8Array(bytes),signal,redirect:'error'});
@@ -282,12 +282,12 @@ export class TeamworkClient {
     const uploaded=z.object({id:z.string().min(1),package:z.string(),version:z.string(),sha256:z.string()}).parse(await response.json());
     if(epoch!==this.epoch)throw new Error('Account changed during upload');
     if(uploaded.sha256!==sha256)throw new Error('Uploaded archive digest mismatch');
-    const { name, note, configId, baseVersion } = input;
+    const { name, description, configId, baseVersion } = input;
     const config = {
       kind: 'plugin',
       name,
       memberAsset: true,
-      data: { package: uploaded.package, version: uploaded.version, packageId: uploaded.id, sha256, description: note },
+      data: { package: uploaded.package, version: uploaded.version, packageId: uploaded.id, sha256, description },
     };
     return this.assistantChange(teamId, configId ? 'updateConfig' : 'createConfig',
       configId ? { ...config, id: configId, version: baseVersion } : config, signal);
@@ -358,7 +358,7 @@ export class TeamworkClient {
   platformCredential() { if (!this.token) throw new Error('Sign in to platform first'); return this.token; }
   sessionRevision() { return this.epoch; }
   authenticated() { return !!this.token; }
-  /** Independent of configuration sync: only the member's own budget and a count of reviews leave the host. */
+  /** Independent of configuration sync: only the member's own budget leaves the host. */
   async summary(teamId: string): Promise<PanelSummary> {
     if (!this.token || !this.snapshot?.teams.some(team => team.teamId === teamId)) throw new Error(say('summary.team'));
     const epoch = this.epoch, endpoint = this.endpoint, token = this.token;
@@ -366,9 +366,9 @@ export class TeamworkClient {
       headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(3000),
     });
     if (!response.ok) throw new Error(say('summary.unavailable'));
-    const result = z.object({ budget: budgetSchema, pendingReviews: z.number().int().nonnegative() }).parse(await response.json());
+    const result = z.object({ budget: budgetSchema }).parse(await response.json());
     if (epoch !== this.epoch || endpoint !== this.endpoint || this.token !== token) throw new Error(say('auth.changed'));
-    return { budget: result.budget, pendingReviews: result.pendingReviews };
+    return result;
   }
   /** The member's own last 30 days in one team, for its settings page; dropped if the account changed meanwhile. */
   async teamUsage(teamId: string): Promise<PanelTeamUsage> {
