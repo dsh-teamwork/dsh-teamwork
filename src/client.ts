@@ -274,7 +274,7 @@ export class TeamworkClient {
     if(epoch!==this.epoch)throw new Error('Account changed during download');
     return files;
   }
-  async submitPlugin(teamId:string,bytes:Buffer,sha256:string,input:{name:string;note:string;configId?:string;baseVersion:number},signal:AbortSignal) {
+  async publishPlugin(teamId:string,bytes:Buffer,sha256:string,input:{name:string;description:string;configId?:string;baseVersion:number},signal:AbortSignal) {
     if(!this.token || createHash('sha256').update(bytes).digest('hex')!==sha256)throw new Error('Prepared archive changed');
     const epoch=this.epoch;
     const response=await this.request(`${this.endpoint}/api/teams/${encodeURIComponent(teamId)}/packages`,{method:'POST',headers:{Authorization:`Bearer ${this.token}`,Origin:new URL(this.endpoint).origin,'Content-Type':'application/octet-stream'},body:new Uint8Array(bytes),signal,redirect:'error'});
@@ -282,40 +282,32 @@ export class TeamworkClient {
     const uploaded=z.object({id:z.string().min(1),package:z.string(),version:z.string(),sha256:z.string()}).parse(await response.json());
     if(epoch!==this.epoch)throw new Error('Account changed during upload');
     if(uploaded.sha256!==sha256)throw new Error('Uploaded archive digest mismatch');
-    const {name,...proposalInput}=input;
-    const draft=await this.assistantChange(teamId,'saveDraft',{...proposalInput,config:{kind:'plugin',name,data:{package:uploaded.package,version:uploaded.version,packageId:uploaded.id,sha256}}},signal);
-    const row=z.object({id:z.string(),revision:z.number()}).parse(draft);
-    return this.assistantChange(teamId,'submit',{id:row.id,revision:row.revision},signal);
+    const { name, description, configId, baseVersion } = input;
+    const config = {
+      kind: 'plugin',
+      name,
+      memberAsset: true,
+      data: { package: uploaded.package, version: uploaded.version, packageId: uploaded.id, sha256, description },
+    };
+    return this.assistantChange(teamId, configId ? 'updateConfig' : 'createConfig',
+      configId ? { ...config, id: configId, version: baseVersion } : config, signal);
   }
   async assistantChange(teamId:string,action:string,input:Record<string,unknown>,signal:AbortSignal):Promise<unknown> {
     if(!this.token)throw new Error('Sign in first');const epoch=this.epoch;
     const id=typeof input.id==='string'?encodeURIComponent(input.id):'';
     const {id:_id,...payload}=input;
     const routes:Record<string,{path:string;method:string;body:unknown}>={
-      saveDraft:{path:'submissions',method:'POST',body:payload},
-      editDraft:{path:`submissions/${id}`,method:'PUT',body:payload},
       createConfig:{path:'configs',method:'POST',body:payload},
       updateConfig:{path:`configs/${id}`,method:'PATCH',body:payload},
       deleteConfig:{path:`configs/${id}`,method:'DELETE',body:undefined},
       setBudget:{path:'budgets',method:'PUT',body:payload},
       removeMember:{path:`members/${id}`,method:'DELETE',body:undefined},
       restore:{path:`history/${id}/restore`,method:'POST',body:payload},
-      submit:{path:`submissions/${id}/submit`,method:'POST',body:{revision:input.revision}},
-      approve:{path:`submissions/${id}/approve`,method:'POST',body:{revision:input.revision,reason:input.reason}},
-      reject:{path:`submissions/${id}/reject`,method:'POST',body:{revision:input.revision,reason:input.reason}},
-      withdraw:{path:`submissions/${id}/withdraw`,method:'POST',body:{revision:input.revision}},
     };
     const route=routes[action];if(!route)throw new Error('Unsupported operation');
     const response=await this.request(`${this.endpoint}/api/teams/${encodeURIComponent(teamId)}/${route.path}`,{method:route.method,headers:{Authorization:`Bearer ${this.token}`,Origin:new URL(this.endpoint).origin,'Content-Type':'application/json'},body:JSON.stringify(route.body),signal,redirect:'error'});
     if(!response.ok)throw new Error(`Teamwork operation failed (${response.status}): ${failure(await response.json().catch(()=>({})))}`);
     const result=response.status===204?null:await response.json();if(epoch!==this.epoch)throw new Error('Account changed during operation');return result;
-  }
-  async reviewPreview(teamId:string,id:string,signal:AbortSignal) {
-    if(!this.token||!/^[A-Za-z0-9_-]{1,32}$/.test(id))throw Error('Invalid submission');
-    const epoch=this.epoch;
-    const response=await this.request(`${this.endpoint}/api/teams/${encodeURIComponent(teamId)}/submissions/${id}`,{headers:{Authorization:`Bearer ${this.token}`},signal,redirect:'error'});
-    if(!response.ok)throw Error(`Review preview failed (${response.status})`);
-    const value=await response.json();if(epoch!==this.epoch)throw Error('Account changed');return value as {revision:number;proposal:unknown;configId:string;baseVersion:number};
   }
   async exportUsage(teamId:string,filters:Record<string,string>,signal:AbortSignal) {
     if(!this.token)throw Error('Sign in first');const epoch=this.epoch;
@@ -366,7 +358,7 @@ export class TeamworkClient {
   platformCredential() { if (!this.token) throw new Error('Sign in to platform first'); return this.token; }
   sessionRevision() { return this.epoch; }
   authenticated() { return !!this.token; }
-  /** Independent of configuration sync: only the member's own budget and a count of reviews leave the host. */
+  /** Independent of configuration sync: only the member's own budget leaves the host. */
   async summary(teamId: string): Promise<PanelSummary> {
     if (!this.token || !this.snapshot?.teams.some(team => team.teamId === teamId)) throw new Error(say('summary.team'));
     const epoch = this.epoch, endpoint = this.endpoint, token = this.token;
@@ -374,9 +366,9 @@ export class TeamworkClient {
       headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(3000),
     });
     if (!response.ok) throw new Error(say('summary.unavailable'));
-    const result = z.object({ budget: budgetSchema, pendingReviews: z.number().int().nonnegative() }).parse(await response.json());
+    const result = z.object({ budget: budgetSchema }).parse(await response.json());
     if (epoch !== this.epoch || endpoint !== this.endpoint || this.token !== token) throw new Error(say('auth.changed'));
-    return { budget: result.budget, pendingReviews: result.pendingReviews };
+    return result;
   }
   /** The member's own last 30 days in one team, for its settings page; dropped if the account changed meanwhile. */
   async teamUsage(teamId: string): Promise<PanelTeamUsage> {

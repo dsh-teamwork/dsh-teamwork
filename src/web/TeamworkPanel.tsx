@@ -60,7 +60,7 @@ function synced(t: Translate, iso: string | undefined) {
 }
 
 /**
- * One team's summary for the member: their budget and the reviews waiting, read every half minute while that team
+ * One team's summary for the member: their budget, read every half minute while that team
  * is browsed. Advisory: a failed read shows as unavailable, never as unlimited.
  */
 function useSummary(team: string | undefined, revision: string) {
@@ -254,7 +254,7 @@ export function TeamworkPanel({ host: dsh, renderFactorySlot }: { host: Host; re
   const choosing = page === 'choose' && state.teams.length > 1;
   return (
     <Words.Provider value={t}>
-      <Panel label="Teamwork" header={<Header state={state} page={page} team={team} reviews={browsed?.role === 'admin' ? summary?.pendingReviews ?? 0 : 0} reviewUrl={browsed ? `${browsed.consoleUrl}/sharing` : ''} selectTeam={selectTeam} navigate={navigate} />}
+      <Panel label="Teamwork" header={<Header state={state} page={page} team={team} selectTeam={selectTeam} navigate={navigate} />}
         footer={<Footer state={state} connectionOpen={page === 'connection'} openConnection={() => navigate('connection')} budget={browsed ? (summary === undefined ? undefined : summary?.budget ?? null) : false} run={run} />}>
         {loadError !== undefined && <Banner tone="danger" title={t('load.stale')} action={retry}>{describe(t, loadError)}</Banner>}
         {state.sync.lastError && (
@@ -778,8 +778,8 @@ function ServerSetting({ state, run }: { state: PanelState; run: Run }) {
 
 /* ── Signed in ───────────────────────────────────────────────────────────── */
 
-function Header({ state, page, team, reviews, reviewUrl, selectTeam, navigate }: {
-  state: PanelState; page: Page; team: string; reviews: number; reviewUrl: string; selectTeam(id: string): void; navigate(page: Page): void;
+function Header({ state, page, team, selectTeam, navigate }: {
+  state: PanelState; page: Page; team: string; selectTeam(id: string): void; navigate(page: Page): void;
 }) {
   const t = useT();
   const pending = state.phones.filter(p => p.status === 'pending').length;
@@ -796,8 +796,6 @@ function Header({ state, page, team, reviews, reviewUrl, selectTeam, navigate }:
       </div>
     </div>
     <div className="twui-row twui-header-actions">
-      {/* Amber marks what waits on the reader (docs/design.md): an admin's reviews, a phone's pairing. */}
-      {reviews > 0 && <Button variant="ghost" trailingIcon="external" title={t('nav.reviewsHint')} onClick={() => open(reviewUrl)}><span className="twui-signal-dot" aria-hidden="true" />{t('nav.reviews', { count: reviews })}</Button>}
       <Button variant="ghost" icon="smartphone" aria-current={page === 'devices' ? 'page' : undefined} onClick={() => navigate('devices')}>{t('nav.phones')}{pending ? <>{` · ${pending}`}<span className="twui-signal-dot" aria-hidden="true" /></> : null}</Button>
       <Button variant="ghost" icon="settings" aria-current={page === 'profile' ? 'page' : undefined} onClick={() => navigate('profile')}>{t('nav.account')}</Button>
     </div>

@@ -315,7 +315,7 @@ test('never overlaps state polling while a slow request is pending', async () =>
 
 test('switching resource teams discards a late summary and does not block resource rendering', async () => {
   let finish!: (value: Awaited<ReturnType<typeof api.summary>>) => void;
-  vi.mocked(api.summary).mockImplementation(id => id === 'a' ? new Promise(resolve => { finish = resolve; }) : Promise.resolve({ budget: { remaining: '2', state: 'known', resetAt: null, tokenLimited: false, exhausted: false }, pendingReviews: 0 }));
+  vi.mocked(api.summary).mockImplementation(id => id === 'a' ? new Promise(resolve => { finish = resolve; }) : Promise.resolve({ budget: { remaining: '2', state: 'known', resetAt: null, tokenLimited: false, exhausted: false } }));
   await mount(); await click('选择团队');
   const select = async (index: number) => {
     await act(async () => document.querySelector<HTMLButtonElement>('.twui-select-trigger')!.click());
@@ -323,7 +323,7 @@ test('switching resource teams discards a late summary and does not block resour
   };
   expect(document.body.textContent).toContain('Preset a');
   await select(1); expect(document.body.textContent).toContain('预算剩余 2 积分');
-  await act(async () => finish({ budget: { remaining: '999', state: 'known', resetAt: null, tokenLimited: false, exhausted: false }, pendingReviews: 0 }));
+  await act(async () => finish({ budget: { remaining: '999', state: 'known', resetAt: null, tokenLimited: false, exhausted: false } }));
   expect(document.body.textContent).not.toContain('999');
   expect(api.use).not.toHaveBeenCalled();
 });
@@ -401,21 +401,6 @@ test('draws each preset with the avatar its admin chose, or the one its name pic
   await act(async () => document.querySelector<HTMLButtonElement>('.twui-select-trigger')!.click());
   await act(async () => document.querySelector<HTMLElement>('[role="option"][data-index="1"]')!.click());
   expect(plate()).toBe(presetAvatar(undefined, 'Preset b').plate);
-});
-
-test('shows an admin the reviews waiting in the browsed team, and a member none', async () => {
-  vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en' });
-  vi.mocked(api.summary).mockResolvedValue({ budget: { remaining: null, state: 'unlimited', resetAt: null, tokenLimited: false, exhausted: false }, pendingReviews: 2 });
-  const open = vi.spyOn(window, 'open').mockReturnValue(null);
-  try {
-    await mount();
-    await act(async () => document.querySelector('article button')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
-    await click('2 to review');
-    expect(open).toHaveBeenCalledWith('https://example.com/teams/a/sharing', '_blank', 'noopener');
-    await act(async () => document.querySelector<HTMLButtonElement>('.twui-select-trigger')!.click());
-    await act(async () => document.querySelector('[role="option"][data-index="1"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
-    expect(document.body.textContent).not.toContain('to review');
-  } finally { open.mockRestore(); }
 });
 
 test('marks a team model without its context window, and a preset on it, as not ready with the reason', async () => {

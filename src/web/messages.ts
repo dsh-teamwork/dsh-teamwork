@@ -39,8 +39,6 @@ const en = {
   'nav.chooseTeam': 'Choose a team',
   'nav.phones': 'Devices',
   'nav.account': 'Account',
-  'nav.reviews': '{count} to review',
-  'nav.reviewsHint': 'Submissions waiting for your review in the team console',
 
   // No team, team chooser, teams page
   'noTeam.title': 'Your account is connected. Next, join a team',
@@ -351,8 +349,6 @@ const zhCN: Record<PanelMessage, string> = {
   'nav.chooseTeam': '选择团队',
   'nav.phones': '设备连接',
   'nav.account': '我的账号',
-  'nav.reviews': '{count} 项待审核',
-  'nav.reviewsHint': '团队控制台里等待你审核的提交',
 
   'noTeam.title': '账号已连接，接下来加入团队',
   'noTeam.body': '在网页中接受邀请或创建团队，完成后回来刷新。',

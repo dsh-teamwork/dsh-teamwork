@@ -4,7 +4,7 @@ import { say, speaking } from '../src/messages.js';
 
 const calls: Array<[string, unknown[]]> = [];
 const ops: PanelOps = {
-  summary: async () => ({ budget: { remaining: null, state: "unlimited", resetAt: null, tokenLimited: false, exhausted: false }, pendingReviews: 0 }),
+  summary: async () => ({ budget: { remaining: null, state: "unlimited", resetAt: null, tokenLimited: false, exhausted: false } }),
   profile: async () => ({ id: 'user', email: 'user@example.com', name: null, image: null, locale: 'en' }),
   updateProfile: async input => { calls.push(['profile', [input]]); return { id: 'user', email: 'user@example.com', image: null, ...input }; },
   state: async (sessionId) => { calls.push(['state', [sessionId]]); return { authenticated: false } as never; },
