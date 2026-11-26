@@ -1,4 +1,4 @@
-import { ROUTE_PREFIX, type PanelPairingOffer, type PanelState, type PanelProfile, type PanelSummary, type PanelTeamUsage } from '../panel.js';
+import { ROUTE_PREFIX, type PanelCatalogItem, type PanelPairingOffer, type PanelState, type PanelProfile, type PanelSummary, type PanelTeamUsage } from '../panel.js';
 import type { Locale } from '../locale.js';
 
 /** A request that never reached the host's answer; the panel words it in its own language. */
@@ -45,6 +45,8 @@ export const api = {
   setServer: (server: string | null) => call('server', { server }),
   use: (sessionId: string, id: string) => call<{ message: string }>('use', { sessionId, id }),
   install: (id: string, version: string) => call<{ message: string }>('install', { id, version }),
+  catalog: (teamId: string) => call<PanelCatalogItem[]>('catalog', { teamId }),
+  here: (teamId: string, id: string, on: boolean) => call<void>('here', { teamId, id, on }),
   setOwnerPin: (pin: string | null) => call<void>('owner-pin', { pin }),
   setNativeWeb: (enabled: boolean) => call<void>('native-web', { enabled }),
   disconnectNativeWeb: () => call<void>('native-web-disconnect'),

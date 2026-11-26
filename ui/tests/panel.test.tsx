@@ -8,7 +8,7 @@ import { presetAvatar } from '../../src/web/avatars.js';
 import type { PanelState } from '../../src/panel.js';
 import type { Host, RenderFactorySlot } from '../../src/web/host.js';
 
-vi.mock('../../src/web/api.js', async (original) => ({ HostUnreachable: (await original<typeof import('../../src/web/api.js')>()).HostUnreachable, api: { summary: vi.fn().mockRejectedValue(new Error("Unavailable")), state: vi.fn(), profile: vi.fn(), updateProfile: vi.fn(), logout: vi.fn(), sync: vi.fn(), use: vi.fn(), login: vi.fn(), authorize: vi.fn(), pairPhone: vi.fn(), decidePhone: vi.fn(), revokePhone: vi.fn(), setWorkspace: vi.fn(), teamUsage: vi.fn() } }));
+vi.mock('../../src/web/api.js', async (original) => ({ HostUnreachable: (await original<typeof import('../../src/web/api.js')>()).HostUnreachable, api: { summary: vi.fn().mockRejectedValue(new Error("Unavailable")), state: vi.fn(), profile: vi.fn(), updateProfile: vi.fn(), logout: vi.fn(), sync: vi.fn(), use: vi.fn(), login: vi.fn(), authorize: vi.fn(), pairPhone: vi.fn(), decidePhone: vi.fn(), revokePhone: vi.fn(), setWorkspace: vi.fn(), teamUsage: vi.fn(), catalog: vi.fn().mockResolvedValue([]), here: vi.fn() } }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const profile = { id: 'user', name: 'Ada', email: 'ada@example.com', image: null, locale: 'zh-CN' as const };
 const state: PanelState = {
@@ -34,7 +34,7 @@ const renderFactorySlot: RenderFactorySlot = (_name, props) => props.open ? <div
 </div> : null;
 let root: ReturnType<typeof createRoot>;
 let scenario = 0;
-beforeEach(() => { vi.resetAllMocks(); profile.id = `user-${++scenario}`; vi.mocked(api.state).mockResolvedValue(state); vi.mocked(api.profile).mockResolvedValue(profile); vi.mocked(api.teamUsage).mockRejectedValue(new Error('Unavailable')); });
+beforeEach(() => { vi.resetAllMocks(); profile.id = `user-${++scenario}`; vi.mocked(api.state).mockResolvedValue(state); vi.mocked(api.profile).mockResolvedValue(profile); vi.mocked(api.teamUsage).mockRejectedValue(new Error('Unavailable')); vi.mocked(api.catalog).mockResolvedValue([]); });
 afterEach(() => { act(() => root?.unmount()); document.body.innerHTML = ''; localStorage.clear(); vi.clearAllMocks(); vi.useRealTimers(); });
 async function mount() {
   const container = document.createElement('div'); document.body.append(container); root = createRoot(container);
@@ -193,7 +193,7 @@ test('a team’s settings show the member’s own usage as the console does, in 
   expect(text).not.toMatch(/\d\.\d+ ?积分|1234\.9|96\.5/);
   // A meter shows by its name in the panel's language, never by its key.
   expect(text).not.toContain('cloud.computer');
-  await click('打开工具箱');
+  await click('打开预设和插件');
   expect(document.querySelector('.twui-select-primary')!.textContent).toContain('Alpha');
 });
 
@@ -285,7 +285,7 @@ test('chooses a team, filters its resources without changing sessions, and shows
   expect(document.body.textContent).toContain('Preset b');
   expect(document.body.textContent).not.toContain('Preset a');
   await click('设备连接'); expect(document.body.textContent).toContain('用手机 App 或网页「我的 DSH」操作');
-  await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="返回团队工具箱"]')!.click());
+  await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="返回预设和插件"]')!.click());
   await act(async () => document.querySelectorAll<HTMLButtonElement>('[role="tab"]')[1].click());
   act(() => root.unmount());
   await mount();
@@ -403,6 +403,17 @@ test('draws each preset with the avatar its admin chose, or the one its name pic
   expect(plate()).toBe(presetAvatar(undefined, 'Preset b').plate);
 });
 
+test('offers the team’s presets that do not sync here and installs one on this DSH alone', async () => {
+  vi.mocked(api.state).mockResolvedValue({ ...state, locale: 'en' });
+  vi.mocked(api.catalog).mockResolvedValue([{ id: 'x', kind: 'preset', name: 'Daily notes', description: 'Standup notes', author: 'Alice', users: 3, recommended: false }]);
+  vi.mocked(api.here).mockResolvedValue(undefined);
+  await mount(); await click('Choose');
+  expect(document.body.textContent).toContain('More presets from the team');
+  expect(document.body.textContent).toContain('Alice · 3 using');
+  await click('Install here');
+  expect(api.here).toHaveBeenCalledWith('a', 'x', true);
+});
+
 test('marks a team model without its context window, and a preset on it, as not ready with the reason', async () => {
   const session = { id: 's', model: null, preset: null, started: false };
   const model = (id: string, name: string, contextWindowMissing: boolean) => ({ id, teamId: 'a', teamName: 'a', name, version: 1, model: id, contextWindowMissing, modelOffline: false });
@@ -501,9 +512,9 @@ test('a paired device shows a badge only when it must pair again, and its kind o
   expect(row('旧 Pixel').textContent).toContain('Android 手机 ·');
 });
 
-test('a page has no back link: the brand mark and the team menu lead back to the team toolbox', async () => {
+test('a page has no back link: the brand mark and the team menu lead back to presets and plugins', async () => {
   await mount(); await click('设备连接');
-  expect([...document.querySelectorAll('button')].some(b => b.textContent === '返回团队工具箱')).toBe(false);
-  await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="返回团队工具箱"]')!.click());
+  expect([...document.querySelectorAll('button')].some(b => b.textContent === '返回预设和插件')).toBe(false);
+  await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="返回预设和插件"]')!.click());
   expect(document.querySelector('[role="tab"]')).not.toBeNull();
 });

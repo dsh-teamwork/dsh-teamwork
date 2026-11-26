@@ -386,6 +386,33 @@ export declare class TeamworkClient {
     }, signal: AbortSignal): Promise<unknown>;
     assistantChange(teamId: string, action: string, input: Record<string, unknown>, signal: AbortSignal): Promise<unknown>;
     exportUsage(teamId: string, filters: Record<string, string>, signal: AbortSignal): Promise<string>;
+    /**
+     * Everything a team shares, for the panel to browse beyond what syncs here: its presets and plugins, the member's
+     * choices and the team's recommendations, and its members' names. Read with the plugin's own sign-in.
+     */
+    catalog(teamId: string): Promise<{
+        configs: {
+            id: string;
+            kind: string;
+            name: string;
+            data: Record<string, unknown>;
+            builtin?: string | undefined;
+            assetOwnerId?: string | undefined;
+        }[];
+        choices: {
+            defaults: Record<string, {
+                version: number;
+            }>;
+            users: Record<string, number>;
+        };
+        members: {
+            userId: string;
+            email?: string | null | undefined;
+            name?: string | null | undefined;
+        }[];
+    }>;
+    /** Puts a team preset or plugin on this computer alone, or takes it off this computer (`PUT …/asset-choices/{id}/here`). */
+    setHere(teamId: string, id: string, on: boolean): Promise<void>;
     /** Narrow team operations; credentials never enter model-visible results. */
     assistantRead(teamId: string, action: 'configs' | 'usage' | 'budgets' | 'members' | 'submissions' | 'history' | 'providers', signal: AbortSignal, filters?: Record<string, string>): Promise<any>;
     sync(): Promise<{

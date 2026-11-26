@@ -316,6 +316,34 @@ export class TeamworkClient {
     const bytes=Buffer.from(await response.arrayBuffer());if(bytes.length>10*1024*1024)throw Error('Export exceeds local size limit');if(epoch!==this.epoch)throw Error('Account changed');
     const directory=join(dirname(this.cachePath),'teamwork-exports');await mkdir(directory,{recursive:true,mode:0o700});const path=join(directory,`usage-${randomBytes(8).toString('hex')}.csv`);await writeFile(path,bytes,{mode:0o600});return path;
   }
+  /**
+   * Everything a team shares, for the panel to browse beyond what syncs here: its presets and plugins, the member's
+   * choices and the team's recommendations, and its members' names. Read with the plugin's own sign-in.
+   */
+  async catalog(teamId: string) {
+    if (!this.token) throw new Error('Sign in first');
+    const epoch = this.epoch, token = this.token;
+    const get = async (path: string) => {
+      const response = await this.request(`${this.endpoint}/api/teams/${encodeURIComponent(teamId)}${path}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10000), redirect: 'error' });
+      if (!response.ok) throw new Error(`Team catalog read failed (${response.status}): ${failure(await response.json().catch(() => ({})))}`);
+      return response.json() as Promise<unknown>;
+    };
+    const [configs, choices, team] = await Promise.all([get('/configs'), get('/asset-choices'), get('')]);
+    if (epoch !== this.epoch) throw new Error('Account changed during the catalog read');
+    return {
+      configs: z.array(z.object({ id: z.string(), kind: z.string(), name: z.string(), builtin: z.string().optional(), assetOwnerId: z.string().optional(), data: z.record(z.string(), z.unknown()) })).parse(configs),
+      choices: z.object({ defaults: z.record(z.string(), z.object({ version: z.number() })), users: z.record(z.string(), z.number()) }).parse(choices),
+      members: z.object({ members: z.array(z.object({ userId: z.string(), email: z.string().nullable().optional(), name: z.string().nullable().optional() })) }).parse(team).members,
+    };
+  }
+  /** Puts a team preset or plugin on this computer alone, or takes it off this computer (`PUT …/asset-choices/{id}/here`). */
+  async setHere(teamId: string, id: string, on: boolean) {
+    if (!this.token) throw new Error('Sign in first');
+    const epoch = this.epoch;
+    const response = await this.request(`${this.endpoint}/api/teams/${encodeURIComponent(teamId)}/asset-choices/${encodeURIComponent(id)}/here`, { method: 'PUT', headers: { Authorization: `Bearer ${this.token}`, Origin: new URL(this.endpoint).origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ on }), signal: AbortSignal.timeout(10000), redirect: 'error' });
+    if (!response.ok) throw new Error(`Teamwork operation failed (${response.status}): ${failure(await response.json().catch(() => ({})))}`);
+    if (epoch !== this.epoch) throw new Error('Account changed during the operation');
+  }
   /** Narrow team operations; credentials never enter model-visible results. */
   async assistantRead(teamId: string, action: 'configs'|'usage'|'budgets'|'members'|'submissions'|'history'|'providers', signal: AbortSignal, filters:Record<string,string>={}) {
     if (!this.token) throw new Error('Sign in first');
