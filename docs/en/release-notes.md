@@ -2,6 +2,16 @@
 
 ## Next release
 
+- The panel's list is called **Presets and plugins**, as in the web console.
+  Below what syncs to this DSH, its Presets and Plugins tabs list the team's
+  other items with their author, how many members use them and whether the
+  team recommends them. **Install here** adds one to this computer alone
+  (`PUT /asset-choices/{id}/here`); **Remove from this DSH** keeps one off it.
+  The team assistant stays. Installing and removing need a Teamwork server
+  with per-DSH choices; an older one answers 404.
+- Members publish their own presets and plugins straight from the DSH
+  assistant, after the host confirms. The legacy approval actions and the
+  review indicator are gone.
 - The knowledge guide says that `@[Name](member-id)` mentions a member and
   `![[artifact:{id}]]` embeds an artifact, both to be kept as written.
 - The knowledge guide in every session now says what the richer format
