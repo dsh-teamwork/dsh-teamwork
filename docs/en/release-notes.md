@@ -2,6 +2,11 @@
 
 ## Next release
 
+- A team model waits up to five minutes, DSH's own default, for its first
+  token instead of two. A provider slow to answer a long conversation no
+  longer ends the turn with `pi-ai stream idle timeout after 120000ms`. A
+  Teamwork server before 2026-11-27 still gives up on the provider after
+  two minutes.
 - The panel's list is called **Presets and plugins**, as in the web console.
   Below what syncs to this DSH, its Presets and Plugins tabs list the team's
   other items with their author, how many members use them and whether the
