@@ -440,6 +440,24 @@ describe('the phone bridge', () => {
       ];
       for (const sample of samples) expect(sizeBound(sample, 1e9)).toBeGreaterThanOrEqual(bytes(sample));
       expect(sizeBound({ text: big(1000) }, 100)).toBe(Infinity);
+      // Not plain data: its JSON is not its entries, so the bound gives way to the exact size.
+      expect(sizeBound({ at: new Date(0) }, 1e9)).toBe(Infinity);
+      expect(sizeBound({ bytes: Buffer.from('abc') }, 1e9)).toBe(Infinity);
+      expect(sizeBound({ custom: { toJSON: () => 'x'.repeat(100) } }, 1e9)).toBe(Infinity);
+    });
+
+    it('keeps a snapshot\'s newest replies whole, dropping older records to fit its budget', async () => {
+      const { sent, mux } = await follow();
+      const reply = (seq: number) => ({ seq, event: { type: 'assistant/message', seq, data: { message: { content: [{ type: 'text', text: `answer ${seq} ${big(15_000)}` }] } } } });
+      const records = Array.from({ length: 20 }, (_, i) => reply(i));
+      mux.emit('message', { data: JSON.stringify({ type: 'item', streamId: 'f', value: { type: 'snapshot', cursor: 19, hasMore: false, records } }) });
+      const frame = sent.at(-1);
+      expect(bytes(frame)).toBeLessThanOrEqual(SNAPSHOT_BYTES);
+      const kept = frame.body.value.records as typeof records;
+      expect(kept.at(-1)!.seq).toBe(19);
+      expect(kept.length).toBeLessThan(20);
+      expect(kept).toEqual(records.slice(20 - kept.length));
+      expect(frame.body.value.hasMore).toBe(true);
     });
 
     it('sends a snapshot within its budget untouched', async () => {

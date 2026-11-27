@@ -63,10 +63,11 @@ export declare class RelayError extends Error {
 /**
  * How often a connected socket asks the relay for a `pong` (the server's `server/relay/protocol.go`), and how long it
  * waits for one. A computer that slept or changed networks may hold a socket nobody answers on; it reconnects within
- * seconds instead of leaving its phones to time out. Any frame heard counts as an answer.
+ * seconds instead of leaving its phones to time out. Any frame heard counts as an answer, and the wait outlasts a
+ * large record already being written to a slow link.
  */
 export declare const PING_EVERY_MS = 15000;
-export declare const PONG_TIMEOUT_MS = 5000;
+export declare const PONG_TIMEOUT_MS = 20000;
 export interface RelayLinkOptions {
     /** The server the member signed in to, read on every attempt. */
     endpoint: () => string;

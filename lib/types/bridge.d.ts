@@ -131,9 +131,15 @@ export declare const SNAPSHOT_BYTES: number;
  */
 export declare function fitFrame<T>(frame: T, limit?: number): T | undefined;
 /**
+ * A follow's opening snapshot within `limit`. A tool's output, which the phone shows only in part, is shortened first;
+ * then the oldest records go, whole, and it says it has more, which `session/page` reads back. What the member and the
+ * agent said stays whole, unless the newest record alone does not fit, which only then is shortened.
+ */
+export declare function newestRecords<T>(frame: T, limit: number): T;
+/**
  * An upper bound on `value`'s JSON in UTF-8 bytes, without building it: every UTF-16 unit of a string is counted at
  * six bytes (`\u0000`, the longest escape), and an undefined property as if it were written. It gives up, returning
- * Infinity, as soon as the bound passes `stop`.
+ * Infinity, as soon as the bound passes `stop`, or at anything but plain JSON data.
  */
 export declare function sizeBound(value: unknown, stop: number): number;
 /** The pairing a cloud computer's server calls the bridge under: there is one, and no phone. */

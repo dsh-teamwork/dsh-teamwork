@@ -319,14 +319,17 @@ Whatever the bridge sends back fits one 1 MiB message of the encrypted channel
 (`fitFrame`): long strings are cut short, a snapshot or a page keeps its newest
 records and says `hasMore`, and a stream frame that still cannot fit ends its
 stream with `too_large` rather than closing the channel. A follow's opening
-snapshot is held to 256 KiB (`SNAPSHOT_BYTES`) by the same rules, since the
-screen waits for it to cross the relay. A frame whose size bound (`sizeBound`,
+snapshot is held to 256 KiB (`SNAPSHOT_BYTES`, `newestRecords`), since the
+screen waits for it to cross the relay: tool output is shortened first, then
+the oldest records go whole, and replies are never shortened unless the
+newest record alone does not fit. A frame whose size bound (`sizeBound`,
 six bytes a character) is under the limit passes without being serialised to
 be measured, which is every stream delta in practice.
 
 `src/relay.ts` pings the relay every fifteen seconds once welcomed and dials
-again when five pass with nothing heard, so a socket a sleep or a network
-change left half open is replaced within seconds.
+again when twenty pass with nothing heard (enough for a large record on a slow
+link to finish arriving), so a socket a sleep or a network change left half
+open is replaced within half a minute.
 
 File intake uses `teamwork/uploadStart`, `uploadChunk`, `uploadFinish` and
 `uploadCancel` after native admission. Receipt/transfer identity binds pairing and

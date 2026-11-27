@@ -61,10 +61,11 @@ const REQUEST_TIMEOUT_MS = 10_000;
 /**
  * How often a connected socket asks the relay for a `pong` (the server's `server/relay/protocol.go`), and how long it
  * waits for one. A computer that slept or changed networks may hold a socket nobody answers on; it reconnects within
- * seconds instead of leaving its phones to time out. Any frame heard counts as an answer.
+ * seconds instead of leaving its phones to time out. Any frame heard counts as an answer, and the wait outlasts a
+ * large record already being written to a slow link.
  */
 export const PING_EVERY_MS = 15_000;
-export const PONG_TIMEOUT_MS = 5_000;
+export const PONG_TIMEOUT_MS = 20_000;
 const webDialSchema = z.object({ t: z.literal('webDial'), id: z.string().regex(/^[a-f0-9]{64}$/) });
 
 export interface RelayLinkOptions {

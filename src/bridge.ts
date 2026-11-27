@@ -447,7 +447,7 @@ export class Bridge {
   private deliver(pairingId: string, link: Link, body: z.infer<typeof serverMuxSchema>) {
     const whole = { t: 'mux', pairingId, body };
     const opening = (body as { value?: { type?: unknown } }).value?.type === 'snapshot';
-    const frame = (opening ? fitFrame(whole, SNAPSHOT_BYTES) : undefined) ?? fitFrame(whole);
+    const frame = fitFrame(opening ? newestRecords(whole, SNAPSHOT_BYTES) : whole);
     if (frame) return this.options.send(frame);
     link.streams.delete(body.streamId);
     if (link.mux?.readyState === 1) link.mux.send(JSON.stringify({ type: 'cancel', streamId: body.streamId }));
@@ -538,9 +538,35 @@ export function fitFrame<T>(frame: T, limit = FRAME_BYTES): T | undefined {
 type History = { type?: unknown; records?: unknown[] };
 
 /**
+ * A follow's opening snapshot within `limit`. A tool's output, which the phone shows only in part, is shortened first;
+ * then the oldest records go, whole, and it says it has more, which `session/page` reads back. What the member and the
+ * agent said stays whole, unless the newest record alone does not fit, which only then is shortened.
+ */
+export function newestRecords<T>(frame: T, limit: number): T {
+  const fits = (value: unknown) => sizeBound(value, limit) <= limit || bytes(value) <= limit;
+  if (fits(frame)) return frame;
+  const body = (frame as { body?: { value?: History } }).body;
+  const history = body?.value;
+  if (!body || !history || !Array.isArray(history.records)) return frame;
+  const framed = (records: unknown[], hasMore: unknown) => ({ ...frame, body: { ...body, value: { ...history, records, hasMore } } }) as T;
+  const tool = (record: unknown) => String((record as { event?: { type?: unknown } } | null)?.event?.type ?? '').startsWith('tool/');
+  let records = history.records;
+  for (const cap of STRING_CAPS) {
+    if (fits(framed(records, history.hasMore))) return framed(records, history.hasMore);
+    records = history.records.map((record) => (tool(record) ? shorten(record, cap) : record));
+  }
+  let over = bytes(framed(records, true)) - limit;
+  let first = 0;
+  // Each record dropped takes its JSON and the comma before the next; the newest always stays.
+  while (over > 0 && first < records.length - 1) over -= bytes(records[first++]) + 1;
+  const kept = framed(records.slice(first), first > 0 ? true : history.hasMore);
+  return fits(kept) ? kept : fitFrame(kept, limit) ?? kept;
+}
+
+/**
  * An upper bound on `value`'s JSON in UTF-8 bytes, without building it: every UTF-16 unit of a string is counted at
  * six bytes (`\u0000`, the longest escape), and an undefined property as if it were written. It gives up, returning
- * Infinity, as soon as the bound passes `stop`.
+ * Infinity, as soon as the bound passes `stop`, or at anything but plain JSON data.
  */
 export function sizeBound(value: unknown, stop: number): number {
   let total = 0;
@@ -552,6 +578,9 @@ export function sizeBound(value: unknown, stop: number): number {
       total += 2 + item.length;
       for (const entry of item) if (!walk(entry)) return false;
     } else if (typeof item === 'object') {
+      // Only a plain object's JSON is its own entries: a Date, a Buffer or anything with `toJSON` is measured exactly.
+      const prototype = Object.getPrototypeOf(item);
+      if ((prototype !== Object.prototype && prototype !== null) || typeof (item as { toJSON?: unknown }).toJSON === 'function') return false;
       const entries = Object.entries(item as object);
       total += 2 + entries.length;
       for (const [key, entry] of entries) {
