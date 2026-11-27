@@ -124,8 +124,6 @@ follow their own build-script and installation policies. See
 4. Select the team's assistant preset and create a new session. New teams receive
    an assistant named after the team; existing teams are not automatically changed.
 
-![Teamwork panel in a real DSH host, with demonstration team resources](https://raw.githubusercontent.com/dsh-teamwork/dsh-teamwork/main/assets/readme/teamwork-panel.png)
-
 Try asking:
 
 > Sync my team's configuration and show my usage for this month.
