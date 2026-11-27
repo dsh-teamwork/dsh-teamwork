@@ -8,9 +8,18 @@ export type SecurePacket = {
     pairingId: string;
     channelId: string;
     kind: 'commit' | 'reveal' | 'noise' | 'data';
-    data: string;
+    data: Uint8Array;
 };
 export declare function securePacket(value: unknown): value is SecurePacket;
+/**
+ * A packet as one binary WebSocket message (the relay's `server/relay/protocol.go`, `sealedRecord`): its kind in one
+ * byte (1 commit, 2 reveal, 3 noise, 4 data), the pairing id's length in one byte, the pairing id, the 22-character
+ * channel id, then the record's bytes as they are. No base64 and no JSON: the relay reads the header and passes the
+ * message on unchanged.
+ */
+export declare function encodePacket(packet: SecurePacket): Uint8Array;
+/** A binary message read back into a packet, or null when it is not a well-formed one. */
+export declare function decodePacket(message: ArrayBuffer | ArrayBufferView): SecurePacket | null;
 export type RandomBytes = (length: number) => Uint8Array;
 export interface Identity {
     privateKey: NoiseComponents['privateKey'];

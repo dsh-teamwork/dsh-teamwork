@@ -14,7 +14,7 @@ import { createRequire } from 'node:module';
 import { hostname } from 'node:os';
 import { dirname } from 'node:path';
 import { z } from 'zod';
-import { securePacket, type SecurePacket } from './secure-channel.js';
+import { decodePacket, encodePacket, securePacket, type SecurePacket } from './secure-channel.js';
 const endSchema = z.object({ t: z.enum(['detach', 'revoked']), pairingId: z.string().min(1).max(64) });
 export type RoutedFrame = SecurePacket | z.infer<typeof endSchema>;
 import type { RelayStatus } from './panel.js';
@@ -153,7 +153,8 @@ export class RelayLink {
    * when an agent waits on its member. Dropped while not connected.
    */
   send(frame: unknown) {
-    if (this.state === 'connected' && this.socket?.readyState === 1) this.socket.send(JSON.stringify(frame));
+    // An encryption record goes as a binary message (`encodePacket`); everything else is JSON.
+    if (this.state === 'connected' && this.socket?.readyState === 1) this.socket.send(securePacket(frame) ? encodePacket(frame) : JSON.stringify(frame));
   }
 
   private failRequests() {
@@ -217,6 +218,7 @@ export class RelayLink {
     // Node has a global WebSocket from 22 on; on an older runtime the phone's way in stays closed.
     if (Socket === undefined) return this.set('off');
     const socket = new Socket(url);
+    socket.binaryType = 'arraybuffer';
     this.socket = socket;
     const lifetime = this.socketLifetime = new AbortController();
     socket.addEventListener('close', () => lifetime.abort(), { once: true });
@@ -235,7 +237,12 @@ export class RelayLink {
     socket.addEventListener('message', (event) => {
       if (run !== this.run) return;
       heard = Date.now();
-      const frame = parseJson(String(event.data));
+      if (typeof event.data !== 'string') {
+        const packet = decodePacket(event.data as ArrayBuffer);
+        if (packet) this.options.onForward?.(packet);
+        return;
+      }
+      const frame = parseJson(event.data);
       const dial = webDialSchema.safeParse(frame);
       if (web && dial.success && this.state === 'connected') {
         const dataURL = new URL('/relay/web/tunnel', url);
@@ -257,7 +264,6 @@ export class RelayLink {
         clearTimeout(pending.timer);
         return reply.data.error ? pending.reject(new RelayError(reply.data.error)) : pending.resolve(reply.data.value);
       }
-      if (securePacket(frame)) this.options.onForward?.(frame);
       const ended = endSchema.safeParse(frame);
       if (ended.success) this.options.onForward?.(ended.data);
       const pushed = eventSchema.safeParse(frame);

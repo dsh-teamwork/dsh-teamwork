@@ -130,6 +130,12 @@ export declare const SNAPSHOT_BYTES: number;
  * `session/page` reads back.
  */
 export declare function fitFrame<T>(frame: T, limit?: number): T | undefined;
+/**
+ * An upper bound on `value`'s JSON in UTF-8 bytes, without building it: every UTF-16 unit of a string is counted at
+ * six bytes (`\u0000`, the longest escape), and an undefined property as if it were written. It gives up, returning
+ * Infinity, as soon as the bound passes `stop`.
+ */
+export declare function sizeBound(value: unknown, stop: number): number;
 /** The pairing a cloud computer's server calls the bridge under: there is one, and no phone. */
 export declare const CLOUD_PAIRING = "cloud";
 /**

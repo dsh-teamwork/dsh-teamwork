@@ -284,6 +284,8 @@ public key. Missing/changed keys require new pairing; plaintext has no fallback.
 Once both ends trust each other, a channel is `pinned` (the platform's ADR
 0071): no commit/reveal, Noise from the first packet (a `noise` packet for an
 untrusted pairing is ignored), and each end sends once its own key is set.
+Packets cross the relay as binary messages (`encodePacket`, `decodePacket`;
+the platform's ADR 0072), and `src/relay.ts` reads every binary message as one.
 After Noise authentication, endpoints exchange independent AES-256 sending keys.
 Payloads use native AES-256-GCM (Node/OpenSSL and Expo Crypto), authenticating the
 channel, direction and monotonic counter. Replay, reordering, cipher failure and
@@ -318,7 +320,9 @@ Whatever the bridge sends back fits one 1 MiB message of the encrypted channel
 records and says `hasMore`, and a stream frame that still cannot fit ends its
 stream with `too_large` rather than closing the channel. A follow's opening
 snapshot is held to 256 KiB (`SNAPSHOT_BYTES`) by the same rules, since the
-screen waits for it to cross the relay.
+screen waits for it to cross the relay. A frame whose size bound (`sizeBound`,
+six bytes a character) is under the limit passes without being serialised to
+be measured, which is every stream delta in practice.
 
 `src/relay.ts` pings the relay every fifteen seconds once welcomed and dials
 again when five pass with nothing heard, so a socket a sleep or a network

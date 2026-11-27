@@ -514,7 +514,8 @@ const STRING_CAPS = [64 * 1024, 16 * 1024, 4 * 1024, 1024];
  * `session/page` reads back.
  */
 export function fitFrame<T>(frame: T, limit = FRAME_BYTES): T | undefined {
-  if (bytes(frame) <= limit) return frame;
+  // Most frames (a stream's deltas) are far below the limit: a bound proves it without serialising them twice.
+  if (sizeBound(frame, limit) <= limit || bytes(frame) <= limit) return frame;
   let short = frame;
   for (const cap of STRING_CAPS) {
     short = shorten(frame, cap) as T;
@@ -535,6 +536,33 @@ export function fitFrame<T>(frame: T, limit = FRAME_BYTES): T | undefined {
 }
 
 type History = { type?: unknown; records?: unknown[] };
+
+/**
+ * An upper bound on `value`'s JSON in UTF-8 bytes, without building it: every UTF-16 unit of a string is counted at
+ * six bytes (`\u0000`, the longest escape), and an undefined property as if it were written. It gives up, returning
+ * Infinity, as soon as the bound passes `stop`.
+ */
+export function sizeBound(value: unknown, stop: number): number {
+  let total = 0;
+  const walk = (item: unknown): boolean => {
+    if (typeof item === 'string') total += 2 + 6 * item.length;
+    else if (typeof item === 'number' || typeof item === 'bigint') total += 24;
+    else if (item === null || item === undefined || typeof item === 'boolean') total += 9;
+    else if (Array.isArray(item)) {
+      total += 2 + item.length;
+      for (const entry of item) if (!walk(entry)) return false;
+    } else if (typeof item === 'object') {
+      const entries = Object.entries(item as object);
+      total += 2 + entries.length;
+      for (const [key, entry] of entries) {
+        total += 3 + 6 * key.length;
+        if (!walk(entry)) return false;
+      }
+    } else total += 9;
+    return total <= stop;
+  };
+  return walk(value) ? total : Infinity;
+}
 
 function shorten(value: unknown, cap: number): unknown {
   if (typeof value === 'string') {
