@@ -1,14 +1,20 @@
-<p align="center"><img src="https://raw.githubusercontent.com/dsh-teamwork/dsh-teamwork/main/assets/readme/icon-256.png" width="72" height="72" alt="DSH Teamwork"></p>
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/dsh-teamwork/dsh-teamwork/main/assets/readme/icon-256.png" width="96" height="96" alt="DSH Teamwork">
 
 # DSH Teamwork
 
-English · [简体中文](README.zh-CN.md)
+**Keep using your DSH from your phone.<br>Publish your team's models, presets and plugins once; every member syncs them.**
 
-[![npm](https://img.shields.io/npm/v/@dsh-teamwork/dsh-teamwork)](https://www.npmjs.com/package/@dsh-teamwork/dsh-teamwork)
+[![npm](https://badgen.net/npm/v/@dsh-teamwork/dsh-teamwork)](https://www.npmjs.com/package/@dsh-teamwork/dsh-teamwork)
 [![CI](https://github.com/dsh-teamwork/dsh-teamwork/actions/workflows/ci.yml/badge.svg)](https://github.com/dsh-teamwork/dsh-teamwork/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-**Keep using your DSH from your phone; publish your team's models, presets and plugins once, and every member syncs them.**
+[Self-host (open source)](https://github.com/dsh-teamwork/dsh-teamwork-platform) · [Hosted service](https://www.dshteamwork.com) · [User guide](docs/en/guide.md)
+
+English · [简体中文](README.zh-CN.md)
+
+</div>
 
 DSH Teamwork is a plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) that connects it to the
 [hosted DSH Teamwork service](https://www.dshteamwork.com), or to your team's own
@@ -16,7 +22,7 @@ DSH Teamwork is a plugin for [DeepSeek Harness](https://github.com/deepseek-ai/d
 Once it is installed, your DSH can be reached from your phone and your browser,
 and a team publishes its configuration once for every member's DSH to sync.
 
-![Teamwork panel in a real DSH host, with demonstration team resources](https://raw.githubusercontent.com/dsh-teamwork/dsh-teamwork/main/assets/readme/teamwork-panel.png)
+![Members on desktop, terminal, phone and web reach Teamwork, and Teamwork reaches the model providers](https://raw.githubusercontent.com/dsh-teamwork/dsh-teamwork/main/assets/readme/overview.en.gif)
 
 The plugin panel and the web console speak English and Simplified Chinese:
 the panel follows the language of your Teamwork account (**Account** in the
@@ -117,6 +123,8 @@ follow their own build-script and installation policies. See
    console if you have no membership yet.
 4. Select the team's assistant preset and create a new session. New teams receive
    an assistant named after the team; existing teams are not automatically changed.
+
+![Teamwork panel in a real DSH host, with demonstration team resources](https://raw.githubusercontent.com/dsh-teamwork/dsh-teamwork/main/assets/readme/teamwork-panel.png)
 
 Try asking:
 

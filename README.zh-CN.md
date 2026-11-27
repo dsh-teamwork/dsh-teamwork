@@ -1,14 +1,20 @@
-<p align="center"><img src="https://raw.githubusercontent.com/dsh-teamwork/dsh-teamwork/main/assets/readme/icon-256.png" width="72" height="72" alt="DSH Teamwork"></p>
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/dsh-teamwork/dsh-teamwork/main/assets/readme/icon-256.png" width="96" height="96" alt="DSH Teamwork">
 
 # DSH Teamwork
 
-[English](README.md) · 简体中文
+**手机上接着用你的 DSH。<br>团队的模型、预设和插件，一次发布、全员同步。**
 
-[![npm](https://img.shields.io/npm/v/@dsh-teamwork/dsh-teamwork)](https://www.npmjs.com/package/@dsh-teamwork/dsh-teamwork)
+[![npm](https://badgen.net/npm/v/@dsh-teamwork/dsh-teamwork)](https://www.npmjs.com/package/@dsh-teamwork/dsh-teamwork)
 [![CI](https://github.com/dsh-teamwork/dsh-teamwork/actions/workflows/ci.yml/badge.svg)](https://github.com/dsh-teamwork/dsh-teamwork/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-**手机上接着用你的 DSH；团队的模型、预设和插件，一次发布、全员同步。**
+[开源自建](https://github.com/dsh-teamwork/dsh-teamwork-platform) · [托管服务](https://www.dshteamwork.com) · [使用指南](docs/zh-CN/guide.md)
+
+[English](README.md) · 简体中文
+
+</div>
 
 DSH Teamwork 是 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的一个插件，连接
 [DSH Teamwork 托管服务](https://www.dshteamwork.com)，或团队用 `docker compose` 自建的[开源社区版服务器](https://github.com/dsh-teamwork/dsh-teamwork-platform)（Apache-2.0）。
