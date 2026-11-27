@@ -8,28 +8,43 @@
 [![CI](https://github.com/dsh-teamwork/dsh-teamwork/actions/workflows/ci.yml/badge.svg)](https://github.com/dsh-teamwork/dsh-teamwork/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-**把团队共享模型、预设和审批后的插件带入 DSH，通过团队助理完成日常协作与管理。**
+**手机上接着用你的 DSH；团队的模型、预设和插件，一次发布、全员同步。**
 
-将 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 连接到
-[DSH Teamwork](https://www.dshteamwork.com) 或团队自建服务器。团队配置发布一次，成员同步到各自的 DSH；团队助理可在对话中协助分享资源、查看使用量和管理团队。
+DSH Teamwork 是 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的一个插件，连接
+[DSH Teamwork 托管服务](https://www.dshteamwork.com)，或团队用 `docker compose` 自建的[开源社区版服务器](https://github.com/dsh-teamwork/dsh-teamwork-platform)（Apache-2.0）。
+装上以后，你的 DSH 能在手机和浏览器上接着用；团队配置发布一次，成员同步到各自的 DSH。
 
-![真实 DSH 宿主中的 Teamwork 面板，使用本地演示团队](https://raw.githubusercontent.com/dsh-teamwork/dsh-teamwork/main/assets/readme/teamwork-panel.png)
+![成员在桌面、终端、手机和网页上的 DSH 都接到 Teamwork，再接到各家模型](https://raw.githubusercontent.com/dsh-teamwork/dsh-teamwork/main/assets/readme/overview.zh-CN.gif)
 
-插件面板和网页控制台都支持英文和简体中文；面板跟随你的 Teamwork 账号语言（面板中的“我的账号”）。终端 `/teamwork` 命令的输出统一为英文；模型的回复跟随对话语言。截图均来自本地演示团队。
+插件面板和网页控制台都支持英文和简体中文；面板跟随你的 Teamwork 账号语言（面板中的“我的账号”）。终端 `/teamwork` 命令的输出统一为英文；模型的回复跟随对话语言。截图和动图均来自本地演示团队。
 
-## 可以做什么
+## 一个人用
 
-| 能力 | 为团队带来的功能 |
-| --- | --- |
-| 共享模型与预设 | 同步团队资源，使用 DSH 原生智能体预设创建会话。 |
-| 团队助理 | 查询配置、个人使用量和适用预算；管理员可执行获授权的团队管理操作。 |
-| Teamwork 搜索 | 登录到提供搜索的服务器（托管服务提供）后，DSH 的「网页搜索与抓取」里会出现 **Teamwork**：通过服务器搜索，无需自己的搜索 key。 |
-| 调研报告 | 自带的 `teamwork-research` 技能拆解问题、阅读一手资料，发布带编号引用、缺口说明和来源日期的调研报告，可导出 PDF 和 Markdown。 |
-| 演示稿 | 自带的 `teamwork-slides` 技能梳理汇报思路、写好每页内容和逐页讲稿，并发布可全屏演示、可导出 PDF 和可编辑 PPT 的演示稿。 |
-| 分享与审批 | 准备本地插件包，提交新插件、预设及更新，交由管理员审批。 |
-| 版本历史 | 查看发布记录、导出资源备份，准备经审批的历史恢复。 |
-| 团队治理 | 通过连接的团队服务管理配置、预算和审批。 |
-| 设备连接 | 通过中转，把手机（Teamwork App）或浏览器（网页的「我的 DSH」）配对到正在运行的 DSH 电脑。 |
+- ✅ **手机上接着干。** 用 Teamwork App 配对正在运行的 DSH 电脑，在外面也能发任务、看回复实时输出、回答 Agent 的提问。Agent 要写文件会先来问你，手机上看清楚、点一下就继续。
+
+  ![手机发出测试要求，办公室电脑上的 DSH 开始执行](https://raw.githubusercontent.com/dsh-teamwork/dsh-teamwork/main/assets/readme/phone-runs.zh-CN.gif)
+
+  ![只读会话要写文件，先在手机上请求批准，点允许后继续](https://raw.githubusercontent.com/dsh-teamwork/dsh-teamwork/main/assets/readme/phone-approve.zh-CN.gif)
+
+- ✅ **几台电脑一处看。** 网页控制台的「我的 DSH」列出你登录过的每台电脑，可以直接打开它的会话。
+- ✅ **定时任务。** 在网页和手机上管理电脑上 DSH 的定时任务：一次、每 N 分钟、每天、每周或 cron，可以立即运行、暂停和查看结果。
+- ✅ **联网搜索不用自己的 key。** 登录到提供搜索的服务器（托管服务提供）后，DSH 的「网页搜索与抓取」里会出现 **Teamwork**，通过服务器搜索。
+- ✅ **调研报告和演示稿。** 自带 `teamwork-research` 技能：拆解问题、阅读一手资料，发布带编号引用、缺口说明和来源日期的报告，可导出 PDF 和 Markdown。自带 `teamwork-slides` 技能：梳理汇报思路、写好每页内容和逐页讲稿，发布可全屏演示、可导出 PDF 和可编辑 PPT 的演示稿。
+
+手机与电脑之间经中转端到端加密，中转只转发、看不到内容；配对用扫码加两端核对安全码。
+
+## 几个人一起用
+
+- ✅ **好用的预设和插件，提交一次全组都有。** 成员提交预设或本地插件包，管理员审阅冻结的内容后发布，每个成员的 DSH 同步到。每次发布都留有版本，可以对比、导出备份，经审批后恢复。发布不会自动在成员电脑上安装代码，装不装插件由成员自己决定。
+
+  ![在团队工具箱里存成预设并提交审批](https://raw.githubusercontent.com/dsh-teamwork/dsh-teamwork/main/assets/readme/preset-review.zh-CN.gif)
+
+- ✅ **模型密钥只放在服务器上。** 团队模型的调用走所选服务器的模型网关，供应商密钥在网页的安全表单里填写、保存在服务端，成员电脑上没有。
+- ✅ **用量和预算看得清。** 按成员、按模型查看用量；团队、成员和供应商都能分别设上限。
+
+  ![网页控制台的使用量页面，团队预算本月已用 62%](https://raw.githubusercontent.com/dsh-teamwork/dsh-teamwork/main/assets/readme/usage-budget.zh-CN.png)
+
+- ✅ **团队助理。** 在对话里问团队配置、自己的用量和适用的预算；管理员还能直接执行获授权的管理操作。
 
 资源在所选团队内部分享。发布后团队成员可以使用；发布不会自动在成员电脑上安装代码。
 

@@ -26,7 +26,7 @@
     "NOTICE",
     "README.zh-CN.md",
     "docs",
-    "assets/readme",
+    "assets/readme/*.png",
     "screenshots.json"
   ],
   "scripts": {
