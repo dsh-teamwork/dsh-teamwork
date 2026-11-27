@@ -8,34 +8,70 @@ English · [简体中文](README.zh-CN.md)
 [![CI](https://github.com/dsh-teamwork/dsh-teamwork/actions/workflows/ci.yml/badge.svg)](https://github.com/dsh-teamwork/dsh-teamwork/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-**Shared models, agent presets, and approved plugins for your team's DSH workspace.**
+**Keep using your DSH from your phone; publish your team's models, presets and plugins once, and every member syncs them.**
 
-Connect [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) to
-[DSH Teamwork](https://www.dshteamwork.com), or your team's self-hosted server.
-A team publishes its configuration once; members sync it into their own DSH.
-The team assistant helps with sharing, usage and administration in conversation.
+DSH Teamwork is a plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) that connects it to the
+[hosted DSH Teamwork service](https://www.dshteamwork.com), or to your team's own
+[open-source community server](https://github.com/dsh-teamwork/dsh-teamwork-platform) (Apache-2.0, `docker compose`).
+Once it is installed, your DSH can be reached from your phone and your browser,
+and a team publishes its configuration once for every member's DSH to sync.
 
 ![Teamwork panel in a real DSH host, with demonstration team resources](https://raw.githubusercontent.com/dsh-teamwork/dsh-teamwork/main/assets/readme/teamwork-panel.png)
 
 The plugin panel and the web console speak English and Simplified Chinese:
 the panel follows the language of your Teamwork account (**Account** in the
 panel). Terminal `/teamwork` output is always English; model replies follow the
-conversation. Screenshots use a local
-demonstration team.
+conversation. Screenshots use a local demonstration team.
 
-## What you can do
+## On your own
 
-| Capability | What it gives your team |
-| --- | --- |
-| Shared models and presets | Sync team resources and create sessions from native DSH agent presets. |
-| Team assistant | Ask about configuration, personal usage and applicable budgets; administrators get their authorized management operations. |
-| Teamwork search | Signed in to a server that offers it (the hosted service does), DSH lists **Teamwork** under Web search and fetch: web search through the server, with no search key of your own. |
-| Research reports | The bundled `teamwork-research` skill breaks a question down, reads primary sources and publishes a report with numbered citations, gaps and dated sources, which prints to PDF and saves as Markdown. |
-| Presentations | The bundled `teamwork-slides` skill plans a talk, writes the slides and speaker notes, and publishes a deck that presents full screen and exports to PDF and an editable PowerPoint file. |
-| Reviewed sharing | Prepare local plugin packages and submit new or updated plugins/presets for administrator review. |
-| Version history | Inspect publications, export resource backups and prepare a reviewed restoration. |
-| Team governance | Administrators manage configuration, budgets and approval through the connected service. |
-| Paired device access | With the relay, pair your phone (the Teamwork App) or a browser (My DSH in the web console) to your online DSH computer. |
+- ✅ **Carry on from your phone.** Pair the Teamwork App with your running DSH
+  computer, then send it work, watch replies stream in and answer the agent
+  while you are away. When the agent wants to write, it asks first: read it and
+  tap once to let it continue.
+
+  ![The phone sends a task; the office computer's DSH runs it](https://raw.githubusercontent.com/dsh-teamwork/dsh-teamwork/main/assets/readme/phone-runs.en.gif)
+
+  ![A read-only session asks before it writes; one tap on the phone lets it continue](https://raw.githubusercontent.com/dsh-teamwork/dsh-teamwork/main/assets/readme/phone-approve.en.gif)
+
+- ✅ **All your computers in one place.** My DSH in the web console lists every
+  computer you have signed in and opens its sessions.
+- ✅ **Scheduled tasks.** Manage your computers' DSH schedules from the web and
+  the phone: once, every N minutes, daily, weekly or cron, with run now, pause
+  and results.
+- ✅ **Web search without a key of your own.** Signed in to a server that offers
+  it (the hosted service does), DSH lists **Teamwork** under Web search and
+  fetch, searching through the server.
+- ✅ **Research reports and decks.** The bundled `teamwork-research` skill breaks
+  a question down, reads primary sources and publishes a report with numbered
+  citations, gaps and dated sources, which prints to PDF and saves as Markdown.
+  The bundled `teamwork-slides` skill plans a talk, writes the slides and
+  speaker notes, and publishes a deck that presents full screen and exports to
+  PDF and an editable PowerPoint file.
+
+The phone and the computer talk through the relay end to end encrypted: it
+forwards and cannot read. Pairing is a scanned code plus a safety code both
+ends confirm.
+
+## As a team
+
+- ✅ **A good preset or plugin, submitted once, for everyone.** A member submits
+  a preset or a local plugin package; an administrator reviews the frozen
+  content and publishes it; every member's DSH syncs it. Every publication is
+  versioned, so it can be compared, exported as a backup and, after review,
+  restored. Publishing never installs code on a member's computer: installing
+  a plugin stays their choice.
+
+  ![Administrator review of a demonstration preset submission](https://raw.githubusercontent.com/dsh-teamwork/dsh-teamwork/main/assets/readme/review-and-publish.png)
+
+- ✅ **Provider keys stay on the server.** Team-model calls go through the
+  chosen server's model gateway; provider keys are entered in the console's
+  secure forms and kept there, never on members' computers.
+- ✅ **Usage and budgets in view.** Usage per member and per model, with limits
+  for the team, each member and each provider.
+- ✅ **The team assistant.** Ask about the team's configuration, your own usage
+  and the budgets that apply; administrators also get their authorized
+  management operations.
 
 Sharing and review happen inside the selected team. A publication becomes
 available to its members; it does not install code on their computers.
@@ -102,7 +138,6 @@ Enter provider keys and account passwords through the console's secure forms.
 The [user guide](docs/en/guide.md) covers commands, configuration, device access
 and the distinction between submitted, published, synced and installed.
 
-![Administrator review of a demonstration preset submission](https://raw.githubusercontent.com/dsh-teamwork/dsh-teamwork/main/assets/readme/review-and-publish.png)
 
 ## Service and data
 
