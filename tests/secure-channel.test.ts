@@ -205,6 +205,74 @@ it('keeps asynchronous native encryption ordered across concurrent sends in both
   } finally { p.close(); }
 });
 
+describe('a channel between devices that already pinned each other', () => {
+  async function pinned(options: { phoneExpects?: string; hostExpects?: string; hostPinned?: boolean; hostFlights?: number } = {}) {
+    let hostSent = 0;
+    const a = await deviceIdentity(base64(randomBytes(32))), b = await deviceIdentity(base64(randomBytes(32)));
+    const sent: SecurePacket[] = [], errors: Error[] = [], messages: unknown[] = [], ready: string[] = [];
+    const common = { importAesKey, pairingId: 'pair', channelId: newChannelId((n) => randomBytes(n)), random: (n: number) => randomBytes(n), closed: (e: Error) => { errors.push(e); } };
+    const host: SecureChannel = new SecureChannel({ ...common, initiator: false, identity: b, expectedKey: options.hostExpects ?? a.publicKey, pinned: options.hostPinned ?? true,
+      send: (f) => { sent.push(f); if (hostSent++ < (options.hostFlights ?? Infinity)) queueMicrotask(() => phone.receive(f)); }, ready: () => { ready.push('host'); }, message: (v) => { messages.push(v); } });
+    const phone: SecureChannel = new SecureChannel({ ...common, initiator: true, identity: a, expectedKey: options.phoneExpects ?? b.publicKey, pinned: true,
+      send: (f) => { sent.push(f); queueMicrotask(() => host.receive(f)); }, ready: () => { ready.push('phone'); phone.send({ early: true }); }, message: (v) => { messages.push(v); } });
+    host.start();
+    phone.start();
+    return { phone, host, sent, errors, messages, ready, close: () => { phone.close(); host.close(); } };
+  }
+
+  it('opens with Noise alone, exchanges no commitments, and carries work sent as soon as this end is ready', async () => {
+    const p = await pinned();
+    try {
+      await until(() => p.messages.length === 1 || p.errors.length > 0);
+      expect(p.errors).toHaveLength(0);
+      expect(p.messages).toEqual([{ early: true }]);
+      expect(p.sent.some((f) => f.kind === 'commit' || f.kind === 'reveal')).toBe(false);
+      p.host.send({ answer: 1 });
+      await until(() => p.messages.length === 2);
+      expect(p.messages[1]).toEqual({ answer: 1 });
+    } finally { p.close(); }
+  });
+
+  it('delivers the phone’s first work with nothing from the computer after its one Noise reply', async () => {
+    const p = await pinned({ hostFlights: 1 });
+    try {
+      await until(() => p.messages.length === 1 || p.errors.length > 0);
+      expect(p.messages).toEqual([{ early: true }]);
+    } finally { p.close(); }
+  });
+
+  it('refuses a key other than the pinned one, at either end', async () => {
+    const other = (await deviceIdentity(base64(randomBytes(32)))).publicKey;
+    for (const options of [{ phoneExpects: other }, { hostExpects: other }]) {
+      const p = await pinned(options);
+      try {
+        await until(() => p.errors.length > 0);
+        expect(p.messages).toHaveLength(0);
+      } finally { p.close(); }
+    }
+  });
+
+  it('refuses commitments on a pinned channel', async () => {
+    const p = await pinned({ hostPinned: false });
+    try {
+      await until(() => p.errors.length > 0);
+      expect(p.messages).toHaveLength(0);
+    } finally { p.close(); }
+  });
+});
+
+it('sends a burst of messages as one record, delivered in order', async () => {
+  const p = await pair();
+  try {
+    const before = p.sent.filter(f => f.kind === 'data' && f.pairingId === 'pair').length;
+    for (let i = 0; i < 50; i++) p.host.send({ delta: i });
+    await until(() => p.messages.length === 50 || p.errors.length > 0);
+    expect(p.errors).toHaveLength(0);
+    expect(p.messages.map((m: any) => m.delta)).toEqual(Array.from({ length: 50 }, (_, i) => i));
+    expect(p.sent.filter(f => f.kind === 'data').length - before).toBe(1);
+  } finally { p.close(); }
+});
+
 it('rejects out-of-order counters and reflected records', async () => {
   for (const reflect of [false, true]) {
     const p = await pair();

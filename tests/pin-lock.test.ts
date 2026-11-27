@@ -146,4 +146,69 @@ describe('a channel behind the PIN', () => {
     expect(forwarded).toHaveLength(1);
     phone.close();
   });
+  it('keeps an unlock across a new channel of the same device until it goes idle, and forgets it on a reset', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'pin-resume-'));
+    const keys = new PhoneKeys(join(dir, 'keys.json'));
+    const pins = new PinStore(join(dir, 'pins.json'));
+    await pins.set('2468');
+    const identity = await deviceIdentity(base64(randomBytes(32)));
+    await keys.trust('scope', 'pair', identity.publicKey, 'phone');
+    let now = 1_000_000;
+    let sentByHost = 0;
+    const forwarded: any[] = [];
+    let messages: any[] = [];
+    let phone: SecureChannel;
+    const host = new PhoneSecurity({
+      keys, scope: async () => 'scope', send: (p) => { sentByHost++; queueMicrotask(() => phone.receive(p)); }, forward: (f) => forwarded.push(f),
+      confirm: async () => {}, changed: () => {}, error: () => {}, pins, pinRequired: () => pins.enabled(), now: () => now,
+    });
+    const connect = () => {
+      messages = [];
+      // The device already trusts this computer: the pinned handshake (platform ADR 0071).
+      phone = new SecureChannel({
+        importAesKey, pairingId: 'pair', channelId: newChannelId((n) => randomBytes(n)), identity, initiator: true, random: (n) => randomBytes(n),
+        expectedKey: computerKey, pinned: true,
+        send: (p) => queueMicrotask(() => void host.handle(p)), ready: () => {},
+        message: (value: any) => { messages.push(value); }, closed: () => {},
+      });
+      phone.start();
+    };
+    const computerKey = await host.publicKey();
+    const state = async () => { await until(() => messages.some((m) => m.t === 'unlocked' || m.t === 'pinRequired')); return messages.find((m) => m.t === 'unlocked' || m.t === 'pinRequired').t; };
+    connect();
+    expect(await state()).toBe('pinRequired');
+    phone.send({ t: 'unlock', pin: '2468' });
+    await until(() => messages.some((m) => m.t === 'unlocked'));
+
+    // The network drops and the device comes back: no PIN, and its work passes at once.
+    phone.close(); host.drop(); connect();
+    expect(await state()).toBe('unlocked');
+    phone.send({ t: 'call', pairingId: 'pair', id: '1', method: 'session/list', body: {} });
+    await until(() => forwarded.some((f) => f.t === 'call'));
+
+    // Idle past the limit before it came back: asked again.
+    now += IDLE_MS + 1;
+    phone.close(); host.drop(); connect();
+    expect(await state()).toBe('pinRequired');
+    phone.send({ t: 'unlock', pin: '2468' });
+    await until(() => messages.some((m) => m.t === 'unlocked'));
+
+    // Signed out or the PIN changed: asked again.
+    phone.close(); host.reset(); connect();
+    expect(await state()).toBe('pinRequired');
+    phone.close();
+
+    // A pinned handshake for a pairing this computer does not trust is not answered at all.
+    let answered = 0;
+    const stranger = new SecureChannel({
+      importAesKey, pairingId: 'stranger', channelId: newChannelId((n) => randomBytes(n)), identity, initiator: true, random: (n) => randomBytes(n),
+      expectedKey: computerKey, pinned: true, send: (p) => void host.handle(p), ready: () => {}, message: () => {}, closed: () => {},
+    });
+    const before = sentByHost;
+    stranger.start();
+    await new Promise((r) => setTimeout(r, 50));
+    answered = sentByHost - before;
+    expect(answered).toBe(0);
+    stranger.close();
+  });
 });

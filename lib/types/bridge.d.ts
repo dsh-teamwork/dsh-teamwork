@@ -117,6 +117,11 @@ export declare class Bridge {
     private cookie;
 }
 /**
+ * What a follow's opening snapshot may take: what the screen shows first, sent ahead of everything else over a link
+ * that may cross an ocean. Older records stay one "Show earlier messages" (`session/page`) away.
+ */
+export declare const SNAPSHOT_BYTES: number;
+/**
  * A frame for the phone that fits one message of the encrypted channel, or
  * undefined when nothing can make it fit. A frame that fits is passed as it
  * is. A larger one has its long strings (a tool's output, a file written) cut
@@ -124,7 +129,7 @@ export declare class Bridge {
  * snapshot then keeps its newest records and says it has more, which
  * `session/page` reads back.
  */
-export declare function fitFrame<T>(frame: T): T | undefined;
+export declare function fitFrame<T>(frame: T, limit?: number): T | undefined;
 /** The pairing a cloud computer's server calls the bridge under: there is one, and no phone. */
 export declare const CLOUD_PAIRING = "cloud";
 /**

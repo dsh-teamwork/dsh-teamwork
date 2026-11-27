@@ -31,12 +31,21 @@ export interface SecureOptions {
     random: RandomBytes;
     importAesKey(bytes: Uint8Array): Promise<AesKey>;
     expectedKey?: string;
+    /**
+     * Both ends already trust each other's key (`expectedKey`): no commitments are exchanged, Noise starts with the
+     * first packet, and no safety code is compared. Pairing never uses it.
+     */
+    pinned?: boolean;
     send(packet: SecurePacket): void;
     ready(remoteKey: string, safetyCode: string): void | Promise<void>;
     message(value: unknown): void | Promise<void>;
     closed(error: Error): void;
 }
-/** Commit/reveal identities and fresh random salts before Noise prevents adaptive short-code grinding. */
+/**
+ * Pairing commits to and reveals identities and fresh random salts before Noise, which prevents adaptive grinding of
+ * the safety code. A channel between devices that already pinned each other's keys (`pinned`) has no code to grind and
+ * goes straight to Noise XX, which authenticates both pinned keys; the platform's ADR 0071.
+ */
 export declare class SecureChannel {
     private readonly options;
     private incoming;
@@ -61,6 +70,7 @@ export declare class SecureChannel {
     private wire;
     private abort;
     private readyState;
+    private isVerified;
     constructor(options: SecureOptions);
     get id(): string;
     start(): void;

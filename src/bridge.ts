@@ -445,7 +445,9 @@ export class Bridge {
    * frame missing would show the phone a different session.
    */
   private deliver(pairingId: string, link: Link, body: z.infer<typeof serverMuxSchema>) {
-    const frame = fitFrame({ t: 'mux', pairingId, body });
+    const whole = { t: 'mux', pairingId, body };
+    const opening = (body as { value?: { type?: unknown } }).value?.type === 'snapshot';
+    const frame = (opening ? fitFrame(whole, SNAPSHOT_BYTES) : undefined) ?? fitFrame(whole);
     if (frame) return this.options.send(frame);
     link.streams.delete(body.streamId);
     if (link.mux?.readyState === 1) link.mux.send(JSON.stringify({ type: 'cancel', streamId: body.streamId }));
@@ -494,6 +496,11 @@ function parseJson(text: string): unknown {
 
 /** What a frame may take of the channel's message, leaving room for nothing else; JSON as the channel encodes it. */
 const FRAME_BYTES = MAX_MESSAGE;
+/**
+ * What a follow's opening snapshot may take: what the screen shows first, sent ahead of everything else over a link
+ * that may cross an ocean. Older records stay one "Show earlier messages" (`session/page`) away.
+ */
+export const SNAPSHOT_BYTES = 256 * 1024;
 const bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value));
 /** The longest a string stays when a frame is too large, tried in turn; ids and names are far shorter. */
 const STRING_CAPS = [64 * 1024, 16 * 1024, 4 * 1024, 1024];
@@ -506,19 +513,19 @@ const STRING_CAPS = [64 * 1024, 16 * 1024, 4 * 1024, 1024];
  * snapshot then keeps its newest records and says it has more, which
  * `session/page` reads back.
  */
-export function fitFrame<T>(frame: T): T | undefined {
-  if (bytes(frame) <= FRAME_BYTES) return frame;
+export function fitFrame<T>(frame: T, limit = FRAME_BYTES): T | undefined {
+  if (bytes(frame) <= limit) return frame;
   let short = frame;
   for (const cap of STRING_CAPS) {
     short = shorten(frame, cap) as T;
-    if (bytes(short) <= FRAME_BYTES) return short;
+    if (bytes(short) <= limit) return short;
   }
   // A window of history: a follow's snapshot, or a call's `session/page`.
   const body = (short as { body?: { value?: History; result?: { value?: History } } }).body;
   const history = body?.value?.type === 'snapshot' ? body.value : body?.result?.value;
   if (!body || !Array.isArray(history?.records)) return undefined;
   const records = history.records;
-  let over = bytes(short) - FRAME_BYTES;
+  let over = bytes(short) - limit;
   let first = 0;
   // Each record dropped takes its JSON and the comma before the next.
   while (over > 0 && first < records.length) over -= bytes(records[first++]) + 1;

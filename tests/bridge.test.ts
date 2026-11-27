@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALLOWED_CALLS, ALLOWED_STREAMS, Bridge, bridgeRoute } from '../src/bridge';
+import { ALLOWED_CALLS, ALLOWED_STREAMS, Bridge, bridgeRoute, SNAPSHOT_BYTES } from '../src/bridge';
 import { readDocument } from '../src/phone-files';
 import { MAX_MESSAGE } from '../src/secure-channel';
 import { PhoneSessionError, type PhoneSessionOps } from '../src/phone-session';
@@ -414,7 +414,7 @@ describe('the phone bridge', () => {
       const records = Array.from({ length: 10 }, (_, i) => i % 2 ? toolResult(i, big(300_000)) : userMessage(i, `question ${i}`));
       mux.emit('message', { data: JSON.stringify({ type: 'item', streamId: 'f', value: { type: 'snapshot', cursor: 9, hasMore: false, records } }) });
       const frame = sent.at(-1);
-      expect(bytes(frame)).toBeLessThanOrEqual(MAX_MESSAGE);
+      expect(bytes(frame)).toBeLessThanOrEqual(SNAPSHOT_BYTES);
       expect(frame.body.value.type).toBe('snapshot');
       expect(frame.body.value.records.map((r: { seq: number }) => r.seq)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
       expect(frame.body.value.records[8].event.data.content[0].text).toBe('question 8');
@@ -425,11 +425,18 @@ describe('the phone bridge', () => {
       const records = Array.from({ length: 3000 }, (_, i) => userMessage(i, `question ${i} ${big(900)}`));
       mux.emit('message', { data: JSON.stringify({ type: 'item', streamId: 'f', value: { type: 'snapshot', cursor: 2999, hasMore: false, records } }) });
       const frame = sent.at(-1);
-      expect(bytes(frame)).toBeLessThanOrEqual(MAX_MESSAGE);
+      expect(bytes(frame)).toBeLessThanOrEqual(SNAPSHOT_BYTES);
       const kept = frame.body.value.records as Array<{ seq: number }>;
       expect(kept.at(-1)!.seq).toBe(2999);
       expect(kept[0]!.seq).toBeGreaterThan(0);
       expect(frame.body.value.hasMore).toBe(true);
+    });
+
+    it('sends a snapshot within its budget untouched', async () => {
+      const { sent, mux } = await follow();
+      const records = Array.from({ length: 20 }, (_, i) => userMessage(i, `question ${i} ${big(5_000)}`));
+      mux.emit('message', { data: JSON.stringify({ type: 'item', streamId: 'f', value: { type: 'snapshot', cursor: 19, hasMore: false, records } }) });
+      expect(sent.at(-1).body.value).toEqual({ type: 'snapshot', cursor: 19, hasMore: false, records });
     });
 
     it('shortens a live event and a call’s result', async () => {

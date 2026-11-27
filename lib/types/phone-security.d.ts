@@ -27,6 +27,12 @@ export declare class PhoneKeys {
 export declare class PhoneSecurity {
     private readonly options;
     private links;
+    /**
+     * When each pairing last carried work while unlocked. An unlock belongs to the device, not to one channel: a
+     * channel the network dropped and the device opened again within the idle limit is not asked for the PIN again.
+     * A wrong PIN, the idle limit, a revocation, a PIN change and signing out each forget it.
+     */
+    private unlocks;
     private opening;
     private blocked;
     private offer?;
@@ -76,6 +82,11 @@ export declare class PhoneSecurity {
     private now;
     /** Whether a channel may carry the member's work now: unlocked, and not idle past the limit. */
     private open;
+    /**
+     * A new channel of a trusted device: `secureReady`, then whether it is still unlocked (its last unlock has not gone
+     * idle) or must give the PIN. Decided before either is sent, so no work it sends meanwhile is refused as locked.
+     */
+    private resume;
     /** Tells the device a PIN is needed: to enter it, or that the lock holds until the owner sets one here. */
     private askPin;
     /**
@@ -86,6 +97,12 @@ export declare class PhoneSecurity {
     private relockOtherChannels;
     /** What a locked channel answers its member's work with: the call fails, the stream ends, and nothing reaches DSH. */
     private refuseLocked;
+    /** Signed out, or the PIN changed: every channel closes and every device is asked for the PIN again. */
     reset(): void;
+    /**
+     * The relay connection dropped: every channel closes, and a device that comes back within the idle limit stays
+     * unlocked.
+     */
+    drop(): void;
 }
 //# sourceMappingURL=phone-security.d.ts.map
