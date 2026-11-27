@@ -535,7 +535,7 @@ export function fitFrame<T>(frame: T, limit = FRAME_BYTES): T | undefined {
   return { ...short, body: history === body.value ? { ...body, value: kept } : { ...body, result: { ...body.result, value: kept } } };
 }
 
-type History = { type?: unknown; records?: unknown[] };
+type History = { type?: unknown; records?: unknown[]; hasMore?: unknown };
 
 /**
  * A follow's opening snapshot within `limit`. A tool's output, which the phone shows only in part, is shortened first;
