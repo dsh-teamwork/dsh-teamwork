@@ -420,7 +420,8 @@ export async function apply(ctx: Context, config: Config) {
       if (status === 'connected') void readPhones();
       // Reconnecting, the devices last listed stay for the panel to show, dimmed; off or refused (a sign-out among
       // them), the list goes with the account it belonged to.
-      else { if (status !== 'connecting') phones = []; security.reset(); bridge.dropAll(); }
+      // An unlock outlives the socket (src/phone-security.ts): reconnecting keeps it, leaving the server does not.
+      else { if (status !== 'connecting') { phones = []; security.reset(); } else security.drop(); bridge.dropAll(); }
     },
     onEvent: () => void readPhones(),
     onForward: (frame) => void security.handle(frame),

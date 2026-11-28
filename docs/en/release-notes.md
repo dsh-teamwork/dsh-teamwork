@@ -2,6 +2,21 @@
 
 ## Next release
 
+- Phones and browsers reach this DSH in fewer trips through the relay. A
+  device this computer already trusts reconnects in one round trip, with no
+  commitments, and its first request goes with the handshake. Its PIN
+  unlock lasts fifteen idle minutes across reconnects, so a dropped
+  connection no longer asks for the PIN again. Records cross the relay as
+  binary rather than base64 JSON. **This changes the wire:** it needs a
+  Teamwork server and phone app from 2026-11-27 or later, and an older one
+  cannot reach this DSH, nor this one an older server's devices.
+- The relay connection is checked every fifteen seconds, and dialled again
+  when twenty pass with nothing heard, so a computer that slept or changed
+  networks is reachable again within half a minute.
+- A follow's opening snapshot is held to 256 KiB: tool output is shortened
+  first, then the oldest messages wait behind **Show earlier messages**, and
+  the newest replies are never cut. A burst of output is sent as one record.
+- Native DSH Web counts as in use only while a tunnel carries a request.
 - A team model waits up to five minutes, DSH's own default, for its first
   token instead of two. A provider slow to answer a long conversation no
   longer ends the turn with `pi-ai stream idle timeout after 120000ms`. A

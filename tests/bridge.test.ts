@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALLOWED_CALLS, ALLOWED_STREAMS, Bridge, bridgeRoute } from '../src/bridge';
+import { ALLOWED_CALLS, ALLOWED_STREAMS, Bridge, bridgeRoute, SNAPSHOT_BYTES, sizeBound } from '../src/bridge';
 import { readDocument } from '../src/phone-files';
 import { MAX_MESSAGE } from '../src/secure-channel';
 import { PhoneSessionError, type PhoneSessionOps } from '../src/phone-session';
@@ -414,7 +414,7 @@ describe('the phone bridge', () => {
       const records = Array.from({ length: 10 }, (_, i) => i % 2 ? toolResult(i, big(300_000)) : userMessage(i, `question ${i}`));
       mux.emit('message', { data: JSON.stringify({ type: 'item', streamId: 'f', value: { type: 'snapshot', cursor: 9, hasMore: false, records } }) });
       const frame = sent.at(-1);
-      expect(bytes(frame)).toBeLessThanOrEqual(MAX_MESSAGE);
+      expect(bytes(frame)).toBeLessThanOrEqual(SNAPSHOT_BYTES);
       expect(frame.body.value.type).toBe('snapshot');
       expect(frame.body.value.records.map((r: { seq: number }) => r.seq)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
       expect(frame.body.value.records[8].event.data.content[0].text).toBe('question 8');
@@ -425,11 +425,46 @@ describe('the phone bridge', () => {
       const records = Array.from({ length: 3000 }, (_, i) => userMessage(i, `question ${i} ${big(900)}`));
       mux.emit('message', { data: JSON.stringify({ type: 'item', streamId: 'f', value: { type: 'snapshot', cursor: 2999, hasMore: false, records } }) });
       const frame = sent.at(-1);
-      expect(bytes(frame)).toBeLessThanOrEqual(MAX_MESSAGE);
+      expect(bytes(frame)).toBeLessThanOrEqual(SNAPSHOT_BYTES);
       const kept = frame.body.value.records as Array<{ seq: number }>;
       expect(kept.at(-1)!.seq).toBe(2999);
       expect(kept[0]!.seq).toBeGreaterThan(0);
       expect(frame.body.value.hasMore).toBe(true);
+    });
+
+    it('bounds a frame\'s JSON from above without building it, and gives up past the limit', () => {
+      const samples: unknown[] = [
+        { t: 'mux', pairingId: 'p', body: { type: 'item', streamId: 's', value: { delta: 'hello "world"\n\u0001\\', seq: 12345678901234, done: false, gone: null } } },
+        ['汉字', '😀', 1.5e-300, -0, true, [], {}],
+        { text: '\u0000'.repeat(100), nested: [{ a: [{ b: 'é'.repeat(50) }] }] },
+      ];
+      for (const sample of samples) expect(sizeBound(sample, 1e9)).toBeGreaterThanOrEqual(bytes(sample));
+      expect(sizeBound({ text: big(1000) }, 100)).toBe(Infinity);
+      // Not plain data: its JSON is not its entries, so the bound gives way to the exact size.
+      expect(sizeBound({ at: new Date(0) }, 1e9)).toBe(Infinity);
+      expect(sizeBound({ bytes: Buffer.from('abc') }, 1e9)).toBe(Infinity);
+      expect(sizeBound({ custom: { toJSON: () => 'x'.repeat(100) } }, 1e9)).toBe(Infinity);
+    });
+
+    it('keeps a snapshot\'s newest replies whole, dropping older records to fit its budget', async () => {
+      const { sent, mux } = await follow();
+      const reply = (seq: number) => ({ seq, event: { type: 'assistant/message', seq, data: { message: { content: [{ type: 'text', text: `answer ${seq} ${big(15_000)}` }] } } } });
+      const records = Array.from({ length: 20 }, (_, i) => reply(i));
+      mux.emit('message', { data: JSON.stringify({ type: 'item', streamId: 'f', value: { type: 'snapshot', cursor: 19, hasMore: false, records } }) });
+      const frame = sent.at(-1);
+      expect(bytes(frame)).toBeLessThanOrEqual(SNAPSHOT_BYTES);
+      const kept = frame.body.value.records as typeof records;
+      expect(kept.at(-1)!.seq).toBe(19);
+      expect(kept.length).toBeLessThan(20);
+      expect(kept).toEqual(records.slice(20 - kept.length));
+      expect(frame.body.value.hasMore).toBe(true);
+    });
+
+    it('sends a snapshot within its budget untouched', async () => {
+      const { sent, mux } = await follow();
+      const records = Array.from({ length: 20 }, (_, i) => userMessage(i, `question ${i} ${big(5_000)}`));
+      mux.emit('message', { data: JSON.stringify({ type: 'item', streamId: 'f', value: { type: 'snapshot', cursor: 19, hasMore: false, records } }) });
+      expect(sent.at(-1).body.value).toEqual({ type: 'snapshot', cursor: 19, hasMore: false, records });
     });
 
     it('shortens a live event and a call’s result', async () => {

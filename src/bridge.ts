@@ -445,7 +445,9 @@ export class Bridge {
    * frame missing would show the phone a different session.
    */
   private deliver(pairingId: string, link: Link, body: z.infer<typeof serverMuxSchema>) {
-    const frame = fitFrame({ t: 'mux', pairingId, body });
+    const whole = { t: 'mux', pairingId, body };
+    const opening = (body as { value?: { type?: unknown } }).value?.type === 'snapshot';
+    const frame = fitFrame(opening ? newestRecords(whole, SNAPSHOT_BYTES) : whole);
     if (frame) return this.options.send(frame);
     link.streams.delete(body.streamId);
     if (link.mux?.readyState === 1) link.mux.send(JSON.stringify({ type: 'cancel', streamId: body.streamId }));
@@ -494,6 +496,11 @@ function parseJson(text: string): unknown {
 
 /** What a frame may take of the channel's message, leaving room for nothing else; JSON as the channel encodes it. */
 const FRAME_BYTES = MAX_MESSAGE;
+/**
+ * What a follow's opening snapshot may take: what the screen shows first, sent ahead of everything else over a link
+ * that may cross an ocean. Older records stay one "Show earlier messages" (`session/page`) away.
+ */
+export const SNAPSHOT_BYTES = 256 * 1024;
 const bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value));
 /** The longest a string stays when a frame is too large, tried in turn; ids and names are far shorter. */
 const STRING_CAPS = [64 * 1024, 16 * 1024, 4 * 1024, 1024];
@@ -506,19 +513,20 @@ const STRING_CAPS = [64 * 1024, 16 * 1024, 4 * 1024, 1024];
  * snapshot then keeps its newest records and says it has more, which
  * `session/page` reads back.
  */
-export function fitFrame<T>(frame: T): T | undefined {
-  if (bytes(frame) <= FRAME_BYTES) return frame;
+export function fitFrame<T>(frame: T, limit = FRAME_BYTES): T | undefined {
+  // Most frames (a stream's deltas) are far below the limit: a bound proves it without serialising them twice.
+  if (sizeBound(frame, limit) <= limit || bytes(frame) <= limit) return frame;
   let short = frame;
   for (const cap of STRING_CAPS) {
     short = shorten(frame, cap) as T;
-    if (bytes(short) <= FRAME_BYTES) return short;
+    if (bytes(short) <= limit) return short;
   }
   // A window of history: a follow's snapshot, or a call's `session/page`.
   const body = (short as { body?: { value?: History; result?: { value?: History } } }).body;
   const history = body?.value?.type === 'snapshot' ? body.value : body?.result?.value;
   if (!body || !Array.isArray(history?.records)) return undefined;
   const records = history.records;
-  let over = bytes(short) - FRAME_BYTES;
+  let over = bytes(short) - limit;
   let first = 0;
   // Each record dropped takes its JSON and the comma before the next.
   while (over > 0 && first < records.length) over -= bytes(records[first++]) + 1;
@@ -527,7 +535,63 @@ export function fitFrame<T>(frame: T): T | undefined {
   return { ...short, body: history === body.value ? { ...body, value: kept } : { ...body, result: { ...body.result, value: kept } } };
 }
 
-type History = { type?: unknown; records?: unknown[] };
+type History = { type?: unknown; records?: unknown[]; hasMore?: unknown };
+
+/**
+ * A follow's opening snapshot within `limit`. A tool's output, which the phone shows only in part, is shortened first;
+ * then the oldest records go, whole, and it says it has more, which `session/page` reads back. What the member and the
+ * agent said stays whole, unless the newest record alone does not fit, which only then is shortened.
+ */
+export function newestRecords<T>(frame: T, limit: number): T {
+  const fits = (value: unknown) => sizeBound(value, limit) <= limit || bytes(value) <= limit;
+  if (fits(frame)) return frame;
+  const body = (frame as { body?: { value?: History } }).body;
+  const history = body?.value;
+  if (!body || !history || !Array.isArray(history.records)) return frame;
+  const framed = (records: unknown[], hasMore: unknown) => ({ ...frame, body: { ...body, value: { ...history, records, hasMore } } }) as T;
+  const tool = (record: unknown) => String((record as { event?: { type?: unknown } } | null)?.event?.type ?? '').startsWith('tool/');
+  let records = history.records;
+  for (const cap of STRING_CAPS) {
+    if (fits(framed(records, history.hasMore))) return framed(records, history.hasMore);
+    records = history.records.map((record) => (tool(record) ? shorten(record, cap) : record));
+  }
+  let over = bytes(framed(records, true)) - limit;
+  let first = 0;
+  // Each record dropped takes its JSON and the comma before the next; the newest always stays.
+  while (over > 0 && first < records.length - 1) over -= bytes(records[first++]) + 1;
+  const kept = framed(records.slice(first), first > 0 ? true : history.hasMore);
+  return fits(kept) ? kept : fitFrame(kept, limit) ?? kept;
+}
+
+/**
+ * An upper bound on `value`'s JSON in UTF-8 bytes, without building it: every UTF-16 unit of a string is counted at
+ * six bytes (`\u0000`, the longest escape), and an undefined property as if it were written. It gives up, returning
+ * Infinity, as soon as the bound passes `stop`, or at anything but plain JSON data.
+ */
+export function sizeBound(value: unknown, stop: number): number {
+  let total = 0;
+  const walk = (item: unknown): boolean => {
+    if (typeof item === 'string') total += 2 + 6 * item.length;
+    else if (typeof item === 'number' || typeof item === 'bigint') total += 24;
+    else if (item === null || item === undefined || typeof item === 'boolean') total += 9;
+    else if (Array.isArray(item)) {
+      total += 2 + item.length;
+      for (const entry of item) if (!walk(entry)) return false;
+    } else if (typeof item === 'object') {
+      // Only a plain object's JSON is its own entries: a Date, a Buffer or anything with `toJSON` is measured exactly.
+      const prototype = Object.getPrototypeOf(item);
+      if ((prototype !== Object.prototype && prototype !== null) || typeof (item as { toJSON?: unknown }).toJSON === 'function') return false;
+      const entries = Object.entries(item as object);
+      total += 2 + entries.length;
+      for (const [key, entry] of entries) {
+        total += 3 + 6 * key.length;
+        if (!walk(entry)) return false;
+      }
+    } else total += 9;
+    return total <= stop;
+  };
+  return walk(value) ? total : Infinity;
+}
 
 function shorten(value: unknown, cap: number): unknown {
   if (typeof value === 'string') {

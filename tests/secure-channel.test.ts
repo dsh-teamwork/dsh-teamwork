@@ -7,6 +7,8 @@ import {
   base64,
   newChannelId,
   unbase64,
+  encodePacket,
+  decodePacket,
   type SecurePacket,
   type AesKey,
 } from '../src/secure-channel.js';
@@ -93,9 +95,11 @@ describe('authenticated encrypted channel', () => {
       p.phone.send({ method: 'session/prompt', text: 'PRIVATE_SENTINEL', data: 'x'.repeat(1000000) });
       await until(() => p.messages.length === 1);
       expect((p.messages[0] as any).text).toBe('PRIVATE_SENTINEL');
-      expect(JSON.stringify(p.sent)).not.toContain('PRIVATE_SENTINEL');
-      expect(JSON.stringify(p.sent)).not.toContain('session/prompt');
-      expect(p.sent.every((frame) => JSON.stringify(frame).length < 1024 * 1024)).toBe(true);
+      expect(p.sent.some((frame) => Buffer.from(frame.data).includes('PRIVATE_SENTINEL'))).toBe(false);
+      expect(p.sent.some((frame) => Buffer.from(frame.data).includes('session/prompt'))).toBe(false);
+      expect(p.sent.every((frame) => encodePacket(frame).length < 1024 * 1024)).toBe(true);
+      // What crosses the relay reads back as the same packet.
+      for (const frame of p.sent) expect(decodePacket(encodePacket(frame))).toEqual(frame);
       expect(p.sent.filter(f => f.kind === 'noise')).toHaveLength(noiseFrames);
       expect(p.sent.filter(f => f.kind === 'data').length).toBeGreaterThan(1);
       const ciphertext = p.sent.filter((f) => f.kind === 'data').at(-1)!;
@@ -120,9 +124,9 @@ describe('authenticated encrypted channel', () => {
     const p = await pair({
       intercept: (f) => {
         if (f.kind !== 'reveal') return f;
-        const reveal = JSON.parse(f.data);
+        const reveal = JSON.parse(new TextDecoder().decode(f.data));
         const salt = unbase64(reveal.salt); salt[0] ^= 1;
-        return { ...f, data: JSON.stringify({ ...reveal, salt: base64(salt) }) };
+        return { ...f, data: new TextEncoder().encode(JSON.stringify({ ...reveal, salt: base64(salt) })) };
       },
     });
     try {
@@ -139,9 +143,9 @@ it('rejects modified authenticated ciphertext before delivering a message', asyn
   const p = await pair({
     intercept: (frame) => {
       if (!tamper || frame.kind !== 'data') return frame;
-      const bytes = unbase64(frame.data);
+      const bytes = frame.data.slice();
       bytes[10] ^= 1;
-      return { ...frame, data: base64(bytes) };
+      return { ...frame, data: bytes };
     },
   });
   try {
@@ -205,6 +209,83 @@ it('keeps asynchronous native encryption ordered across concurrent sends in both
   } finally { p.close(); }
 });
 
+describe('a channel between devices that already pinned each other', () => {
+  async function pinned(options: { phoneExpects?: string; hostExpects?: string; hostPinned?: boolean; hostFlights?: number } = {}) {
+    let hostSent = 0;
+    const a = await deviceIdentity(base64(randomBytes(32))), b = await deviceIdentity(base64(randomBytes(32)));
+    const sent: SecurePacket[] = [], errors: Error[] = [], messages: unknown[] = [], ready: string[] = [];
+    const common = { importAesKey, pairingId: 'pair', channelId: newChannelId((n) => randomBytes(n)), random: (n: number) => randomBytes(n), closed: (e: Error) => { errors.push(e); } };
+    const host: SecureChannel = new SecureChannel({ ...common, initiator: false, identity: b, expectedKey: options.hostExpects ?? a.publicKey, pinned: options.hostPinned ?? true,
+      send: (f) => { sent.push(f); if (hostSent++ < (options.hostFlights ?? Infinity)) queueMicrotask(() => phone.receive(f)); }, ready: () => { ready.push('host'); }, message: (v) => { messages.push(v); } });
+    const phone: SecureChannel = new SecureChannel({ ...common, initiator: true, identity: a, expectedKey: options.phoneExpects ?? b.publicKey, pinned: true,
+      send: (f) => { sent.push(f); queueMicrotask(() => host.receive(f)); }, ready: () => { ready.push('phone'); phone.send({ early: true }); }, message: (v) => { messages.push(v); } });
+    host.start();
+    phone.start();
+    return { phone, host, sent, errors, messages, ready, close: () => { phone.close(); host.close(); } };
+  }
+
+  it('opens with Noise alone, exchanges no commitments, and carries work sent as soon as this end is ready', async () => {
+    const p = await pinned();
+    try {
+      await until(() => p.messages.length === 1 || p.errors.length > 0);
+      expect(p.errors).toHaveLength(0);
+      expect(p.messages).toEqual([{ early: true }]);
+      expect(p.sent.some((f) => f.kind === 'commit' || f.kind === 'reveal')).toBe(false);
+      p.host.send({ answer: 1 });
+      await until(() => p.messages.length === 2);
+      expect(p.messages[1]).toEqual({ answer: 1 });
+    } finally { p.close(); }
+  });
+
+  it('delivers the phone’s first work with nothing from the computer after its one Noise reply', async () => {
+    const p = await pinned({ hostFlights: 1 });
+    try {
+      await until(() => p.messages.length === 1 || p.errors.length > 0);
+      expect(p.messages).toEqual([{ early: true }]);
+    } finally { p.close(); }
+  });
+
+  it('refuses a key other than the pinned one, at either end', async () => {
+    const other = (await deviceIdentity(base64(randomBytes(32)))).publicKey;
+    for (const options of [{ phoneExpects: other }, { hostExpects: other }]) {
+      const p = await pinned(options);
+      try {
+        await until(() => p.errors.length > 0);
+        expect(p.messages).toHaveLength(0);
+      } finally { p.close(); }
+    }
+  });
+
+  it('refuses commitments on a pinned channel', async () => {
+    const p = await pinned({ hostPinned: false });
+    try {
+      await until(() => p.errors.length > 0);
+      expect(p.messages).toHaveLength(0);
+    } finally { p.close(); }
+  });
+});
+
+it('reads back only a well-formed binary packet', () => {
+  const packet = { t: 'sealed' as const, pairingId: 'pair-1', channelId: 'abcdefghijklmnopqrstuv', kind: 'noise' as const, data: new Uint8Array([1, 2, 3]) };
+  const bytes = encodePacket(packet);
+  expect(bytes.subarray(0, 2)).toEqual(new Uint8Array([3, 6]));
+  expect(decodePacket(bytes)).toEqual(packet);
+  expect(decodePacket(bytes.buffer)).toEqual(packet);
+  for (const bad of [new Uint8Array([9, 1, 112]), bytes.subarray(0, 2 + 6 + 22), Uint8Array.from([5, ...bytes.subarray(1)])]) expect(decodePacket(bad)).toBeNull();
+});
+
+it('sends a burst of messages as one record, delivered in order', async () => {
+  const p = await pair();
+  try {
+    const before = p.sent.filter(f => f.kind === 'data' && f.pairingId === 'pair').length;
+    for (let i = 0; i < 50; i++) p.host.send({ delta: i });
+    await until(() => p.messages.length === 50 || p.errors.length > 0);
+    expect(p.errors).toHaveLength(0);
+    expect(p.messages.map((m: any) => m.delta)).toEqual(Array.from({ length: 50 }, (_, i) => i));
+    expect(p.sent.filter(f => f.kind === 'data').length - before).toBe(1);
+  } finally { p.close(); }
+});
+
 it('rejects out-of-order counters and reflected records', async () => {
   for (const reflect of [false, true]) {
     const p = await pair();
@@ -214,9 +295,9 @@ it('rejects out-of-order counters and reflected records', async () => {
       const packet = p.sent.find(f => f.kind === 'data')!;
       if (reflect) p.phone.receive(packet);
       else {
-        const bytes = unbase64(packet.data);
+        const bytes = packet.data.slice();
         new DataView(bytes.buffer).setUint32(0, 2);
-        p.host.receive({...packet, data: base64(bytes)});
+        p.host.receive({...packet, data: bytes});
       }
       await until(() => p.errors.length > 0);
       expect(p.messages).toHaveLength(1);
@@ -295,8 +376,8 @@ it('delivers no partial large message when a later record is corrupted', async (
   let records = 0;
   const p = await pair({ intercept: packet => {
     if (packet.kind !== 'data' || ++records !== 2) return packet;
-    const bytes = unbase64(packet.data); bytes[bytes.length - 1] ^= 1;
-    return { ...packet, data: base64(bytes) };
+    const bytes = packet.data.slice(); bytes[bytes.length - 1] ^= 1;
+    return { ...packet, data: bytes };
   }});
   try {
     p.phone.send({ data: 'x'.repeat(1000000) });

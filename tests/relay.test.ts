@@ -1,8 +1,8 @@
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
-import { hostOs, RELAY_CLOSE, RelayLink, relayClientIdPath, type RelayStatus } from '../src/relay';
+import { describe, expect, it, vi } from 'vitest';
+import { hostOs, PING_EVERY_MS, PONG_TIMEOUT_MS, RELAY_CLOSE, RelayLink, relayClientIdPath, type RelayStatus } from '../src/relay';
 
 /** A WebSocket the test drives by hand: what the plugin sent, and what the relay answers. */
 class FakeSocket {
@@ -84,6 +84,30 @@ describe('the relay link', () => {
     relay.refresh(); await until(() => FakeSocket.made.length > 0);
     FakeSocket.made[0]!.emit('close', { code: 1006 });
     expect(relay.status).toBe('connecting');
+    await until(() => FakeSocket.made.length > 1);
+    expect(FakeSocket.made.length).toBeGreaterThan(1);
+    relay.stop();
+  });
+
+  it('asks the relay for a pong while connected, and dials again when none comes', async () => {
+    const { relay } = await link();
+    relay.refresh(); await until(() => FakeSocket.made.length > 0);
+    const socket = FakeSocket.made[0]!;
+    socket.emit('open');
+    vi.useFakeTimers();
+    try {
+      socket.emit('message', { data: JSON.stringify({ t: 'welcome', hostId: 'host-1' }) });
+      await vi.advanceTimersByTimeAsync(PING_EVERY_MS);
+      expect(socket.sent.filter((f: any) => f.t === 'ping')).toHaveLength(1);
+      socket.emit('message', { data: JSON.stringify({ t: 'pong' }) });
+      await vi.advanceTimersByTimeAsync(PONG_TIMEOUT_MS);
+      expect(relay.status).toBe('connected');
+      await vi.advanceTimersByTimeAsync(PING_EVERY_MS + PONG_TIMEOUT_MS);
+      expect(socket.closedWith).toBe(4000);
+      expect(relay.status).toBe('connecting');
+    } finally {
+      vi.useRealTimers();
+    }
     await until(() => FakeSocket.made.length > 1);
     expect(FakeSocket.made.length).toBeGreaterThan(1);
     relay.stop();

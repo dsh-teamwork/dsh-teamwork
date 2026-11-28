@@ -108,9 +108,17 @@ interface Link {
   /** Whether the owner's PIN was given on this channel (src/pin-lock.ts), and when it last carried work. */
   unlocked?: boolean;
   lastActive?: number;
+  /** Settles once a trusted device's new channel knows whether it is still unlocked; work waits for it. */
+  resumed?: Promise<void>;
 }
 export class PhoneSecurity {
   private links = new Map<string, Link>();
+  /**
+   * When each pairing last carried work while unlocked. An unlock belongs to the device, not to one channel: a
+   * channel the network dropped and the device opened again within the idle limit is not asked for the PIN again.
+   * A wrong PIN, the idle limit, a revocation, a PIN change and signing out each forget it.
+   */
+  private unlocks = new Map<string, number>();
   private opening = new Set<string>();
   private blocked = new Set<string>();
   private offer?: { expires: number; pairingId?: string };
@@ -166,7 +174,9 @@ export class PhoneSecurity {
     if (this.blocked.has(frame.pairingId)) return;
     const current = this.links.get(frame.pairingId);
     if (current?.channel && current.channelId === frame.channelId) return current.channel.receive(frame);
-    if (frame.kind !== 'commit' || this.opening.has(frame.pairingId) || this.links.size >= 64) return;
+    // A new channel opens with a commitment (pairing, or a device without the pinned fast path) or straight with Noise
+    // (a device both ends already trust: `pinned`, the platform's ADR 0071).
+    if ((frame.kind !== 'commit' && frame.kind !== 'noise') || this.opening.has(frame.pairingId) || this.links.size >= 64) return;
     const epoch = this.epoch;
     this.opening.add(frame.pairingId);
     try {
@@ -174,6 +184,8 @@ export class PhoneSecurity {
       const trusted = await this.options.keys.peer(scope, frame.pairingId);
       const identity = await this.options.keys.identity();
       if (epoch !== this.epoch) return;
+      const pinned = frame.kind === 'noise';
+      if (pinned && !trusted) return;
       if (!trusted) {
         if (
           !this.offer ||
@@ -193,6 +205,7 @@ export class PhoneSecurity {
         importAesKey,
         random: (n) => randomBytes(n),
         expectedKey: trusted?.key,
+        pinned,
         send: this.options.send,
         ready: (key, code) => {
           link.remoteKey = key;
@@ -200,8 +213,7 @@ export class PhoneSecurity {
           if (trusted) {
             link.authorized = true;
             channel.verified();
-            channel.send({ t: 'secureReady' });
-            void this.askPin(frame.pairingId, link);
+            link.resumed = this.resume(frame.pairingId, link);
           } else channel.send({ t: 'verify', code });
           this.options.changed();
         },
@@ -226,6 +238,7 @@ export class PhoneSecurity {
           if (!link.authorized) throw new Error('device_not_verified');
           if (body?.t === 'revoke') {
             this.blocked.add(frame.pairingId);
+            this.unlocks.delete(frame.pairingId);
             link.authorized = false;
             this.options.forward({ t: 'detach', pairingId: frame.pairingId });
             await this.options.keys.forget(link.scope, frame.pairingId);
@@ -300,6 +313,7 @@ export class PhoneSecurity {
     this.options.changed();
   }
   async revoke(id: string) {
+    this.unlocks.delete(id);
     // Keep an in-memory deny even when the durable write fails; never resume this live grant.
     if (this.links.has(id)) this.blocked.add(id);
     this.links.get(id)?.channel.close();
@@ -318,6 +332,7 @@ export class PhoneSecurity {
     const gone = await this.options.keys.forgetExcept(await this.options.scope(), new Set(listed));
     for (const id of gone) {
       this.blocked.add(id);
+      this.unlocks.delete(id);
       this.links.get(id)?.channel.close();
     }
   }
@@ -325,10 +340,37 @@ export class PhoneSecurity {
 
   /** Whether a channel may carry the member's work now: unlocked, and not idle past the limit. */
   private async open(pairingId: string, link: Link) {
+    await link.resumed;
     if (!this.options.pins || (this.options.pinRequired && !await this.options.pinRequired())) return true;
-    if (link.unlocked && this.now() - (link.lastActive ?? 0) <= IDLE_MS) { link.lastActive = this.now(); return true; }
-    if (link.unlocked) { link.unlocked = false; await this.askPin(pairingId, link); }
+    if (link.unlocked && this.now() - (link.lastActive ?? 0) <= IDLE_MS) {
+      link.lastActive = this.now();
+      this.unlocks.set(pairingId, link.lastActive);
+      return true;
+    }
+    if (link.unlocked) { link.unlocked = false; this.unlocks.delete(pairingId); await this.askPin(pairingId, link); }
     return false;
+  }
+
+  /**
+   * A new channel of a trusted device: `secureReady`, then whether it is still unlocked (its last unlock has not gone
+   * idle) or must give the PIN. Decided before either is sent, so no work it sends meanwhile is refused as locked.
+   */
+  private async resume(pairingId: string, link: Link) {
+    const last = this.unlocks.get(pairingId);
+    let still = false;
+    try {
+      const required = this.options.pins && (!this.options.pinRequired || await this.options.pinRequired());
+      still = !!required && last !== undefined && this.now() - last <= IDLE_MS && !await this.options.pins!.locked();
+    } catch (error) { this.options.error(error as Error); }
+    if (this.links.get(pairingId) !== link) return;
+    try { link.channel.send({ t: 'secureReady' }); } catch { return; }
+    if (still) {
+      link.unlocked = true;
+      link.lastActive = last;
+      return link.channel.send({ t: 'unlocked' });
+    }
+    this.unlocks.delete(pairingId);
+    await this.askPin(pairingId, link);
   }
 
   /** Tells the device a PIN is needed: to enter it, or that the lock holds until the owner sets one here. */
@@ -358,12 +400,14 @@ export class PhoneSecurity {
     if (!result.ok) {
       if (link.unlocked) this.options.forward({ t: 'detach', pairingId });
       link.unlocked = false;
+      this.unlocks.delete(pairingId);
       if (result.reason === 'locked') this.relockOtherChannels(pairingId);
       if (result.reason === 'unset') return this.askPin(pairingId, link);
       return link.channel.send(result.reason === 'wrong' ? { t: 'pinWrong', left: result.left } : { t: 'pinLocked' });
     }
     link.unlocked = true;
     link.lastActive = this.now();
+    this.unlocks.set(pairingId, link.lastActive);
     link.channel.send({ t: 'unlocked' });
   }
 
@@ -371,6 +415,7 @@ export class PhoneSecurity {
     for (const [id, link] of this.links) {
       if (id === current || !link.authorized) continue;
       link.unlocked = false;
+      this.unlocks.delete(id);
       this.options.forward({ t: 'detach', pairingId: id });
       void this.askPin(id, link);
     }
@@ -383,7 +428,17 @@ export class PhoneSecurity {
     if (mux?.type === 'open' && mux.streamId) link.channel.send({ t: 'mux', pairingId: frame.pairingId, body: { type: 'error', streamId: mux.streamId, error: { code: 'locked', message: 'locked', details: {} } } });
   }
 
+  /** Signed out, or the PIN changed: every channel closes and every device is asked for the PIN again. */
   reset() {
+    this.unlocks.clear();
+    this.drop();
+  }
+
+  /**
+   * The relay connection dropped: every channel closes, and a device that comes back within the idle limit stays
+   * unlocked.
+   */
+  drop() {
     this.epoch++;
     this.offer = undefined;
     for (const link of this.links.values()) link.channel.close();

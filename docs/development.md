@@ -281,6 +281,11 @@ Phone and desktop pin Ed25519 identities and authenticate through libp2p Noise X
 A single-use six-letter locator and matching eight-digit safety codes establish
 trust, with phone confirmation and desktop approval. QR links pin the desktop
 public key. Missing/changed keys require new pairing; plaintext has no fallback.
+Once both ends trust each other, a channel is `pinned` (the platform's ADR
+0071): no commit/reveal, Noise from the first packet (a `noise` packet for an
+untrusted pairing is ignored), and each end sends once its own key is set.
+Packets cross the relay as binary messages (`encodePacket`, `decodePacket`;
+the platform's ADR 0072), and `src/relay.ts` reads every binary message as one.
 After Noise authentication, endpoints exchange independent AES-256 sending keys.
 Payloads use native AES-256-GCM (Node/OpenSSL and Expo Crypto), authenticating the
 channel, direction and monotonic counter. Replay, reordering, cipher failure and
@@ -302,14 +307,29 @@ failure count that survives a restart. Once a channel is authorized,
 `PhoneSecurity` tells the device `pinRequired`, answers `unlock` with
 `unlocked`, `pinWrong` or `pinLocked` (a device never sets the PIN: `setPin` is
 answered as if asked again), and refuses every call (`teamwork/locked`) and
-stream until unlocked, and again after fifteen minutes with nothing sent. Five
+stream until unlocked, and again after fifteen minutes with nothing sent. An
+unlock belongs to the pairing, not to the channel: a device whose channel was
+dropped and opened again within those fifteen minutes is told `unlocked` at
+once (`resume`), and `drop()`, which the relay socket reconnecting calls,
+keeps it where `reset()` (sign-out, a PIN change) forgets it. Five
 wrong PINs lock every device until `/teamwork pin reset` clears the PIN, which
 keeps the lock on until a new one is set. The PIN outlives a sign-out.
 
 Whatever the bridge sends back fits one 1 MiB message of the encrypted channel
 (`fitFrame`): long strings are cut short, a snapshot or a page keeps its newest
 records and says `hasMore`, and a stream frame that still cannot fit ends its
-stream with `too_large` rather than closing the channel.
+stream with `too_large` rather than closing the channel. A follow's opening
+snapshot is held to 256 KiB (`SNAPSHOT_BYTES`, `newestRecords`), since the
+screen waits for it to cross the relay: tool output is shortened first, then
+the oldest records go whole, and replies are never shortened unless the
+newest record alone does not fit. A frame whose size bound (`sizeBound`,
+six bytes a character) is under the limit passes without being serialised to
+be measured, which is every stream delta in practice.
+
+`src/relay.ts` pings the relay every fifteen seconds once welcomed and dials
+again when twenty pass with nothing heard (enough for a large record on a slow
+link to finish arriving), so a socket a sleep or a network change left half
+open is replaced within half a minute.
 
 File intake uses `teamwork/uploadStart`, `uploadChunk`, `uploadFinish` and
 `uploadCancel` after native admission. Receipt/transfer identity binds pairing and
