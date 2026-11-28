@@ -129,13 +129,14 @@ export async function connectWebRelay(launchURL: string, dataURL: URL, id: strin
   let first = true;
   const timeout = setTimeout(close, 10_000);
   let closed = false;
-  tunnels?.opened();
+  // A tunnel counts as in use from its first request: the relay keeps some open ahead of requests, which nobody uses.
+  let counted = false;
   function close() {
     clearTimeout(timeout);
     lifetime.removeEventListener('abort', close);
     local.destroy();
     tunnel.destroy();
-    if (!closed) { closed = true; tunnels?.closed(); }
+    if (!closed) { closed = true; if (counted) tunnels?.closed(); }
   }
 
   const request = new Transform({
@@ -153,6 +154,7 @@ export async function connectWebRelay(launchURL: string, dataURL: URL, id: strin
       try {
         const rewritten = rewriteWebRequest(buffered.subarray(0, end), launch, cookie);
         first = false;
+        if (!closed && !counted) { counted = true; tunnels?.opened(); }
         header = Buffer.alloc(0);
         clearTimeout(timeout);
         done(null, Buffer.concat([rewritten, buffered.subarray(end + 4)]));
